@@ -14,7 +14,7 @@ from PIL import Image
 # --- 1. 系統全域設定 ---
 st.set_page_config(page_title="IFUKUK 智慧中樞", layout="wide", page_icon="🧠")
 
-# --- ⚠️⚠️⚠️ 設定區 (請填入資料) ⚠️⚠️⚠️ ---
+# --- ⚠️⚠️⚠️ 設定區 (請仔細填入) ⚠️⚠️⚠️ ---
 
 # 1. Google Sheet 網址
 GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/1oCdUsYy8AGp8slJyrlYw2Qy2POgL2eaIp7_8aTVcX3w/edit?gid=1626161493#gid=1626161493"
@@ -22,10 +22,10 @@ GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/1oCdUsYy8AGp8slJyrlYw
 # 2. ImgBB API Key
 IMGBB_API_KEY = "c2f93d2a1a62bd3a6da15f477d2bb88a"
 
-# 3. LINE Channel Access Token (長的那串)
-LINE_CHANNEL_ACCESS_TOKEN = "6e6b206277d145fc0e6c24ec3ed94064"
+# 3. LINE Channel Access Token (⚠️ 這裡是填那串「最長的」亂碼)
+LINE_CHANNEL_ACCESS_TOKEN = "IaGvcTOmbMFW8wKEJ5MamxfRx7QVo0kX1IyCqwKZw0WX2nxAVYY7SsSh5vAJ0r+WBNvyjjiU8G3eYkL1nozqIOjjWMOKr/4ZtzUMRRf7JNJkk5V6jLpWc/EOkzvNGVPMh0zwH+wQD51tR3XWipUULwdB04t89/1O/w1cDnyilFU="
 
-# 4. LINE User ID (U開頭的那串)
+# 4. LINE User ID (⚠️ 這裡是填 U 開頭的「短」亂碼)
 LINE_USER_ID = "U55199b00fb78da85bb285db6d00b6ff5"
 
 # ---------------------------------------------------
@@ -123,13 +123,13 @@ def upload_image_to_imgbb(image_file):
         return None
     except: return None
 
-# V13.1: LINE Messaging API (含錯誤回報)
+# V13.2 LINE Messaging API (修復錯誤回報)
 def send_line_push(message):
-    # 1. 檢查是否填寫資料
-    if not LINE_CHANNEL_ACCESS_TOKEN or "請將您的" in LINE_CHANNEL_ACCESS_TOKEN:
-        return "ERROR_TOKEN_EMPTY"
-    if not LINE_USER_ID or "請將您的" in LINE_USER_ID:
-        return "ERROR_ID_EMPTY"
+    # 檢查 Token 是否正確填寫
+    if not LINE_CHANNEL_ACCESS_TOKEN or len(LINE_CHANNEL_ACCESS_TOKEN) < 50:
+        return "ERROR_TOKEN_INVALID (Token 太短或未填)"
+    if not LINE_USER_ID or not LINE_USER_ID.startswith("U"):
+        return "ERROR_ID_INVALID (User ID 格式錯誤)"
     
     url = "https://api.line.me/v2/bot/message/push"
     headers = {
@@ -146,7 +146,6 @@ def send_line_push(message):
         if response.status_code == 200:
             return "SUCCESS"
         else:
-            # 回傳錯誤代碼與訊息以便除錯
             return f"FAILED: {response.status_code} - {response.text}"
     except Exception as e:
         return f"EXCEPTION: {str(e)}"
@@ -272,7 +271,7 @@ def main():
 
     tabs = st.tabs(["🧥 樣品", "⚡ POS", "➕ 商品與匯入", "📝 紀錄/後台"])
 
-    # Tab 1: 樣品
+    # Tab 1: 樣品 (V13.2 圖片修復)
     with tabs[0]:
         search_txt = st.text_input("🔍 搜尋商品", placeholder="輸入名稱或SKU...")
         show_df = df.copy()
@@ -285,7 +284,10 @@ def main():
                 for idx, (col, item) in enumerate(zip(cols, row.iterrows())):
                     val = item[1]
                     with col:
-                        img = val['Image_URL'] if str(val['Image_URL']).startswith('http') else "https://via.placeholder.com/150"
+                        # V13.2 關鍵修復：去除網址前後空格
+                        raw_url = str(val['Image_URL']).strip()
+                        img = raw_url if raw_url.startswith('http') else "https://via.placeholder.com/150"
+                        
                         st.markdown(f"""
                         <div class='product-card'>
                             <div style='height:120px;overflow:hidden;border-radius:5px;margin-bottom:5px;'>
@@ -333,7 +335,6 @@ def main():
                     ws_items.update_cell(r, 8, str(datetime.now()))
                     log_event(ws_logs, st.session_state['user_name'], "銷售", f"{target['SKU']} -{op_qty} | {note}")
                     
-                    # 警報觸發
                     if new_q < 5:
                         msg = f"⚠️ [缺貨警報] \n商品: {target['Name']} \n剩餘: {new_q} 件 \n請盡速補貨！"
                         result = send_line_push(msg)
@@ -438,20 +439,14 @@ def main():
             st.divider()
             st.subheader("⚙️ 管理員後台")
             
-            # === V13.1 新增：LINE 連線測試 ===
-            st.info("📡 LINE 系統診斷中心")
-            if st.button("發送測試訊息 (Test Connection)"):
-                test_msg = "✅ IFUKUK 系統連線成功！這是一條測試訊息。"
-                result = send_line_push(test_msg)
+            # V13.2 LINE 測試區
+            st.info("📡 LINE 系統診斷")
+            if st.button("發送測試訊息"):
+                result = send_line_push("✅ V13.2 連線正常！圖片修復完畢。")
                 if result == "SUCCESS":
-                    st.success("測試成功！您的手機應該會收到訊息。")
-                elif "ERROR_TOKEN_EMPTY" in result:
-                    st.error("❌ 失敗：請檢查代碼第 26 行，Channel Access Token 尚未填入。")
-                elif "ERROR_ID_EMPTY" in result:
-                    st.error("❌ 失敗：請檢查代碼第 29 行，User ID 尚未填入。")
+                    st.success("成功！請檢查手機。")
                 else:
-                    st.error(f"❌ 傳送失敗，錯誤詳情：\n{result}")
-            # ==================================
+                    st.error(f"❌ 失敗：{result} (請檢查 Token 是否填錯位置)")
 
             with st.expander("👥 員工管理 / 🔴 清空"):
                 st.dataframe(get_data_safe(ws_users), use_container_width=True)
