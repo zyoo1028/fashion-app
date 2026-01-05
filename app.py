@@ -31,15 +31,13 @@ st.markdown("""
     <style>
     /* 全站字體與背景 */
     .stApp {
-        background-color: #f8f9fa; /* 極淺灰背景，凸顯卡片 */
+        background-color: #f8f9fa;
         font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
     }
     
-    /* 隱藏原生選單與 Footer */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     
-    /* 品牌標題優化 */
     .brand-title {
         font-weight: 900;
         font-size: 3rem;
@@ -58,13 +56,13 @@ st.markdown("""
         margin-bottom: 30px;
     }
     
-    /* 數據卡片 (Metric Cards) - V14 核心設計 */
+    /* 數據卡片 */
     .metric-card {
         background: white;
         border-radius: 15px;
         padding: 20px;
         box-shadow: 0 4px 15px rgba(0,0,0,0.05);
-        border-left: 5px solid #1a1a1a; /* 左側黑條裝飾 */
+        border-left: 5px solid #1a1a1a;
         transition: transform 0.2s;
         text-align: center;
         margin-bottom: 15px;
@@ -88,14 +86,14 @@ st.markdown("""
     }
     .metric-sub {
         font-size: 0.8rem;
-        color: #28a745; /* 綠色代表獲利 */
+        color: #28a745;
         font-weight: 500;
     }
     
-    /* 按鈕美化 (Pill Shape) */
+    /* 按鈕美化 */
     .stButton>button {
         width: 100%;
-        border-radius: 50px; /* 膠囊狀 */
+        border-radius: 50px;
         font-weight: 600;
         height: 3.2em;
         border: none;
@@ -124,7 +122,7 @@ st.markdown("""
         object-fit: cover;
     }
     
-    /* 分頁籤 (Tabs) 美化 */
+    /* Tabs 美化 */
     .stTabs [data-baseweb="tab-list"] {
         gap: 10px;
     }
@@ -223,7 +221,6 @@ def main():
     sh = init_db()
     if not sh: st.stop()
 
-    # 初始化 Worksheet (同前)
     try:
         ws_items = sh.worksheet("Items")
         headers = ws_items.row_values(1)
@@ -245,7 +242,7 @@ def main():
         ws_users.append_row(["Name", "Password", "Role", "Status", "Created_At"])
         ws_users.append_row(["Boss", "1234", "Admin", "Active", str(datetime.now())])
 
-    # --- A. 品牌登入 (美化版) ---
+    # --- A. 品牌登入 ---
     if not st.session_state['logged_in']:
         c1, c2, c3 = st.columns([1, 2, 1])
         with c2:
@@ -304,19 +301,16 @@ def main():
             st.session_state['logged_in'] = False
             st.rerun()
 
-    # --- D. 戰情儀表板 (V14.0 核心更新) ---
+    # --- D. 戰情儀表板 ---
     st.markdown("<div class='brand-title' style='font-size:2rem;text-align:left;'>DASHBOARD</div>", unsafe_allow_html=True)
     
-    # 財務計算
     total_qty = df['Qty'].sum()
-    total_cost = (df['Qty'] * df['Cost']).sum() # 庫存總成本
-    total_revenue_potential = (df['Qty'] * df['Price']).sum() # 預估總銷額
-    potential_profit = total_revenue_potential - total_cost # 預估毛利
+    total_cost = (df['Qty'] * df['Cost']).sum()
+    total_revenue_potential = (df['Qty'] * df['Price']).sum()
+    potential_profit = total_revenue_potential - total_cost
     active_sku = len(df)
 
-    # V14.0 客製化 HTML 卡片 (取代 st.metric)
     c1, c2, c3, c4 = st.columns(4)
-    
     with c1:
         st.markdown(f"""
         <div class="metric-card">
@@ -325,7 +319,6 @@ def main():
             <div class="metric-sub">{active_sku} 款熱銷中</div>
         </div>
         """, unsafe_allow_html=True)
-        
     with c2:
         st.markdown(f"""
         <div class="metric-card" style="border-left: 5px solid #d32f2f;">
@@ -334,7 +327,6 @@ def main():
             <div class="metric-sub">資金積壓</div>
         </div>
         """, unsafe_allow_html=True)
-        
     with c3:
         st.markdown(f"""
         <div class="metric-card" style="border-left: 5px solid #f1c40f;">
@@ -343,7 +335,6 @@ def main():
             <div class="metric-sub">全數售出價值</div>
         </div>
         """, unsafe_allow_html=True)
-
     with c4:
         st.markdown(f"""
         <div class="metric-card" style="border-left: 5px solid #28a745;">
@@ -353,14 +344,19 @@ def main():
         </div>
         """, unsafe_allow_html=True)
 
-    # 視覺化圖表
+    # 視覺化圖表 (V14.1 修正色票錯誤)
     if not df.empty:
         chart_col1, chart_col2 = st.columns([2, 1])
         with chart_col1:
             st.caption("📊 庫存分類占比 (Inventory Distribution)")
-            fig = px.pie(df, names='Category', values='Qty', hole=0.4, color_discrete_sequence=px.colors.sequential.Gray)
+            
+            # ⚠️ 修正點：使用手動定義的黑白灰色系，不依賴 px.colors.sequential
+            fashion_greys = ['#1a1a1a', '#4d4d4d', '#808080', '#b3b3b3', '#e6e6e6', '#000000']
+            
+            fig = px.pie(df, names='Category', values='Qty', hole=0.4, color_discrete_sequence=fashion_greys)
             fig.update_layout(showlegend=True, margin=dict(l=0, r=0, t=0, b=0), height=250)
             st.plotly_chart(fig, use_container_width=True)
+            
         with chart_col2:
             st.caption("🚨 低庫存警報 (<5件)")
             low_stock = df[df['Qty'] < 5][['SKU', 'Name', 'Qty']]
@@ -374,7 +370,7 @@ def main():
     # --- E. 功能分頁 ---
     tabs = st.tabs(["🧥 樣品展示", "⚡ 快速 POS", "➕ 商品管理", "📝 系統後台"])
 
-    # Tab 1: 樣品展示
+    # Tab 1
     with tabs[0]:
         search_txt = st.text_input("🔍 搜尋商品", placeholder="輸入名稱或 SKU...")
         show_df = df.copy()
@@ -382,7 +378,7 @@ def main():
         
         if show_df.empty: st.info("無符合商品")
         else:
-            rows = [show_df.iloc[i:i+4] for i in range(0, len(show_df), 4)] # 電腦版改4欄
+            rows = [show_df.iloc[i:i+4] for i in range(0, len(show_df), 4)]
             for row in rows:
                 cols = st.columns(4)
                 for idx, (col, item) in enumerate(zip(cols, row.iterrows())):
@@ -403,19 +399,16 @@ def main():
                             </div>
                         </div>""", unsafe_allow_html=True)
 
-    # Tab 2: POS
+    # Tab 2
     with tabs[1]:
         st.info("💡 提示：支援 Barcode / QR Code 掃描槍輸入")
         c_pos1, c_pos2 = st.columns([1, 1])
         with c_pos1:
             sku_opts = df.apply(lambda x: f"{x['SKU']} | {x['Name']}", axis=1).tolist()
             sel_sku = st.selectbox("鎖定商品", ["請選擇..."] + sku_opts)
-            
             target = None
             if sel_sku != "請選擇...":
                 target = df[df['SKU'] == sel_sku.split(" | ")[0]].iloc[0]
-                
-                # 商品卡片預覽
                 raw_url = str(target['Image_URL']).strip()
                 img = raw_url if raw_url.startswith('http') else "https://via.placeholder.com/150"
                 st.image(img, width=200)
@@ -426,7 +419,6 @@ def main():
             if target is not None:
                 op_qty = st.number_input("操作數量", 1)
                 note = st.text_input("備註 (選填)")
-                
                 b1, b2 = st.columns(2)
                 if b1.button("📥 進貨入庫", type="secondary"):
                     r = ws_items.find(target['SKU']).row
@@ -437,7 +429,6 @@ def main():
                     st.success("入庫完成")
                     time.sleep(1)
                     st.rerun()
-                    
                 if b2.button("📤 確認銷售", type="primary"):
                     if int(target['Qty']) < op_qty: st.error("庫存不足！")
                     else:
@@ -446,8 +437,6 @@ def main():
                         ws_items.update_cell(r, 5, new_q)
                         ws_items.update_cell(r, 8, str(datetime.now()))
                         log_event(ws_logs, st.session_state['user_name'], "銷售", f"{target['SKU']} -{op_qty}")
-                        
-                        # LINE 通知
                         if new_q < 5:
                             msg = f"⚠️ [缺貨警報] {target['Name']} 剩餘 {new_q} 件！"
                             send_line_push(msg)
@@ -455,7 +444,7 @@ def main():
                         time.sleep(1)
                         st.rerun()
 
-    # Tab 3: 商品管理
+    # Tab 3
     with tabs[2]:
         c_m1, c_m2 = st.columns(2)
         with c_m1:
@@ -470,7 +459,6 @@ def main():
                 n_cost = col_n2.number_input("成本", 0)
                 n_price = st.number_input("售價", 0)
                 up_file = st.file_uploader("圖片", type=['jpg','png'])
-                
                 if st.form_submit_button("建立商品"):
                     if n_sku and n_name:
                         if n_sku in df['SKU'].tolist(): st.error("SKU 已存在")
@@ -511,7 +499,7 @@ def main():
                 time.sleep(1)
                 st.rerun()
 
-    # Tab 4: 後台
+    # Tab 4
     with tabs[3]:
         st.subheader("📝 操作紀錄")
         st.dataframe(get_data_safe(ws_logs).sort_index(ascending=False).head(50), use_container_width=True)
@@ -526,7 +514,6 @@ def main():
             
             with st.expander("人員管理"):
                 st.dataframe(get_data_safe(ws_users))
-                # (簡化代碼以保持版面整潔，功能同前)
                 
 if __name__ == "__main__":
     main()
