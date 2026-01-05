@@ -16,7 +16,7 @@ st.set_page_config(page_title="IFUKUK 企業核心系統", layout="wide", page_i
 GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/1oCdUsYy8AGp8slJyrlYw2Qy2POgL2eaIp7_8aTVcX3w/edit?gid=1626161493#gid=1626161493"
 
 # 2. ImgBB API Key (請填入剛剛搜尋並複製到的那串鑰匙)
-IMGBB_API_KEY = "請將您的_ImgBB_API_Key_貼在這裡" 
+IMGBB_API_KEY = "37c1f9eb05ec7d4e51c23849d6921298" 
 
 # ---------------------------------------------------
 
