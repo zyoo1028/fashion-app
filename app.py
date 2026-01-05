@@ -19,7 +19,8 @@ st.set_page_config(
 )
 
 # --- ⚠️⚠️⚠️ 設定區 (請填入您的 4 把鑰匙) ⚠️⚠️⚠️ ---
-GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/1oCdUsYy8AGp8slJyrlYw2Qy2POgL2eaIp7_8aTVcX3w/edit?gid=1626161493#gid=1626161493"
+GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/1oCdUsYy8AGp8slJyrlYw2Qy2POgL2eaIp7_8aTVcX3w/edit?gid=1626161493#gid=1626161493
+"
 IMGBB_API_KEY = "c2f93d2a1a62bd3a6da15f477d2bb88a"
 LINE_CHANNEL_ACCESS_TOKEN = "IaGvcTOmbMFW8wKEJ5MamxfRx7QVo0kX1IyCqwKZw0WX2nxAVYY7SsSh5vAJ0r+WBNvyjjiU8G3eYkL1nozqIOjjWMOKr/4ZtzUMRRf7JNJkk5V6jLpWc/EOkzvNGVPMh0zwH+wQD51tR3XWipUULwdB04t89/1O/w1cDnyilFU="
 LINE_USER_ID = "U55199b00fb78da85bb285db6d00b6ff5"
@@ -47,7 +48,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. 核心連線邏輯 (V17.3: 防崩潰強化版) ---
+# --- 2. 核心連線邏輯 (V17.4: 不死鳥重試機制) ---
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
 
 @st.cache_resource(ttl=3600)
@@ -59,20 +60,19 @@ def get_connection():
     creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
     return gspread.authorize(creds)
 
-# V17.3 修復：強制回傳 DataFrame，防止 AttributeError
+# V17.4 核心修復：讀取重試與防崩潰
 def get_data_safe(ws):
-    try:
-        data = ws.get_all_records()
-        if not data: return pd.DataFrame()
-        return pd.DataFrame(data)
-    except Exception:
-        # 如果連線失敗，休息一下再試一次
-        time.sleep(1)
+    max_retries = 3
+    for i in range(max_retries):
         try:
+            if ws is None: return pd.DataFrame()
             data = ws.get_all_records()
-            return pd.DataFrame(data) if data else pd.DataFrame()
-        except:
-            return pd.DataFrame() # 即使失敗也回傳空表，防止崩潰
+            if not data: return pd.DataFrame()
+            return pd.DataFrame(data)
+        except Exception:
+            time.sleep(1) # 休息1秒再試
+            continue
+    return pd.DataFrame() # 真的失敗了，回傳空表而不是讓系統崩潰
 
 @st.cache_resource(ttl=3600)
 def init_db():
@@ -123,7 +123,6 @@ def generate_qr(data):
     img.save(buf)
     return buf.getvalue()
 
-# V17.3 修復：加入冷卻時間，防止 API 頻繁呼叫崩潰
 def log_event(ws_logs, user, action, detail):
     try:
         ws_logs.append_row([datetime.now().strftime("%Y-%m-%d %H:%M:%S"), user, action, detail])
@@ -137,11 +136,18 @@ def main():
         st.session_state['user_role'] = ""
 
     sh = init_db()
-    if not sh: st.stop()
+    if not sh: 
+        st.error("無法連線至資料庫，請檢查網路或 API 設定。")
+        st.stop()
 
+    # V17.4 安全檢查：如果無法取得工作表，不會直接崩潰
     ws_items = get_worksheet_safe(sh, "Items", ["SKU", "Name", "Category", "Size", "Qty", "Price", "Cost", "Last_Updated", "Image_URL"])
     ws_logs = get_worksheet_safe(sh, "Logs", ["Timestamp", "User", "Action", "Details"])
     ws_users = get_worksheet_safe(sh, "Users", ["Name", "Password", "Role", "Status", "Created_At"])
+
+    if not ws_items or not ws_logs or not ws_users:
+        st.warning("系統正在初始化資料表，請稍後重新整理頁面...")
+        st.stop()
 
     # --- A. 品牌登入 ---
     if not st.session_state['logged_in']:
@@ -155,7 +161,6 @@ def main():
                 if st.form_submit_button("登入系統", type="primary"):
                     users_df = get_data_safe(ws_users)
                     if not users_df.empty:
-                        # V17.3 關鍵修復：強制轉字串比對，解決 '0' vs '0000' 問題
                         users_df['Name'] = users_df['Name'].astype(str).str.strip()
                         users_df['Password'] = users_df['Password'].astype(str).str.strip()
                         
@@ -175,7 +180,7 @@ def main():
                         if user_input == "Boss" and pass_input == "1234":
                             ws_users.append_row(["Boss", "1234", "Admin", "Active", str(datetime.now())])
                             st.success("初始化完成")
-                        else: st.error("登入失敗")
+                        else: st.error("登入失敗或資料庫忙碌中")
         return
 
     # --- B. 數據讀取 ---
@@ -192,32 +197,28 @@ def main():
         st.markdown(f"### 👤 {st.session_state['user_name']}")
         role_label = "🔴 Admin" if st.session_state['user_role'] == 'Admin' else "🟢 Staff"
         st.caption(f"Role: {role_label}")
-        
-        with st.expander("⚙️ 個人設定 (修改密碼)"):
+        with st.expander("⚙️ 個人設定"):
             with st.form("pwd"):
                 old = st.text_input("舊密碼", type="password")
                 new = st.text_input("新密碼", type="password")
                 confirm = st.text_input("確認新密碼", type="password")
-                if st.form_submit_button("確認修改"):
+                if st.form_submit_button("修改"):
                     if not old or not new: st.error("欄位不可為空")
                     elif new != confirm: st.error("新密碼不一致")
                     else:
                         try:
-                            # V17.3 密碼修改修復：強制字串比對
                             cell = ws_users.find(st.session_state['user_name'], in_column=1)
-                            # 抓下來可能是數字 0，強制轉字串 "0"
                             real_pwd = str(ws_users.cell(cell.row, 2).value).strip()
-                            input_old = str(old).strip()
-                            
-                            if input_old == real_pwd:
+                            if str(old).strip() == real_pwd:
                                 ws_users.update_cell(cell.row, 2, str(new).strip())
-                                st.success("密碼修改成功！")
-                                time.sleep(1) # 冷卻
-                            else:
-                                st.error(f"舊密碼錯誤 (系統紀錄: {real_pwd}, 您輸入: {input_old})")
+                                log_event(ws_logs, st.session_state['user_name'], "Security", "修改密碼成功")
+                                st.success("成功")
+                                time.sleep(1)
+                            else: st.error("舊密碼錯誤")
                         except Exception as e: st.error(f"錯誤: {e}")
         st.markdown("---")
         if st.button("🚪 登出"):
+            log_event(ws_logs, st.session_state['user_name'], "Logout", "登出系統")
             st.session_state['logged_in'] = False
             st.rerun()
 
@@ -296,9 +297,9 @@ def main():
                     new_val = int(target['Qty']) + qty
                     ws_items.update_cell(r, 5, new_val)
                     ws_items.update_cell(r, 8, str(datetime.now()))
-                    log_event(ws_logs, st.session_state['user_name'], "Restock", f"{target['SKU']} +{qty}")
+                    log_event(ws_logs, st.session_state['user_name'], "Restock", f"{target['SKU']} +{qty} | {note}")
                     st.success("成功")
-                    time.sleep(1.5) # 冷卻防崩
+                    time.sleep(1.5)
                     st.rerun()
                 if b2.button("📤 銷售", type="primary"):
                     if int(target['Qty']) < qty: st.error("庫存不足")
@@ -307,10 +308,10 @@ def main():
                         new_val = int(target['Qty']) - qty
                         ws_items.update_cell(r, 5, new_val)
                         ws_items.update_cell(r, 8, str(datetime.now()))
-                        log_event(ws_logs, st.session_state['user_name'], "Sale", f"{target['SKU']} -{qty}")
+                        log_event(ws_logs, st.session_state['user_name'], "Sale", f"{target['SKU']} -{qty} | {note}")
                         if new_val < 5: send_line_push(f"⚠️ 缺貨警報: {target['Name']} 剩 {new_val} 件")
                         st.success("成功")
-                        time.sleep(1.5) # 冷卻防崩
+                        time.sleep(1.5)
                         st.rerun()
 
     # Tab 3
@@ -334,8 +335,9 @@ def main():
                         else:
                             u = upload_image_to_imgbb(img) if img else ""
                             ws_items.append_row([sku, name, cat, size, q, price, cost, str(datetime.now()), u])
+                            log_event(ws_logs, st.session_state['user_name'], "New_Item", f"新增: {sku}")
                             st.success("成功")
-                            time.sleep(1.5) # 冷卻防崩
+                            time.sleep(1.5)
                             st.rerun()
         with c2:
             st.subheader("工具箱")
@@ -350,7 +352,8 @@ def main():
                             if s not in df['SKU'].tolist():
                                 ws_items.append_row([s, r['Name'], r['Category'], r['Size'], r['Qty'], r['Price'], r['Cost'], str(datetime.now()), ""])
                                 cnt+=1
-                                time.sleep(0.5) # 批量匯入強制冷卻
+                                time.sleep(0.5)
+                        log_event(ws_logs, st.session_state['user_name'], "Import", f"匯入 {cnt} 筆")
                         st.success(f"匯入 {cnt} 筆")
                         time.sleep(1)
                         st.rerun()
@@ -361,32 +364,50 @@ def main():
             d_s = st.selectbox("刪除商品", ["..."]+df['SKU'].tolist())
             if d_s != "..." and st.button("確認刪除"):
                 ws_items.delete_rows(ws_items.find(d_s).row)
+                log_event(ws_logs, st.session_state['user_name'], "Del_Item", f"刪除: {d_s}")
                 st.success("已刪除")
-                time.sleep(1.5) # 冷卻防崩
+                time.sleep(1.5)
                 st.rerun()
 
-    # Tab 4
+    # Tab 4: 全知後台 (V17.4: 漢化篩選器)
     with tabs[3]:
-        st.subheader("🕵️ 歷史操作回朔")
+        st.subheader("🕵️ 歷史操作回朔 (Audit Log)")
         f_col1, f_col2 = st.columns(2)
-        with f_col1: search_date = st.date_input("📅 選擇日期", value=None)
-        with f_col2: search_action = st.selectbox("🔍 動作篩選", ["All", "Login", "Logout", "Sale", "Restock", "New_Item", "Del_Item", "HR_Update", "Import", "Security"])
+        with f_col1: 
+            search_date = st.date_input("📅 選擇日期", value=None)
+        with f_col2:
+            # V17.4: 漢化對照表
+            action_map = {
+                "全部": "All",
+                "登入": "Login",
+                "登出": "Logout",
+                "銷售": "Sale",
+                "進貨": "Restock",
+                "新增商品": "New_Item",
+                "刪除商品": "Del_Item",
+                "人員異動": "HR_Update",
+                "批量匯入": "Import",
+                "安全操作": "Security"
+            }
+            selected_action_zh = st.selectbox("🔍 動作篩選", list(action_map.keys()))
+            search_action_en = action_map[selected_action_zh]
 
         logs_df = get_data_safe(ws_logs)
         if not logs_df.empty:
             logs_df['DateObj'] = pd.to_datetime(logs_df['Timestamp'], errors='coerce').dt.date
             display_logs = logs_df.copy()
             if search_date: display_logs = display_logs[display_logs['DateObj'] == search_date]
-            if search_action != "All": display_logs = display_logs[display_logs['Action'] == search_action]
+            if search_action_en != "All": display_logs = display_logs[display_logs['Action'] == search_action_en]
             st.dataframe(display_logs.drop(columns=['DateObj']).sort_index(ascending=False), use_container_width=True, height=400)
         else: st.info("尚無紀錄")
 
         if st.session_state['user_role'] == 'Admin':
             st.markdown("---")
             st.subheader("👥 人員管理中心")
+            st.caption("🟢 Active = 帳號啟用中 (可登入) | 🔴 Inactive = 帳號停用 (無法登入)") # V17.4: 加入圖例說明
+            
             users_df = get_data_safe(ws_users)
             if not users_df.empty:
-                # 轉字串確保顯示正常
                 users_df['Name'] = users_df['Name'].astype(str)
                 u_rows = [users_df.iloc[i:i+3] for i in range(0, len(users_df), 3)]
                 for row in u_rows:
@@ -419,17 +440,18 @@ def main():
                     if st.button("💾 儲存設定", type="primary"):
                         if n and p:
                             try:
-                                # V17.3 修復：加入冷卻時間防止刪增太快崩潰
                                 cell = ws_users.find(n, in_column=1)
                                 r_idx = cell.row
-                                ws_users.update_cell(r_idx, 2, str(p).strip()) # 強制轉字串
+                                ws_users.update_cell(r_idx, 2, str(p).strip())
                                 ws_users.update_cell(r_idx, 3, r)
                                 ws_users.update_cell(r_idx, 4, s)
-                                st.toast(f"✅ 已更新員工: {n}")
+                                log_event(ws_logs, st.session_state['user_name'], "HR_Update", f"修改: {n}")
+                                st.toast(f"✅ 已更新: {n}")
                             except:
                                 ws_users.append_row([n, str(p).strip(), r, s, str(datetime.now())])
-                                st.toast(f"✅ 已新增員工: {n}")
-                            time.sleep(2) # 關鍵冷卻時間：2秒
+                                log_event(ws_logs, st.session_state['user_name'], "HR_Update", f"新增: {n}")
+                                st.toast(f"✅ 已新增: {n}")
+                            time.sleep(2)
                             st.rerun()
                         else: st.error("帳號密碼不可為空")
 
@@ -439,13 +461,14 @@ def main():
                     if del_n == "Boss" or del_n == st.session_state['user_name']: st.error("無法刪除老闆或自己")
                     else:
                         ws_users.delete_rows(ws_users.find(del_n).row)
+                        log_event(ws_logs, st.session_state['user_name'], "HR_Update", f"刪除: {del_n}")
                         st.success("已刪除")
-                        time.sleep(2) # 關鍵冷卻時間：2秒
+                        time.sleep(2)
                         st.rerun()
 
             with manage_tabs[2]:
                 if st.button("發送 LINE 測試"):
-                    res = send_line_push("✅ V17.3 系統運作正常")
+                    res = send_line_push("✅ V17.4 系統運作正常")
                     if res == "SUCCESS": st.success("發送成功")
                     else: st.error(res)
 
