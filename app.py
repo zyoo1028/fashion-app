@@ -20,7 +20,6 @@ st.set_page_config(
 
 # --- ⚠️⚠️⚠️ 設定區 (請填入您的 4 把鑰匙) ⚠️⚠️⚠️ ---
 GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/1oCdUsYy8AGp8slJyrlYw2Qy2POgL2eaIp7_8aTVcX3w/edit?gid=1626161493#gid=1626161493"
-
 IMGBB_API_KEY = "c2f93d2a1a62bd3a6da15f477d2bb88a"
 LINE_CHANNEL_ACCESS_TOKEN = "IaGvcTOmbMFW8wKEJ5MamxfRx7QVo0kX1IyCqwKZw0WX2nxAVYY7SsSh5vAJ0r+WBNvyjjiU8G3eYkL1nozqIOjjWMOKr/4ZtzUMRRf7JNJkk5V6jLpWc/EOkzvNGVPMh0zwH+wQD51tR3XWipUULwdB04t89/1O/w1cDnyilFU="
 LINE_USER_ID = "U55199b00fb78da85bb285db6d00b6ff5"
@@ -48,7 +47,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. 核心連線邏輯 (V17.4: 不死鳥重試機制) ---
+# --- 2. 核心連線邏輯 ---
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
 
 @st.cache_resource(ttl=3600)
@@ -60,19 +59,27 @@ def get_connection():
     creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
     return gspread.authorize(creds)
 
-# V17.4 核心修復：讀取重試與防崩潰
+# V18.0 核心升級：強制純文字讀取模式 (解決 0 vs 0000 問題)
 def get_data_safe(ws):
     max_retries = 3
     for i in range(max_retries):
         try:
             if ws is None: return pd.DataFrame()
-            data = ws.get_all_records()
-            if not data: return pd.DataFrame()
-            return pd.DataFrame(data)
+            # 關鍵修改：使用 get_all_values() 而不是 get_all_records()
+            # 這會將所有內容作為字串列表返回，不進行數字轉換
+            raw_data = ws.get_all_values()
+            
+            if not raw_data or len(raw_data) < 2: return pd.DataFrame()
+            
+            # 手動將第一行設為標題
+            headers = raw_data[0]
+            rows = raw_data[1:]
+            df = pd.DataFrame(rows, columns=headers)
+            return df
         except Exception:
-            time.sleep(1) # 休息1秒再試
+            time.sleep(1)
             continue
-    return pd.DataFrame() # 真的失敗了，回傳空表而不是讓系統崩潰
+    return pd.DataFrame()
 
 @st.cache_resource(ttl=3600)
 def init_db():
@@ -137,16 +144,15 @@ def main():
 
     sh = init_db()
     if not sh: 
-        st.error("無法連線至資料庫，請檢查網路或 API 設定。")
+        st.error("無法連線至資料庫")
         st.stop()
 
-    # V17.4 安全檢查：如果無法取得工作表，不會直接崩潰
     ws_items = get_worksheet_safe(sh, "Items", ["SKU", "Name", "Category", "Size", "Qty", "Price", "Cost", "Last_Updated", "Image_URL"])
     ws_logs = get_worksheet_safe(sh, "Logs", ["Timestamp", "User", "Action", "Details"])
     ws_users = get_worksheet_safe(sh, "Users", ["Name", "Password", "Role", "Status", "Created_At"])
 
     if not ws_items or not ws_logs or not ws_users:
-        st.warning("系統正在初始化資料表，請稍後重新整理頁面...")
+        st.warning("系統初始化中...")
         st.stop()
 
     # --- A. 品牌登入 ---
@@ -161,12 +167,14 @@ def main():
                 if st.form_submit_button("登入系統", type="primary"):
                     users_df = get_data_safe(ws_users)
                     if not users_df.empty:
+                        # V18.0: 確保所有資料都是字串，去除前後空白
                         users_df['Name'] = users_df['Name'].astype(str).str.strip()
                         users_df['Password'] = users_df['Password'].astype(str).str.strip()
                         
                         input_u = str(user_input).strip()
                         input_p = str(pass_input).strip()
                         
+                        # 嚴格比對
                         valid = users_df[(users_df['Name'] == input_u) & (users_df['Password'] == input_p) & (users_df['Status'] == 'Active')]
                         
                         if not valid.empty:
@@ -180,7 +188,7 @@ def main():
                         if user_input == "Boss" and pass_input == "1234":
                             ws_users.append_row(["Boss", "1234", "Admin", "Active", str(datetime.now())])
                             st.success("初始化完成")
-                        else: st.error("登入失敗或資料庫忙碌中")
+                        else: st.error("登入失敗")
         return
 
     # --- B. 數據讀取 ---
@@ -188,6 +196,7 @@ def main():
     cols = ["SKU", "Name", "Category", "Size", "Qty", "Price", "Cost", "Last_Updated", "Image_URL"]
     for c in cols: 
         if c not in df.columns: df[c] = ""
+    # V18.0: 只對數量金額轉數字，SKU 保持字串
     for num in ['Qty', 'Price', 'Cost']:
         df[num] = pd.to_numeric(df[num], errors='coerce').fillna(0).astype(int)
     df['SKU'] = df['SKU'].astype(str)
@@ -197,7 +206,8 @@ def main():
         st.markdown(f"### 👤 {st.session_state['user_name']}")
         role_label = "🔴 Admin" if st.session_state['user_role'] == 'Admin' else "🟢 Staff"
         st.caption(f"Role: {role_label}")
-        with st.expander("⚙️ 個人設定"):
+        
+        with st.expander("⚙️ 個人設定 (修改密碼)"):
             with st.form("pwd"):
                 old = st.text_input("舊密碼", type="password")
                 new = st.text_input("新密碼", type="password")
@@ -207,14 +217,35 @@ def main():
                     elif new != confirm: st.error("新密碼不一致")
                     else:
                         try:
-                            cell = ws_users.find(st.session_state['user_name'], in_column=1)
-                            real_pwd = str(ws_users.cell(cell.row, 2).value).strip()
-                            if str(old).strip() == real_pwd:
-                                ws_users.update_cell(cell.row, 2, str(new).strip())
-                                log_event(ws_logs, st.session_state['user_name'], "Security", "修改密碼成功")
-                                st.success("成功")
-                                time.sleep(1)
-                            else: st.error("舊密碼錯誤")
+                            # V18.0: 徹底解決密碼比對問題
+                            # 重新讀取整張表 (純文字模式)
+                            raw_data = ws_users.get_all_values()
+                            headers = raw_data[0]
+                            # 找到 User Name 所在的 Row Index
+                            user_row_idx = -1
+                            current_pwd_db = ""
+                            
+                            for i, row in enumerate(raw_data):
+                                if str(row[0]).strip() == st.session_state['user_name']:
+                                    user_row_idx = i + 1 # Google Sheet 是從 1 開始，列表是從 0 開始
+                                    current_pwd_db = str(row[1]).strip() # 第二欄是密碼
+                                    break
+                            
+                            if user_row_idx == -1:
+                                st.error("找不到使用者資料")
+                            else:
+                                input_old = str(old).strip()
+                                if input_old == current_pwd_db:
+                                    ws_users.update_cell(user_row_idx, 2, str(new).strip())
+                                    log_event(ws_logs, st.session_state['user_name'], "Security", "修改密碼成功")
+                                    st.success("✅ 密碼修改成功！")
+                                    time.sleep(1)
+                                else:
+                                    # V18.0: 除錯模式，顯示系統讀到了什麼
+                                    st.error(f"❌ 舊密碼錯誤。")
+                                    st.caption(f"系統讀取: [{current_pwd_db}] vs 您輸入: [{input_old}]")
+                                    st.caption("若兩者看起來一樣但失敗，請確認 Google Sheet 欄位格式是否為「純文字」。")
+
                         except Exception as e: st.error(f"錯誤: {e}")
         st.markdown("---")
         if st.button("🚪 登出"):
@@ -369,25 +400,16 @@ def main():
                 time.sleep(1.5)
                 st.rerun()
 
-    # Tab 4: 全知後台 (V17.4: 漢化篩選器)
+    # Tab 4: 全知後台
     with tabs[3]:
         st.subheader("🕵️ 歷史操作回朔 (Audit Log)")
         f_col1, f_col2 = st.columns(2)
-        with f_col1: 
-            search_date = st.date_input("📅 選擇日期", value=None)
+        with f_col1: search_date = st.date_input("📅 選擇日期", value=None)
         with f_col2:
-            # V17.4: 漢化對照表
             action_map = {
-                "全部": "All",
-                "登入": "Login",
-                "登出": "Logout",
-                "銷售": "Sale",
-                "進貨": "Restock",
-                "新增商品": "New_Item",
-                "刪除商品": "Del_Item",
-                "人員異動": "HR_Update",
-                "批量匯入": "Import",
-                "安全操作": "Security"
+                "全部": "All", "登入": "Login", "登出": "Logout", "銷售": "Sale", 
+                "進貨": "Restock", "新增商品": "New_Item", "刪除商品": "Del_Item", 
+                "人員異動": "HR_Update", "批量匯入": "Import", "安全操作": "Security"
             }
             selected_action_zh = st.selectbox("🔍 動作篩選", list(action_map.keys()))
             search_action_en = action_map[selected_action_zh]
@@ -404,7 +426,7 @@ def main():
         if st.session_state['user_role'] == 'Admin':
             st.markdown("---")
             st.subheader("👥 人員管理中心")
-            st.caption("🟢 Active = 帳號啟用中 (可登入) | 🔴 Inactive = 帳號停用 (無法登入)") # V17.4: 加入圖例說明
+            st.caption("🟢 Active = 帳號啟用中 (可登入) | 🔴 Inactive = 帳號停用 (無法登入)")
             
             users_df = get_data_safe(ws_users)
             if not users_df.empty:
@@ -468,7 +490,7 @@ def main():
 
             with manage_tabs[2]:
                 if st.button("發送 LINE 測試"):
-                    res = send_line_push("✅ V17.4 系統運作正常")
+                    res = send_line_push("✅ V18.0 系統運作正常")
                     if res == "SUCCESS": st.success("發送成功")
                     else: st.error(res)
 
