@@ -5,29 +5,28 @@ from google.oauth2.service_account import Credentials
 from datetime import datetime
 import time
 import requests
-import plotly.express as px  # 引入專業圖表庫
+import plotly.express as px
+import base64  # <--- V10.3 新增：加密傳輸模組
 
-# --- 1. 系統全域設定 (System Config) ---
+# --- 1. 系統全域設定 ---
 st.set_page_config(page_title="IFUKUK 企業核心系統", layout="wide", page_icon="🌐")
 
-# --- ⚠️⚠️⚠️ 設定區 (請在此填入您的資料) ⚠️⚠️⚠️ ---
+# --- ⚠️⚠️⚠️ 設定區 (請填入資料) ⚠️⚠️⚠️ ---
 
-# 1. Google Sheet 網址 (請填入您原本那個成功的試算表網址)
+# 1. Google Sheet 網址 (請填入您的網址)
 GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/1oCdUsYy8AGp8slJyrlYw2Qy2POgL2eaIp7_8aTVcX3w/edit?gid=1626161493#gid=1626161493"
 
-# 2. ImgBB API Key (請填入剛剛搜尋並複製到的那串鑰匙)
-IMGBB_API_KEY = "37c1f9eb05ec7d4e51c23849d6921298" 
+# 2. ImgBB API Key (請務必去官網重新申請一把新的，不要用舊的)
+# 申請網址: https://api.imgbb.com/
+IMGBB_API_KEY = "c2f93d2a1a62bd3a6da15f477d2bb88a" 
 
 # ---------------------------------------------------
 
-# --- 自定義 CSS (旗艦級 UI) ---
+# --- 自定義 CSS ---
 st.markdown("""
     <style>
-    /* 隱藏預設雜項 */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
-    
-    /* 登入標題字體優化 */
     .brand-title {
         font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
         font-weight: 800;
@@ -36,8 +35,6 @@ st.markdown("""
         text-align: center;
         letter-spacing: 2px;
     }
-    
-    /* 專業按鈕風格 */
     .stButton>button {
         width: 100%;
         border-radius: 6px;
@@ -49,8 +46,6 @@ st.markdown("""
         transform: scale(1.02);
         box-shadow: 0 4px 12px rgba(0,0,0,0.15);
     }
-    
-    /* 儀表板卡片 */
     div[data-testid="stMetric"] {
         background-color: #ffffff;
         padding: 20px;
@@ -58,8 +53,6 @@ st.markdown("""
         border: 1px solid #f0f0f0;
         box-shadow: 0 2px 8px rgba(0,0,0,0.05);
     }
-    
-    /* 產品卡片 */
     .product-card {
         background: white;
         border-radius: 12px;
@@ -75,20 +68,19 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. 核心連線邏輯 (Brain) ---
+# --- 2. 核心連線邏輯 ---
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
 
 @st.cache_resource(ttl=3600)
 def get_connection():
     if "gcp_service_account" not in st.secrets:
-        st.error("❌ 系統錯誤：找不到 Secrets 金鑰，請檢查 Streamlit 設定。")
+        st.error("❌ 系統錯誤：找不到 Secrets 金鑰。")
         st.stop()
     creds_dict = st.secrets["gcp_service_account"]
     creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
     return gspread.authorize(creds)
 
 def safe_api_call(func, *args, **kwargs):
-    """企業級 API 防彈重試機制"""
     max_retries = 3
     for attempt in range(max_retries):
         try:
@@ -98,7 +90,7 @@ def safe_api_call(func, *args, **kwargs):
                 time.sleep(1)
                 continue
             else:
-                st.error(f"連線異常 (Error: {e})，請檢查網路或稍後再試。")
+                st.error(f"連線異常: {e}")
                 return None
 
 @st.cache_resource(ttl=3600)
@@ -108,30 +100,38 @@ def init_db():
         sh = client.open_by_url(GOOGLE_SHEET_URL)
         return sh
     except Exception as e:
-        st.error(f"無法連結資料庫，請檢查網址是否正確。錯誤: {e}")
+        st.error(f"無法連結資料庫: {e}")
         return None
 
-# --- 3. 圖片上傳模組 (ImgBB API) ---
+# --- 3. 圖片上傳模組 (V10.3 Base64 加強版) ---
 def upload_image_to_imgbb(image_file):
-    """將圖片上傳至 ImgBB 並取得網址"""
+    """將圖片轉為 Base64 並上傳"""
     if not IMGBB_API_KEY or "請將您的" in IMGBB_API_KEY:
-        st.warning("⚠️ 請先在代碼中填入 ImgBB API Key 才能使用上傳功能。")
+        st.warning("⚠️ 請先在代碼中填入正確的 ImgBB API Key。")
         return None
     
     try:
+        # 1. 將圖片轉為 Base64 字串 (ImgBB 最喜歡的格式)
+        img_bytes = image_file.getvalue()
+        b64_string = base64.b64encode(img_bytes).decode('utf-8')
+
+        # 2. 發送請求
         url = "https://api.imgbb.com/1/upload"
         payload = {
             "key": IMGBB_API_KEY,
-            "image": image_file.getvalue()
+            "image": b64_string
         }
-        response = requests.post(url, payload)
+        response = requests.post(url, data=payload) # 使用 data 參數發送
+        
         if response.status_code == 200:
             return response.json()["data"]["url"]
         else:
-            st.error("圖片上傳失敗，請檢查 API Key 或網路。")
+            # 顯示詳細錯誤訊息以便除錯
+            err_msg = response.json().get('error', {}).get('message', 'Unknown Error')
+            st.error(f"圖片上傳被拒絕: {err_msg}")
             return None
     except Exception as e:
-        st.error(f"上傳錯誤: {e}")
+        st.error(f"上傳過程發生錯誤: {e}")
         return None
 
 # --- 4. 數據與日誌模組 ---
@@ -153,10 +153,8 @@ def main():
     sh = init_db()
     if not sh: st.stop()
 
-    # 自動修復與建置資料表
     try:
         ws_items = sh.worksheet("Items")
-        # 確保有 Cost (成本) 和 Category (分類) 等高階欄位
         headers = ws_items.row_values(1)
         required_headers = ["SKU", "Name", "Category", "Size", "Qty", "Price", "Cost", "Last_Updated", "Image_URL"]
         if len(headers) < len(required_headers):
@@ -173,7 +171,7 @@ def main():
         ws_logs = sh.add_worksheet(title="Logs", rows="1000", cols="5")
         ws_logs.append_row(["Timestamp", "User", "Action", "Details"])
 
-    # --- A. 品牌登入入口 (IFUKUK BRAND PORTAL) ---
+    # --- A. 品牌登入入口 ---
     if not st.session_state['logged_in']:
         c1, c2, c3 = st.columns([1, 2, 1])
         with c2:
@@ -195,11 +193,7 @@ def main():
         return
 
     # --- B. 企業戰情中心 ---
-    
-    # 讀取資料
     df = get_data_safe(ws_items)
-    
-    # 資料清洗
     cols = ["SKU", "Name", "Category", "Size", "Qty", "Price", "Cost", "Last_Updated", "Image_URL"]
     for c in cols:
         if c not in df.columns: df[c] = ""
@@ -208,7 +202,6 @@ def main():
         df[num_col] = pd.to_numeric(df[num_col], errors='coerce').fillna(0).astype(int)
     df['SKU'] = df['SKU'].astype(str)
 
-    # 側邊導航
     with st.sidebar:
         st.markdown(f"### 👤 {st.session_state['user_name']}")
         st.caption("Administrator Access")
@@ -219,10 +212,8 @@ def main():
         st.markdown("<br>", unsafe_allow_html=True)
         st.link_button("📊 原始資料庫 (Excel)", sh.url)
 
-    # --- 1. 高階儀表板 (BI Dashboard) ---
+    # --- 1. 高階儀表板 ---
     st.markdown("### 🚀 營運戰情室 (Dashboard)")
-    
-    # 核心指標
     total_rev = (df['Qty'] * df['Price']).sum()
     total_cost_val = (df['Qty'] * df['Cost']).sum()
     profit = total_rev - total_cost_val
@@ -233,26 +224,20 @@ def main():
     kpi3.metric("💰 庫存總市值", f"${total_rev:,.0f}")
     kpi4.metric("📈 預估淨利", f"${profit:,.0f}", delta="Profit", delta_color="normal")
     
-    # 圖表分析區 (V10 新功能)
     if not df.empty:
         with st.expander("📊 點此展開/收合 詳細庫存圖表分析", expanded=True):
             chart1, chart2 = st.columns(2)
             with chart1:
-                # 庫存數量前 10 名
                 top_stock = df.sort_values(by='Qty', ascending=False).head(10)
                 fig_qty = px.bar(top_stock, x='Name', y='Qty', title='🔥 庫存數量 TOP 10', color='Qty', text='Qty')
                 st.plotly_chart(fig_qty, use_container_width=True)
-            
             with chart2:
-                # 尺寸分佈
                 size_dist = df.groupby('Size')['Qty'].sum().reset_index()
                 fig_size = px.pie(size_dist, values='Qty', names='Size', title='📏 尺寸庫存佔比', hole=0.4)
                 st.plotly_chart(fig_size, use_container_width=True)
-    
     st.divider()
 
-    # --- 2. 功能分頁系統 ---
-    # 改名為更專業的稱呼
+    # --- 2. 功能分頁 ---
     tab_gallery, tab_pos, tab_admin, tab_logs = st.tabs([
         "🧥 數位樣品室 (Showroom)", 
         "⚡ 進銷存戰情 (POS & Ops)", 
@@ -260,7 +245,7 @@ def main():
         "📝 稽核日誌 (Audit)"
     ])
 
-    # === Tab 1: 數位樣品室 (Showroom) ===
+    # === Tab 1: 數位樣品室 ===
     with tab_gallery:
         c_search, c_sort = st.columns([3, 1])
         search_txt = c_search.text_input("🔍 關鍵字搜尋 (SKU/名稱)", placeholder="輸入...")
@@ -275,7 +260,6 @@ def main():
         if show_df.empty:
             st.info("查無商品")
         else:
-            # 專業網格顯示
             cols_count = 4
             rows = [show_df.iloc[i:i+cols_count] for i in range(0, len(show_df), cols_count)]
             for row in rows:
@@ -302,11 +286,9 @@ def main():
                         </div>
                         """, unsafe_allow_html=True)
 
-    # === Tab 2: 進銷存戰情 (POS) ===
+    # === Tab 2: POS ===
     with tab_pos:
-        # 分割為左右戰區，避免混淆
         col_select, col_action = st.columns([1, 1.2])
-        
         target_item = None
         curr_row = None
         
@@ -319,8 +301,6 @@ def main():
                 real_sku = select_sku.split(" | ")[0]
                 target_item = df[df['SKU'] == real_sku].iloc[0]
                 curr_row = ws_items.find(real_sku).row
-                
-                # 顯示商品詳情卡
                 st.success(f"已鎖定: {target_item['Name']}")
                 st.info(f"當前庫存: {target_item['Qty']} | 售價: ${target_item['Price']}")
                 if str(target_item['Image_URL']).startswith('http'):
@@ -328,61 +308,53 @@ def main():
 
         with col_action:
             st.subheader("2. 執行交易")
-            
             if target_item is not None:
                 op_qty = st.number_input("數量", min_value=1, value=1)
                 note = st.text_input("交易備註 (選填)", placeholder="例如: VIP折扣, 補貨入庫...")
-                
-                # 使用 Tabs 分開 進貨與出貨，防止按錯
-                action_tab1, action_tab2 = st.tabs(["📥 進貨入庫 (Inbound)", "📤 銷售出庫 (Sales)"])
+                action_tab1, action_tab2 = st.tabs(["📥 進貨 (Inbound)", "📤 銷售 (Sales)"])
                 
                 with action_tab1:
                     if st.button("確認進貨 (+)", type="secondary", use_container_width=True):
                         new_q = int(target_item['Qty']) + op_qty
-                        safe_api_call(ws_items.update_cell, curr_row, 5, new_q) # 5=Qty
-                        safe_api_call(ws_items.update_cell, curr_row, 8, str(datetime.now())) # 8=Time
+                        safe_api_call(ws_items.update_cell, curr_row, 5, new_q)
+                        safe_api_call(ws_items.update_cell, curr_row, 8, str(datetime.now()))
                         log_event(ws_logs, st.session_state['user_name'], "進貨", f"{real_sku} +{op_qty} | {note}")
                         st.success(f"進貨成功！庫存更新為: {new_q}")
                         time.sleep(1)
                         st.rerun()
-                        
                 with action_tab2:
                     if st.button("確認銷售 (-)", type="primary", use_container_width=True):
                         if int(target_item['Qty']) < op_qty:
-                            st.error("❌ 庫存不足，無法出貨！")
+                            st.error("❌ 庫存不足")
                         else:
                             new_q = int(target_item['Qty']) - op_qty
                             safe_api_call(ws_items.update_cell, curr_row, 5, new_q)
                             safe_api_call(ws_items.update_cell, curr_row, 8, str(datetime.now()))
                             log_event(ws_logs, st.session_state['user_name'], "銷售", f"{real_sku} -{op_qty} | {note}")
-                            st.balloons() # 銷售成功放氣球慶祝
+                            st.balloons()
                             st.success(f"銷售成功！庫存更新為: {new_q}")
                             time.sleep(1)
                             st.rerun()
             else:
                 st.caption("請先在左側選擇商品...")
 
-    # === Tab 3: 商品管理 (Admin) ===
+    # === Tab 3: Admin ===
     with tab_admin:
         with st.expander("➕ 新增商品 (含圖片上傳)", expanded=True):
             with st.form("new_item"):
                 c1, c2 = st.columns(2)
                 n_sku = c1.text_input("SKU 編號", placeholder="例如: T-888")
                 n_name = c2.text_input("商品名稱")
-                
                 c3, c4, c5 = st.columns(3)
-                n_cat = c3.text_input("分類", placeholder="上衣/褲子/配件")
+                n_cat = c3.text_input("分類", placeholder="上衣/褲子")
                 n_size = c4.selectbox("尺寸", ["F", "XS", "S", "M", "L", "XL"])
                 n_qty = c5.number_input("初始數量", 0)
-                
                 c6, c7 = st.columns(2)
-                n_cost = c6.number_input("進貨成本 (Cost)", 0)
-                n_price = c7.number_input("銷售單價 (Price)", 0)
-                
+                n_cost = c6.number_input("進貨成本", 0)
+                n_price = c7.number_input("銷售單價", 0)
                 st.markdown("---")
-                st.markdown("📷 **圖片設定** (二選一)")
-                # V10 新功能：直接上傳
-                up_file = st.file_uploader("直接上傳圖片 (推薦)", type=['png', 'jpg', 'jpeg'])
+                st.markdown("📷 **圖片設定**")
+                up_file = st.file_uploader("直接上傳圖片", type=['png', 'jpg', 'jpeg'])
                 n_url_manual = st.text_input("或是貼上圖片網址")
                 
                 if st.form_submit_button("建立商品資料"):
@@ -390,7 +362,6 @@ def main():
                         if n_sku in df['SKU'].tolist():
                             st.error("SKU 已存在！")
                         else:
-                            # 處理圖片
                             final_img_url = ""
                             if up_file:
                                 with st.spinner("圖片上傳雲端中..."):
@@ -399,7 +370,6 @@ def main():
                             elif n_url_manual:
                                 final_img_url = n_url_manual
                             
-                            # 寫入資料
                             new_row = [n_sku, n_name, n_cat, n_size, n_qty, n_price, n_cost, str(datetime.now()), final_img_url]
                             safe_api_call(ws_items.append_row, new_row)
                             log_event(ws_logs, st.session_state['user_name'], "建立新品", f"{n_sku} {n_name}")
@@ -410,8 +380,8 @@ def main():
                         st.error("SKU 和 名稱 為必填！")
 
         st.markdown("---")
-        with st.expander("🗑️ 刪除商品 / 🛠️ 數據修正"):
-            d_sku = st.selectbox("選擇要刪除或修正的商品", ["請選擇..."] + df['SKU'].tolist())
+        with st.expander("🗑️ 刪除商品"):
+            d_sku = st.selectbox("選擇要刪除的商品", ["請選擇..."] + df['SKU'].tolist())
             if d_sku != "請選擇...":
                 if st.button("確認永久刪除此商品", type="primary"):
                     r = ws_items.find(d_sku).row
@@ -421,7 +391,7 @@ def main():
                     time.sleep(1)
                     st.rerun()
 
-    # === Tab 4: 稽核日誌 ===
+    # === Tab 4: Logs ===
     with tab_logs:
         st.dataframe(get_data_safe(ws_logs), use_container_width=True)
 
