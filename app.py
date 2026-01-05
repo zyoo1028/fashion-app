@@ -15,7 +15,7 @@ st.markdown("""
     /* 隱藏雜項 */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
-    header {visibility: hidden;}
+    
     
     /* 按鈕風格優化 */
     .stButton>button {
