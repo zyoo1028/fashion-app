@@ -4,3 +4,6 @@ gspread
 google-auth
 requests
 plotly
+openpyxl
+qrcode
+pillow
