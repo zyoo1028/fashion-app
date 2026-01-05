@@ -20,7 +20,7 @@ IMGBB_API_KEY = "c2f93d2a1a62bd3a6da15f477d2bb88a"
 
 # ---------------------------------------------------
 
-# --- 自定義 CSS (手機版與深色模式修復專用) ---
+# --- 自定義 CSS (維持 V12 手機優化) ---
 st.markdown("""
     <style>
     #MainMenu {visibility: hidden;}
@@ -29,11 +29,11 @@ st.markdown("""
     .brand-title {
         font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
         font-weight: 800;
-        font-size: 2.5rem;
+        font-size: 2.2rem;
         color: #1E1E1E;
         text-align: center;
         letter-spacing: 1px;
-        margin-bottom: 20px;
+        margin-bottom: 15px;
     }
     
     .stButton>button {
@@ -44,6 +44,7 @@ st.markdown("""
         transition: all 0.2s;
     }
     
+    /* 強制卡片白底黑字 */
     div[data-testid="stMetric"] {
         background-color: #ffffff !important;
         padding: 15px;
@@ -143,6 +144,7 @@ def main():
     sh = init_db()
     if not sh: st.stop()
 
+    # 初始化資料表
     try:
         ws_items = sh.worksheet("Items")
         headers = ws_items.row_values(1)
@@ -217,7 +219,7 @@ def main():
                             ws_users.update_cell(cell.row, 2, new)
                             st.success("成功")
                         else:
-                            st.error("失敗")
+                            st.error("舊密碼錯誤")
                     except: pass
         st.divider()
         if st.button("🔒 登出"):
@@ -236,8 +238,8 @@ def main():
     kpi4.metric("📈 淨利", f"${profit:,.0f}")
     st.divider()
 
-    # --- 功能分頁 ---
-    tabs = st.tabs(["🧥 樣品", "⚡ POS", "📝 紀錄", "⚙️ 管理"])
+    # --- V12.2 新版分頁結構 ---
+    tabs = st.tabs(["🧥 樣品", "⚡ POS", "➕ 商品管理", "📝 紀錄/後台"])
 
     # Tab 1: 樣品
     with tabs[0]:
@@ -302,11 +304,66 @@ def main():
                     time.sleep(1)
                     st.rerun()
 
-    # Tab 3: 紀錄
+    # Tab 3: 商品管理 (V12.2 重點：獨立分頁，全體可用，無摺疊)
     with tabs[2]:
+        st.subheader("➕ 新增商品 / 上傳圖片")
+        
+        with st.form("new_item"):
+            c1, c2 = st.columns(2)
+            n_sku = c1.text_input("SKU 編號", placeholder="例如: T-888")
+            n_name = c2.text_input("商品名稱")
+            c3, c4, c5 = st.columns(3)
+            n_cat = c3.text_input("分類")
+            n_size = c4.selectbox("尺寸", ["F", "XS", "S", "M", "L", "XL"])
+            n_qty = c5.number_input("初始數量", 0)
+            c6, c7 = st.columns(2)
+            n_cost = c6.number_input("成本", 0)
+            n_price = c7.number_input("售價", 0)
+            
+            st.markdown("📷 **圖片設定**")
+            up_file = st.file_uploader("上傳圖片", type=['png', 'jpg', 'jpeg'])
+            n_url_manual = st.text_input("或貼上網址")
+            
+            if st.form_submit_button("建立商品", type="primary"):
+                if n_sku and n_name:
+                    if n_sku in df['SKU'].tolist():
+                        st.error("SKU 已存在")
+                    else:
+                        final_img_url = ""
+                        if up_file:
+                            with st.spinner("上傳中..."):
+                                final_img_url = upload_image_to_imgbb(up_file)
+                                if not final_img_url: st.stop()
+                        elif n_url_manual:
+                            final_img_url = n_url_manual
+                        
+                        new_row = [n_sku, n_name, n_cat, n_size, n_qty, n_price, n_cost, str(datetime.now()), final_img_url]
+                        safe_api_call(ws_items.append_row, new_row)
+                        log_event(ws_logs, st.session_state['user_name'], "建立新品", f"{n_sku} {n_name}")
+                        st.success("成功")
+                        time.sleep(1)
+                        st.rerun()
+                else:
+                    st.error("請輸入 SKU 與 名稱")
+        
+        st.divider()
+        st.caption("🗑️ 刪除商品 (謹慎操作)")
+        del_sku = st.selectbox("選擇要刪除的商品", ["請選擇..."] + df['SKU'].tolist())
+        if del_sku != "請選擇...":
+            if st.button("確認永久刪除", type="secondary"):
+                r = ws_items.find(del_sku).row
+                safe_api_call(ws_items.delete_rows, r)
+                log_event(ws_logs, st.session_state['user_name'], "刪除商品", del_sku)
+                st.success("已刪除")
+                time.sleep(1)
+                st.rerun()
+
+    # Tab 4: 紀錄/後台 (合併區)
+    with tabs[3]:
+        # 上半部：紀錄
         st.subheader("🔍 紀錄查詢")
         col_date, col_key = st.columns(2)
-        search_date = col_date.date_input("📅 選擇日期", value=None)
+        search_date = col_date.date_input("📅 日期", value=None)
         search_key = col_key.text_input("關鍵字")
         logs_df = get_data_safe(ws_logs)
         if not logs_df.empty:
@@ -314,30 +371,23 @@ def main():
             display_logs = logs_df.copy()
             if search_date: display_logs = display_logs[display_logs['DateObj'] == search_date]
             if search_key: display_logs = display_logs[display_logs.apply(lambda x: search_key.lower() in str(x.values).lower(), axis=1)]
-            final_view = display_logs.drop(columns=['DateObj']).sort_index(ascending=False).tail(500)
-            st.dataframe(final_view, use_container_width=True)
-            if st.session_state['user_role'] == 'Admin':
-                st.divider()
-                with st.expander("🗑️ 清理紀錄"):
-                    if st.button("清除所有"):
-                        ws_logs.clear()
-                        ws_logs.append_row(["Timestamp", "User", "Action", "Details"])
-                        st.success("已清空")
-                        time.sleep(1)
-                        st.rerun()
-
-    # Tab 4: 管理 (V12.1 重點：把商品管理加回來！)
-    with tabs[3]:
+            st.dataframe(display_logs.drop(columns=['DateObj']).sort_index(ascending=False).tail(500), use_container_width=True)
+        
+        # 下半部：管理員專區
         if st.session_state['user_role'] == 'Admin':
-            
-            # 1. 員工管理
-            st.subheader("👥 員工管理")
-            with st.expander("➕ 新增/修改/刪除員工", expanded=False):
-                 action = st.radio("動作", ["新增/修改", "刪除"])
-                 if action == "新增/修改":
-                     n = st.text_input("帳號")
-                     p = st.text_input("密碼")
-                     r = st.selectbox("權限", ["Staff", "Admin"])
+            st.divider()
+            st.subheader("⚙️ 管理員專區")
+            with st.expander("👥 員工管理 / 🗑️ 清空紀錄", expanded=False):
+                # 員工列表
+                st.dataframe(get_data_safe(ws_users), use_container_width=True)
+                
+                # 新增員工
+                st.markdown("---")
+                action = st.radio("員工操作", ["新增/修改", "刪除"])
+                if action == "新增/修改":
+                     n = st.text_input("帳號", key="u_n")
+                     p = st.text_input("密碼", key="u_p")
+                     r = st.selectbox("權限", ["Staff", "Admin"], key="u_r")
                      if st.button("儲存員工"):
                          try:
                              cell = ws_users.find(n)
@@ -348,73 +398,22 @@ def main():
                          st.success("完成")
                          time.sleep(1)
                          st.rerun()
-                 else:
+                else:
                      del_n = st.selectbox("刪除誰", ws_users.col_values(1)[1:])
                      if st.button("刪除員工"):
                          ws_users.delete_rows(ws_users.find(del_n).row)
                          st.success("已刪除")
                          time.sleep(1)
                          st.rerun()
-            
-            st.divider()
-
-            # 2. 商品管理 (V12.1 補回來的核心功能)
-            st.subheader("🛠️ 商品資料庫管理")
-            
-            # === 新增商品 (含圖片上傳) ===
-            with st.expander("➕ 新增商品 / 上傳圖片", expanded=True):
-                with st.form("new_item"):
-                    c1, c2 = st.columns(2)
-                    n_sku = c1.text_input("SKU 編號", placeholder="例如: T-888")
-                    n_name = c2.text_input("商品名稱")
-                    c3, c4, c5 = st.columns(3)
-                    n_cat = c3.text_input("分類")
-                    n_size = c4.selectbox("尺寸", ["F", "XS", "S", "M", "L", "XL"])
-                    n_qty = c5.number_input("初始數量", 0)
-                    c6, c7 = st.columns(2)
-                    n_cost = c6.number_input("成本", 0)
-                    n_price = c7.number_input("售價", 0)
-                    
-                    st.markdown("📷 **圖片設定**")
-                    up_file = st.file_uploader("上傳圖片", type=['png', 'jpg', 'jpeg'])
-                    n_url_manual = st.text_input("或貼上網址")
-                    
-                    if st.form_submit_button("建立商品"):
-                        if n_sku and n_name:
-                            if n_sku in df['SKU'].tolist():
-                                st.error("SKU 已存在")
-                            else:
-                                final_img_url = ""
-                                if up_file:
-                                    with st.spinner("上傳中..."):
-                                        final_img_url = upload_image_to_imgbb(up_file)
-                                        if not final_img_url: st.stop()
-                                elif n_url_manual:
-                                    final_img_url = n_url_manual
-                                
-                                new_row = [n_sku, n_name, n_cat, n_size, n_qty, n_price, n_cost, str(datetime.now()), final_img_url]
-                                safe_api_call(ws_items.append_row, new_row)
-                                log_event(ws_logs, st.session_state['user_name'], "建立新品", f"{n_sku} {n_name}")
-                                st.success("成功")
-                                time.sleep(1)
-                                st.rerun()
-                        else:
-                            st.error("請輸入 SKU 與 名稱")
-            
-            # === 刪除商品 ===
-            with st.expander("🗑️ 刪除商品"):
-                del_sku = st.selectbox("選擇要刪除的商品", ["請選擇..."] + df['SKU'].tolist())
-                if del_sku != "請選擇...":
-                    if st.button("確認永久刪除商品", type="primary"):
-                        r = ws_items.find(del_sku).row
-                        safe_api_call(ws_items.delete_rows, r)
-                        log_event(ws_logs, st.session_state['user_name'], "刪除商品", del_sku)
-                        st.success("已刪除")
-                        time.sleep(1)
-                        st.rerun()
-
-        else:
-            st.info("僅管理員可見")
+                
+                # 清空紀錄
+                st.markdown("---")
+                if st.button("🔴 清空所有操作紀錄"):
+                    ws_logs.clear()
+                    ws_logs.append_row(["Timestamp", "User", "Action", "Details"])
+                    st.success("已清空")
+                    time.sleep(1)
+                    st.rerun()
 
 if __name__ == "__main__":
     main()
