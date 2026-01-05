@@ -25,41 +25,29 @@ LINE_CHANNEL_ACCESS_TOKEN = "IaGvcTOmbMFW8wKEJ5MamxfRx7QVo0kX1IyCqwKZw0WX2nxAVYY
 LINE_USER_ID = "U55199b00fb78da85bb285db6d00b6ff5"
 # ---------------------------------------------------
 
-# --- 自定義 CSS (V17.1 企業級美學) ---
+# --- 自定義 CSS ---
 st.markdown("""
     <style>
-    /* 全站基礎 */
     .stApp { background-color: #f8f9fa; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; }
     #MainMenu {visibility: hidden;} footer {visibility: hidden;}
-    
-    /* 標題 */
     .brand-title { font-weight: 900; font-size: 2.5rem; color: #1a1a1a; text-align: center; letter-spacing: 2px; margin-bottom: 20px; text-transform: uppercase; }
-    
-    /* 戰情數據卡 */
     .metric-card { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); border-left: 6px solid #1a1a1a; text-align: center; margin-bottom: 10px; transition: transform 0.2s; }
-    .metric-card:hover { transform: translateY(-3px); }
     .metric-value { font-size: 2rem; color: #1a1a1a; font-weight: 700; margin: 5px 0; }
     .metric-label { font-size: 0.85rem; color: #666; font-weight: 600; letter-spacing: 1px; }
-    
-    /* 商品卡片 */
     .product-card { background: white; border-radius: 12px; padding: 10px; box-shadow: 0 3px 8px rgba(0,0,0,0.05); margin-bottom: 15px; border: 1px solid #eee; }
     .product-card img { border-radius: 8px; width: 100%; height: 150px; object-fit: cover; }
-    
-    /* 人員卡片 */
     .user-card { background: white; border-radius: 10px; padding: 15px; border: 1px solid #e0e0e0; margin-bottom: 10px; display: flex; align-items: center; justify-content: space-between; }
     .user-info { display: flex; flex-direction: column; }
     .user-name { font-weight: bold; font-size: 1.1rem; color: #333; }
     .user-role { font-size: 0.8rem; color: #666; background: #f0f0f0; padding: 2px 8px; border-radius: 10px; width: fit-content; margin-top: 5px; }
     .status-active { color: #28a745; font-weight: bold; font-size: 0.8rem; }
     .status-inactive { color: #dc3545; font-weight: bold; font-size: 0.8rem; }
-
-    /* 按鈕 */
     .stButton>button { width: 100%; border-radius: 8px; font-weight: 600; height: 3em; border: none; box-shadow: 0 2px 5px rgba(0,0,0,0.1); transition: all 0.2s; }
     .stButton>button:hover { transform: scale(1.02); box-shadow: 0 5px 10px rgba(0,0,0,0.1); }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. 核心連線邏輯 (防崩潰版) ---
+# --- 2. 核心連線邏輯 ---
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
 
 @st.cache_resource(ttl=3600)
@@ -93,13 +81,10 @@ def get_worksheet_safe(sh, title, headers):
     except: return None
 
 # --- 3. 工具模組 ---
-
-# 圖片網址淨化器
 def render_image_url(url_input):
     if not url_input: return "https://i.ibb.co/W31w56W/placeholder.png"
     s = str(url_input).strip()
-    if len(s) < 10 or not s.startswith("http"):
-        return "https://i.ibb.co/W31w56W/placeholder.png"
+    if len(s) < 10 or not s.startswith("http"): return "https://i.ibb.co/W31w56W/placeholder.png"
     return s
 
 def upload_image_to_imgbb(image_file):
@@ -135,9 +120,7 @@ def get_data_safe(ws):
     if data is None: return pd.DataFrame()
     return pd.DataFrame(data)
 
-# 重要：寫入紀錄函式
 def log_event(ws_logs, user, action, detail):
-    # 格式: 時間戳記 | 操作者 | 動作類別 | 詳細內容
     safe_api_call(ws_logs.append_row, [datetime.now().strftime("%Y-%m-%d %H:%M:%S"), user, action, detail])
 
 # --- 5. 主程式 ---
@@ -166,17 +149,21 @@ def main():
                 if st.form_submit_button("登入系統", type="primary"):
                     users_df = get_data_safe(ws_users)
                     if not users_df.empty:
-                        users_df['Name'] = users_df['Name'].astype(str)
-                        users_df['Password'] = users_df['Password'].astype(str)
-                        valid = users_df[(users_df['Name'] == user_input) & (users_df['Password'] == pass_input) & (users_df['Status'] == 'Active')]
+                        # 確保轉為字串比對，去除空格
+                        users_df['Name'] = users_df['Name'].astype(str).str.strip()
+                        users_df['Password'] = users_df['Password'].astype(str).str.strip()
+                        
+                        valid = users_df[(users_df['Name'] == str(user_input).strip()) & (users_df['Password'] == str(pass_input).strip()) & (users_df['Status'] == 'Active')]
+                        
                         if not valid.empty:
                             st.session_state['logged_in'] = True
                             st.session_state['user_name'] = user_input
                             st.session_state['user_role'] = valid.iloc[0]['Role']
                             log_event(ws_logs, user_input, "Login", "登入成功")
                             st.rerun()
-                        else: st.error("帳號或密碼錯誤")
+                        else: st.error("帳號或密碼錯誤 (或帳號已停用)")
                     else:
+                        # 初始化後門
                         if user_input == "Boss" and pass_input == "1234":
                             ws_users.append_row(["Boss", "1234", "Admin", "Active", str(datetime.now())])
                             st.success("初始化完成")
@@ -192,24 +179,42 @@ def main():
         df[num] = pd.to_numeric(df[num], errors='coerce').fillna(0).astype(int)
     df['SKU'] = df['SKU'].astype(str)
 
-    # --- C. 側邊欄 ---
+    # --- C. 側邊欄 (V17.2 修復核心：密碼修改邏輯) ---
     with st.sidebar:
         st.markdown(f"### 👤 {st.session_state['user_name']}")
         role_label = "🔴 Admin" if st.session_state['user_role'] == 'Admin' else "🟢 Staff"
         st.caption(f"Role: {role_label}")
-        with st.expander("⚙️ 個人設定"):
+        
+        with st.expander("⚙️ 個人設定 (修改密碼)"):
             with st.form("pwd"):
                 old = st.text_input("舊密碼", type="password")
                 new = st.text_input("新密碼", type="password")
-                if st.form_submit_button("修改"):
-                    try:
-                        cell = ws_users.find(st.session_state['user_name'])
-                        if str(old) == str(ws_users.cell(cell.row, 2).value) and new:
-                            ws_users.update_cell(cell.row, 2, new)
-                            log_event(ws_logs, st.session_state['user_name'], "Security", "修改個人密碼")
-                            st.success("成功")
-                        else: st.error("失敗")
-                    except: pass
+                confirm = st.text_input("確認新密碼", type="password")
+                
+                if st.form_submit_button("確認修改"):
+                    if not old or not new:
+                        st.error("❌ 密碼欄位不得為空")
+                    elif new != confirm:
+                        st.error("❌ 兩次新密碼輸入不一致")
+                    else:
+                        try:
+                            # 1. 精準定位使用者 (限制在第1欄搜尋)
+                            cell = ws_users.find(st.session_state['user_name'], in_column=1)
+                            
+                            # 2. 抓取資料庫中的真實密碼 (第2欄)
+                            real_pwd = str(ws_users.cell(cell.row, 2).value).strip()
+                            
+                            # 3. 比對 (去除空格)
+                            if str(old).strip() == real_pwd:
+                                ws_users.update_cell(cell.row, 2, str(new).strip())
+                                log_event(ws_logs, st.session_state['user_name'], "Security", "修改密碼成功")
+                                st.success("✅ 密碼修改成功！")
+                            else:
+                                st.error("❌ 舊密碼錯誤")
+                        except Exception as e:
+                            # V17.2: 顯示具體錯誤，不再 pass
+                            st.error(f"❌ 系統錯誤: {e}")
+        
         st.markdown("---")
         if st.button("🚪 登出"):
             log_event(ws_logs, st.session_state['user_name'], "Logout", "登出系統")
@@ -245,7 +250,7 @@ def main():
     # --- E. 功能分頁 ---
     tabs = st.tabs(["🧥 樣品展示", "⚡ POS", "➕ 商品管理", "📝 全知後台"])
 
-    # Tab 1: 樣品
+    # Tab 1
     with tabs[0]:
         q = st.text_input("🔍 搜尋", placeholder="SKU / Name...")
         v_df = df.copy()
@@ -268,7 +273,7 @@ def main():
                             </div>
                         </div>""", unsafe_allow_html=True)
 
-    # Tab 2: POS
+    # Tab 2
     with tabs[1]:
         c1, c2 = st.columns(2)
         with c1:
@@ -308,7 +313,7 @@ def main():
                         time.sleep(1)
                         st.rerun()
 
-    # Tab 3: 商品管理
+    # Tab 3
     with tabs[2]:
         c1, c2 = st.columns(2)
         with c1:
@@ -362,44 +367,25 @@ def main():
                 time.sleep(1)
                 st.rerun()
 
-    # Tab 4: 全知後台 (V17.1 重點升級：黑盒子紀錄)
+    # Tab 4
     with tabs[3]:
-        # --- A. 歷史回朔機 (任何人可見) ---
-        st.subheader("🕵️ 歷史操作回朔 (Audit Log)")
-        
-        # 搜尋過濾器
+        st.subheader("🕵️ 歷史操作回朔")
         f_col1, f_col2 = st.columns(2)
-        with f_col1:
-            # 1. 日期選擇器 (V17.1)
-            search_date = st.date_input("📅 選擇日期 (Date)", value=None)
-        with f_col2:
-            # 2. 動作過濾器 (V17.1)
-            action_types = ["All", "Login", "Logout", "Sale", "Restock", "New_Item", "Del_Item", "HR_Update", "Import", "Security"]
-            search_action = st.selectbox("🔍 動作篩選 (Action)", action_types)
+        with f_col1: search_date = st.date_input("📅 選擇日期", value=None)
+        with f_col2: search_action = st.selectbox("🔍 動作篩選", ["All", "Login", "Logout", "Sale", "Restock", "New_Item", "Del_Item", "HR_Update", "Import", "Security"])
 
         logs_df = get_data_safe(ws_logs)
         if not logs_df.empty:
-            # 數據處理
             logs_df['DateObj'] = pd.to_datetime(logs_df['Timestamp'], errors='coerce').dt.date
             display_logs = logs_df.copy()
-
-            # 執行篩選
-            if search_date:
-                display_logs = display_logs[display_logs['DateObj'] == search_date]
-            if search_action != "All":
-                display_logs = display_logs[display_logs['Action'] == search_action]
-
-            # 顯示結果 (不顯示 DateObj 輔助欄位)
+            if search_date: display_logs = display_logs[display_logs['DateObj'] == search_date]
+            if search_action != "All": display_logs = display_logs[display_logs['Action'] == search_action]
             st.dataframe(display_logs.drop(columns=['DateObj']).sort_index(ascending=False), use_container_width=True, height=400)
-        else:
-            st.info("尚無紀錄")
+        else: st.info("尚無紀錄")
 
-        # --- B. HR 與 系統管理 (僅 Admin 可見) ---
         if st.session_state['user_role'] == 'Admin':
             st.markdown("---")
             st.subheader("👥 人員管理中心")
-            
-            # 人員卡片
             users_df = get_data_safe(ws_users)
             if not users_df.empty:
                 u_rows = [users_df.iloc[i:i+3] for i in range(0, len(users_df), 3)]
@@ -421,9 +407,7 @@ def main():
                             """, unsafe_allow_html=True)
 
             st.divider()
-            
             manage_tabs = st.tabs(["➕ 新增/修改員工", "🗑️ 刪除員工", "📡 系統測試"])
-            
             with manage_tabs[0]:
                 c_edit1, c_edit2 = st.columns([1, 2])
                 with c_edit1: st.info("💡 輸入現有帳號即為修改，輸入新帳號即為新增。")
@@ -435,7 +419,7 @@ def main():
                     if st.button("💾 儲存設定", type="primary"):
                         if n and p:
                             try:
-                                cell = ws_users.find(n)
+                                cell = ws_users.find(n, in_column=1) # 修正: 限制搜尋欄位
                                 r_idx = cell.row
                                 ws_users.update_cell(r_idx, 2, p)
                                 ws_users.update_cell(r_idx, 3, r)
@@ -453,8 +437,7 @@ def main():
             with manage_tabs[1]:
                 del_n = st.selectbox("選擇要刪除的員工", ["..."] + users_df['Name'].tolist())
                 if del_n != "..." and st.button("❌ 確認刪除"):
-                    if del_n == "Boss" or del_n == st.session_state['user_name']:
-                        st.error("無法刪除老闆或自己")
+                    if del_n == "Boss" or del_n == st.session_state['user_name']: st.error("無法刪除老闆或自己")
                     else:
                         ws_users.delete_rows(ws_users.find(del_n).row)
                         log_event(ws_logs, st.session_state['user_name'], "HR_Update", f"刪除員工: {del_n}")
@@ -464,19 +447,18 @@ def main():
 
             with manage_tabs[2]:
                 if st.button("發送 LINE 測試"):
-                    res = send_line_push("✅ V17.1 系統運作正常")
+                    res = send_line_push("✅ V17.2 系統運作正常")
                     if res == "SUCCESS": st.success("發送成功")
                     else: st.error(res)
 
-            # V17.1 危險區域
             st.markdown("---")
-            with st.expander("🔴 危險區域 (Danger Zone)"):
-                st.warning("⚠️ 警告：此操作將永久刪除所有歷史操作紀錄，無法復原。")
+            with st.expander("🔴 危險區域"):
+                st.warning("⚠️ 警告：此操作將永久刪除所有歷史操作紀錄。")
                 if st.button("☢️ 確認清空所有紀錄"):
                     ws_logs.clear()
                     ws_logs.append_row(["Timestamp", "User", "Action", "Details"])
                     log_event(ws_logs, st.session_state['user_name'], "Security", "執行紀錄清空")
-                    st.success("紀錄已清空並重置")
+                    st.success("紀錄已清空")
                     time.sleep(1)
                     st.rerun()
 
