@@ -4,7 +4,7 @@ import gspread
 from google.oauth2.service_account import Credentials
 from datetime import datetime
 
-# --- Apex V7.1 Config ---
+# --- Apex V7.2 Config ---
 st.set_page_config(page_title="服飾庫存 Apex", layout="wide", page_icon="☁️")
 
 # --- 連線設定 ---
@@ -19,11 +19,8 @@ def get_connection():
     return gspread.authorize(creds)
 
 def init_db(client):
-    # 這裡請務必確認是您正確的網址 (若您之前已貼上正確的，請把下面這行換回您的網址)
-    # 為了保險，我們這裡用 "open_by_url" 並請您再次確認填入
-    # 如果您懶得改，可以先試著用回 open("Inventory_DB")，但我建議用網址最穩
     try:
-        # ⚠️ 請注意：下面這一行請換成您真正的 Google 試算表網址 ⚠️
+        # ⚠️⚠️⚠️ 主理人請注意：請將下方引號內的網址，換成您剛剛測試成功的那串 Google 試算表網址 ⚠️⚠️⚠️
         sh = client.open_by_url("https://docs.google.com/spreadsheets/d/1oCdUsYy8AGp8slJyrlYw2Qy2POgL2eaIp7_8aTVcX3w/edit?gid=1626161493#gid=1626161493") 
         return sh
     except Exception as e:
@@ -31,58 +28,82 @@ def init_db(client):
         return None
 
 def main():
-    st.title("☁️ Apex 服飾庫存 - V7.1 最終版")
+    st.title("☁️ Apex 服飾庫存 - V7.2 團隊版")
 
+    # 1. 啟動連線
     client = get_connection()
     sh = init_db(client)
     if not sh: st.stop()
 
     ws_items = sh.worksheet("Items")
-    ws_logs = sh.worksheet("Logs")
+    ws_logs = sh.worksheet("Logs") # 這裡我們把紀錄功能加回來
 
-    # 🔗 絕對傳送門：讓 App 告訴你它連去哪了
-    st.sidebar.success("系統連線正常")
-    st.sidebar.link_button("🔗 點我打開目前連線的資料庫", sh.url)
+    # 2. 身份驗證 (把門鎖裝回來)
+    st.sidebar.header("🔐 員工登入")
+    user_name = st.sidebar.text_input("請輸入您的姓名")
+    
+    if not user_name:
+        st.warning("⚠️ 請先在左側輸入姓名，以解鎖系統並開始作業。")
+        st.stop() # 這裡會暫停，直到輸入名字
+    
+    st.sidebar.success(f"Hi, {user_name} (已連線)")
+    st.sidebar.divider()
+    st.sidebar.link_button("🔗 打開 Google 資料庫", sh.url)
 
-    # 讀取資料
+    # 3. 讀取資料
     data = ws_items.get_all_records()
     df = pd.DataFrame(data)
 
-    # 處理空資料狀況
+    # 處理空資料
     if df.empty:
         sku_list = []
     else:
-        # 強制轉字串避免數字/文字混淆
-        df['SKU'] = df['SKU'].astype(str)
+        df['SKU'] = df['SKU'].astype(str) # 強制轉文字
         sku_list = df['SKU'].tolist()
 
-    # --- 介面 ---
-    tab1, tab2 = st.tabs(["📦 庫存清單", "➕ 新增商品"])
+    # --- 分頁介面 ---
+    tab1, tab2, tab3 = st.tabs(["📦 庫存清單", "➕ 新增商品", "📝 操作紀錄"])
 
+    # === Tab 1: 清單 ===
     with tab1:
         if df.empty:
             st.info("目前資料庫是空的。請到隔壁分頁新增商品 👉")
         else:
+            # 搜尋框
+            search = st.text_input("🔍 搜尋商品 (SKU 或名稱)")
+            if search:
+                # 簡單搜尋邏輯
+                df = df[df.apply(lambda row: row.astype(str).str.contains(search, case=False).any(), axis=1)]
+            
             st.dataframe(df, use_container_width=True)
 
+    # === Tab 2: 新增 ===
     with tab2:
         with st.form("add_form"):
-            n_name = st.text_input("商品名稱 (例如：白T)")
-            n_sku = st.text_input("SKU (例如：T-001)")
+            n_name = st.text_input("商品名稱 (例如：修身牛仔褲)")
+            n_sku = st.text_input("SKU (例如：JN-001)")
+            n_size = st.selectbox("尺寸", ["S", "M", "L", "XL", "F"])
             n_qty = st.number_input("數量", value=10)
             
             if st.form_submit_button("確認新增"):
                 if n_sku and n_name:
-                    # ✨ V7.1 新邏輯：直接檢查我們剛剛讀到的清單 ✨
-                    # 如果清單是空的，這裡絕對不會擋你
                     if n_sku in sku_list:
-                        st.error(f"❌ SKU '{n_sku}' 已經存在了！不能重複。")
+                        st.error(f"❌ SKU '{n_sku}' 已經存在了！")
                     else:
-                        ws_items.append_row([n_sku, n_name, "F", n_qty, str(datetime.now())])
+                        # 寫入商品表
+                        ws_items.append_row([n_sku, n_name, n_size, n_qty, str(datetime.now())])
+                        # 寫入紀錄表 (加上 user_name)
+                        ws_logs.append_row([str(datetime.now()), user_name, "新增商品", f"{n_sku} {n_name}"])
+                        
                         st.success(f"✅ 成功新增：{n_name}")
-                        st.rerun() # 立刻刷新
+                        st.rerun()
                 else:
-                    st.warning("請把名稱和 SKU 填好")
+                    st.warning("請填寫完整資訊")
+
+    # === Tab 3: 紀錄 (看誰做了什麼) ===
+    with tab3:
+        logs_data = ws_logs.get_all_records()
+        st.dataframe(pd.DataFrame(logs_data), use_container_width=True)
 
 if __name__ == "__main__":
     main()
