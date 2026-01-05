@@ -24,7 +24,7 @@ def init_db(client):
     # 如果您懶得改，可以先試著用回 open("Inventory_DB")，但我建議用網址最穩
     try:
         # ⚠️ 請注意：下面這一行請換成您真正的 Google 試算表網址 ⚠️
-        sh = client.open_by_url("https://docs.google.com/spreadsheets/d/您的試算表ID_請替換這裡") 
+        sh = client.open_by_url("https://docs.google.com/spreadsheets/d/1oCdUsYy8AGp8slJyrlYw2Qy2POgL2eaIp7_8aTVcX3w/edit?gid=1626161493#gid=1626161493") 
         return sh
     except Exception as e:
         st.error(f"連線失敗，請檢查網址或權限: {e}")
