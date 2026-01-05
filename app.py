@@ -22,10 +22,10 @@ GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/1oCdUsYy8AGp8slJyrlYw
 # 2. ImgBB API Key
 IMGBB_API_KEY = "c2f93d2a1a62bd3a6da15f477d2bb88a"
 
-# 3. LINE Channel Access Token (剛剛那串超長的亂碼)
+# 3. LINE Channel Access Token (長的那串)
 LINE_CHANNEL_ACCESS_TOKEN = "6e6b206277d145fc0e6c24ec3ed94064"
 
-# 4. LINE User ID (剛剛那串 U 開頭的亂碼)
+# 4. LINE User ID (U開頭的那串)
 LINE_USER_ID = "U55199b00fb78da85bb285db6d00b6ff5"
 
 # ---------------------------------------------------
@@ -109,7 +109,7 @@ def init_db():
         st.error(f"無法連結資料庫: {e}")
         return None
 
-# --- 3. 工具模組 (ImgBB, LINE Messaging API, QR, Excel) ---
+# --- 3. 工具模組 ---
 
 def upload_image_to_imgbb(image_file):
     if not IMGBB_API_KEY or "請將您的" in IMGBB_API_KEY: return None
@@ -123,10 +123,13 @@ def upload_image_to_imgbb(image_file):
         return None
     except: return None
 
-# V13.0: LINE Messaging API (Push Message)
+# V13.1: LINE Messaging API (含錯誤回報)
 def send_line_push(message):
-    if not LINE_CHANNEL_ACCESS_TOKEN or "請將您的" in LINE_CHANNEL_ACCESS_TOKEN: return
-    if not LINE_USER_ID or "請將您的" in LINE_USER_ID: return
+    # 1. 檢查是否填寫資料
+    if not LINE_CHANNEL_ACCESS_TOKEN or "請將您的" in LINE_CHANNEL_ACCESS_TOKEN:
+        return "ERROR_TOKEN_EMPTY"
+    if not LINE_USER_ID or "請將您的" in LINE_USER_ID:
+        return "ERROR_ID_EMPTY"
     
     url = "https://api.line.me/v2/bot/message/push"
     headers = {
@@ -137,11 +140,18 @@ def send_line_push(message):
         "to": LINE_USER_ID,
         "messages": [{"type": "text", "text": message}]
     }
+    
     try:
-        requests.post(url, headers=headers, json=data)
-    except: pass
+        response = requests.post(url, headers=headers, json=data)
+        if response.status_code == 200:
+            return "SUCCESS"
+        else:
+            # 回傳錯誤代碼與訊息以便除錯
+            return f"FAILED: {response.status_code} - {response.text}"
+    except Exception as e:
+        return f"EXCEPTION: {str(e)}"
 
-# V13.0: QR Code 生成功能
+# QR Code
 def generate_qr(data):
     qr = qrcode.QRCode(version=1, box_size=10, border=5)
     qr.add_data(data)
@@ -289,9 +299,9 @@ def main():
                             </div>
                         </div>""", unsafe_allow_html=True)
 
-    # Tab 2: POS (V13.0 LINE Messaging API)
+    # Tab 2: POS
     with tabs[1]:
-        st.caption("🔍 支援 QR Code 掃描槍：請點擊下方搜尋框後直接掃描")
+        st.caption("🔍 支援 QR Code 掃描槍")
         sku_opts = df.apply(lambda x: f"{x['SKU']} | {x['Name']}", axis=1).tolist()
         sel_sku = st.selectbox("鎖定商品", ["請選擇..."] + sku_opts)
         
@@ -323,21 +333,22 @@ def main():
                     ws_items.update_cell(r, 8, str(datetime.now()))
                     log_event(ws_logs, st.session_state['user_name'], "銷售", f"{target['SKU']} -{op_qty} | {note}")
                     
-                    # V13.0 LINE 警報觸發 (Messaging API)
+                    # 警報觸發
                     if new_q < 5:
                         msg = f"⚠️ [缺貨警報] \n商品: {target['Name']} \n剩餘: {new_q} 件 \n請盡速補貨！"
-                        send_line_push(msg)
-                        st.toast("已發送 LINE 通知", icon="📢")
+                        result = send_line_push(msg)
+                        if result == "SUCCESS":
+                            st.toast("✅ LINE 通知已發送", icon="📢")
+                        else:
+                            st.error(f"❌ LINE 發送失敗: {result}")
                         
                     st.success("成功")
-                    time.sleep(1)
+                    time.sleep(2)
                     st.rerun()
 
     # Tab 3: 商品與匯入
     with tabs[2]:
         st.subheader("🛠️ 商品資料庫管理")
-        
-        # 1. 單筆新增
         with st.expander("➕ 單筆新增 / 圖片上傳"):
             with st.form("new_item"):
                 c1, c2 = st.columns(2)
@@ -361,42 +372,34 @@ def main():
                             time.sleep(1)
                             st.rerun()
                             
-        # 2. Excel 批量匯入
         with st.expander("📂 Excel 批量匯入 (進階)"):
             st.info("請先下載範本，填寫後上傳。")
             sample_data = pd.DataFrame(columns=["SKU", "Name", "Category", "Size", "Qty", "Price", "Cost"])
             csv = sample_data.to_csv(index=False).encode('utf-8')
             st.download_button("📥 下載範本 (CSV)", data=csv, file_name="import_template.csv", mime="text/csv")
-            
             uploaded_excel = st.file_uploader("上傳檔案", type=['csv', 'xlsx'])
             if uploaded_excel:
                 if st.button("確認匯入"):
                     try:
                         if uploaded_excel.name.endswith('.csv'): imp_df = pd.read_csv(uploaded_excel)
                         else: imp_df = pd.read_excel(uploaded_excel)
-                        
                         success_count = 0
                         existing_skus = df['SKU'].tolist()
                         progress_bar = st.progress(0)
-                        
                         for idx, row in imp_df.iterrows():
                             sku = str(row['SKU']).strip()
                             if sku in existing_skus:
                                 cell = ws_items.find(sku)
                                 current_q = int(ws_items.cell(cell.row, 5).value)
                                 ws_items.update_cell(cell.row, 5, current_q + int(row['Qty']))
-                            else:
-                                ws_items.append_row([sku, row['Name'], row['Category'], row['Size'], row['Qty'], row['Price'], row['Cost'], str(datetime.now()), ""])
+                            else: ws_items.append_row([sku, row['Name'], row['Category'], row['Size'], row['Qty'], row['Price'], row['Cost'], str(datetime.now()), ""])
                             success_count += 1
                             progress_bar.progress((idx + 1) / len(imp_df))
-                        
-                        log_event(ws_logs, st.session_state['user_name'], "批量匯入", f"處理 {success_count} 筆")
                         st.success(f"匯入 {success_count} 筆成功")
                         time.sleep(2)
                         st.rerun()
                     except Exception as e: st.error(f"錯誤: {e}")
 
-        # 3. 標籤產生器
         with st.expander("🖨️ QR Code 標籤"):
             tag_sku = st.selectbox("選擇商品", df['SKU'].tolist())
             if tag_sku:
@@ -404,8 +407,7 @@ def main():
                 with col_img:
                     qr_bytes = generate_qr(tag_sku)
                     st.image(qr_bytes, width=150)
-                with col_info:
-                    st.info("可右鍵下載列印")
+                with col_info: st.info("可右鍵下載列印")
 
         st.divider()
         st.caption("🗑️ 刪除商品")
@@ -414,7 +416,6 @@ def main():
             if st.button("永久刪除", type="secondary"):
                 r = ws_items.find(del_sku).row
                 safe_api_call(ws_items.delete_rows, r)
-                log_event(ws_logs, st.session_state['user_name'], "刪除商品", del_sku)
                 st.success("已刪除")
                 time.sleep(1)
                 st.rerun()
@@ -436,6 +437,22 @@ def main():
         if st.session_state['user_role'] == 'Admin':
             st.divider()
             st.subheader("⚙️ 管理員後台")
+            
+            # === V13.1 新增：LINE 連線測試 ===
+            st.info("📡 LINE 系統診斷中心")
+            if st.button("發送測試訊息 (Test Connection)"):
+                test_msg = "✅ IFUKUK 系統連線成功！這是一條測試訊息。"
+                result = send_line_push(test_msg)
+                if result == "SUCCESS":
+                    st.success("測試成功！您的手機應該會收到訊息。")
+                elif "ERROR_TOKEN_EMPTY" in result:
+                    st.error("❌ 失敗：請檢查代碼第 26 行，Channel Access Token 尚未填入。")
+                elif "ERROR_ID_EMPTY" in result:
+                    st.error("❌ 失敗：請檢查代碼第 29 行，User ID 尚未填入。")
+                else:
+                    st.error(f"❌ 傳送失敗，錯誤詳情：\n{result}")
+            # ==================================
+
             with st.expander("👥 員工管理 / 🔴 清空"):
                 st.dataframe(get_data_safe(ws_users), use_container_width=True)
                 action = st.radio("動作", ["新增/修改", "刪除"], horizontal=True)
