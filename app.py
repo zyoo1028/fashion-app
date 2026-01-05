@@ -20,7 +20,7 @@ IMGBB_API_KEY = "c2f93d2a1a62bd3a6da15f477d2bb88a"
 
 # ---------------------------------------------------
 
-# --- 自定義 CSS (維持 V12 手機優化) ---
+# --- 自定義 CSS ---
 st.markdown("""
     <style>
     #MainMenu {visibility: hidden;}
@@ -44,7 +44,6 @@ st.markdown("""
         transition: all 0.2s;
     }
     
-    /* 強制卡片白底黑字 */
     div[data-testid="stMetric"] {
         background-color: #ffffff !important;
         padding: 15px;
@@ -238,8 +237,8 @@ def main():
     kpi4.metric("📈 淨利", f"${profit:,.0f}")
     st.divider()
 
-    # --- V12.2 新版分頁結構 ---
-    tabs = st.tabs(["🧥 樣品", "⚡ POS", "➕ 商品管理", "📝 紀錄/後台"])
+    # --- V12.3 修正：分頁名稱與權限配置 ---
+    tabs = st.tabs(["🧥 樣品", "⚡ POS", "➕ 商品管理", "📝 操作紀錄"])
 
     # Tab 1: 樣品
     with tabs[0]:
@@ -304,10 +303,9 @@ def main():
                     time.sleep(1)
                     st.rerun()
 
-    # Tab 3: 商品管理 (V12.2 重點：獨立分頁，全體可用，無摺疊)
+    # Tab 3: 商品管理 (全員開放)
     with tabs[2]:
         st.subheader("➕ 新增商品 / 上傳圖片")
-        
         with st.form("new_item"):
             c1, c2 = st.columns(2)
             n_sku = c1.text_input("SKU 編號", placeholder="例如: T-888")
@@ -319,11 +317,9 @@ def main():
             c6, c7 = st.columns(2)
             n_cost = c6.number_input("成本", 0)
             n_price = c7.number_input("售價", 0)
-            
             st.markdown("📷 **圖片設定**")
             up_file = st.file_uploader("上傳圖片", type=['png', 'jpg', 'jpeg'])
             n_url_manual = st.text_input("或貼上網址")
-            
             if st.form_submit_button("建立商品", type="primary"):
                 if n_sku and n_name:
                     if n_sku in df['SKU'].tolist():
@@ -336,7 +332,6 @@ def main():
                                 if not final_img_url: st.stop()
                         elif n_url_manual:
                             final_img_url = n_url_manual
-                        
                         new_row = [n_sku, n_name, n_cat, n_size, n_qty, n_price, n_cost, str(datetime.now()), final_img_url]
                         safe_api_call(ws_items.append_row, new_row)
                         log_event(ws_logs, st.session_state['user_name'], "建立新品", f"{n_sku} {n_name}")
@@ -345,9 +340,8 @@ def main():
                         st.rerun()
                 else:
                     st.error("請輸入 SKU 與 名稱")
-        
         st.divider()
-        st.caption("🗑️ 刪除商品 (謹慎操作)")
+        st.caption("🗑️ 刪除商品")
         del_sku = st.selectbox("選擇要刪除的商品", ["請選擇..."] + df['SKU'].tolist())
         if del_sku != "請選擇...":
             if st.button("確認永久刪除", type="secondary"):
@@ -358,9 +352,9 @@ def main():
                 time.sleep(1)
                 st.rerun()
 
-    # Tab 4: 紀錄/後台 (合併區)
+    # Tab 4: 操作紀錄 (V12.3：紀錄全員可見，管理功能僅 Admin 可見)
     with tabs[3]:
-        # 上半部：紀錄
+        # === A. 紀錄區 (所有人可見) ===
         st.subheader("🔍 紀錄查詢")
         col_date, col_key = st.columns(2)
         search_date = col_date.date_input("📅 日期", value=None)
@@ -373,17 +367,19 @@ def main():
             if search_key: display_logs = display_logs[display_logs.apply(lambda x: search_key.lower() in str(x.values).lower(), axis=1)]
             st.dataframe(display_logs.drop(columns=['DateObj']).sort_index(ascending=False).tail(500), use_container_width=True)
         
-        # 下半部：管理員專區
+        # === B. 管理員專區 (只有 Admin 才會浮現) ===
         if st.session_state['user_role'] == 'Admin':
             st.divider()
-            st.subheader("⚙️ 管理員專區")
-            with st.expander("👥 員工管理 / 🗑️ 清空紀錄", expanded=False):
-                # 員工列表
+            st.subheader("⚙️ 管理員專用後台")
+            st.caption("⚠️ 以下功能僅 Admin 可見")
+            
+            with st.expander("👥 員工管理 / 🔴 清空紀錄"):
+                # 1. 員工列表
+                st.markdown("#### 目前員工")
                 st.dataframe(get_data_safe(ws_users), use_container_width=True)
                 
-                # 新增員工
-                st.markdown("---")
-                action = st.radio("員工操作", ["新增/修改", "刪除"])
+                st.markdown("#### 帳號操作")
+                action = st.radio("動作", ["新增/修改", "刪除"], horizontal=True)
                 if action == "新增/修改":
                      n = st.text_input("帳號", key="u_n")
                      p = st.text_input("密碼", key="u_p")
@@ -406,9 +402,8 @@ def main():
                          time.sleep(1)
                          st.rerun()
                 
-                # 清空紀錄
                 st.markdown("---")
-                if st.button("🔴 清空所有操作紀錄"):
+                if st.button("🔴 危險：清空所有紀錄", type="primary"):
                     ws_logs.clear()
                     ws_logs.append_row(["Timestamp", "User", "Action", "Details"])
                     st.success("已清空")
