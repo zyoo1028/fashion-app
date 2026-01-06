@@ -18,6 +18,67 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+# ==========================================
+# 🛑 【MATRIX-V11 視覺強制修復補丁】開始
+# 說明：此區塊強制鎖定手機版顏色，解決隱形文字問題
+# ==========================================
+st.markdown("""
+    <style>
+        /* 1. 全局強制：所有背景鎖死為白色 */
+        .stApp {
+            background-color: #FFFFFF !important;
+        }
+        
+        /* 2. 暴力修正所有普通文字顏色為深黑色 */
+        p, div, h1, h2, h3, h4, span, label, li {
+            color: #000000 !important;
+        }
+        
+        /* 3. 特別修復：Tab 選項卡 (解決看不見的問題) */
+        /* 未選中的 Tab：深灰色 */
+        button[data-baseweb="tab"] div p {
+            color: #555555 !important;
+            font-weight: 600 !important;
+        }
+        /* 被選中的 Tab：紅色高亮 */
+        button[data-baseweb="tab"][aria-selected="true"] div p {
+            color: #FF4B4B !important;
+        }
+
+        /* 4. 特別修復：輸入框與搜尋欄 */
+        /* 輸入框背景淺灰，文字黑色 */
+        input.st-ai, textarea, select {
+            color: #000000 !important;
+            background-color: #F0F2F6 !important;
+        }
+        /* 修正輸入框外圍容器 */
+        div[data-testid="stTextInput"] {
+            color: #000000 !important;
+        }
+        
+        /* 5. 修正指標卡片 (Metrics) 文字 */
+        div[data-testid="stMetricValue"] {
+            color: #000000 !important;
+        }
+        div[data-testid="stMetricLabel"] {
+            color: #666666 !important;
+        }
+
+        /* 6. 強制移除深色模式 (Dark Mode) 干擾 */
+        @media (prefers-color-scheme: dark) {
+            .stApp {
+                background-color: #FFFFFF !important;
+            }
+            h1, h2, h3, p, span {
+                color: #000000 !important;
+            }
+        }
+    </style>
+""", unsafe_allow_html=True)
+# ==========================================
+# 🛑 【MATRIX-V11 視覺強制修復補丁】結束
+# ==========================================
+
 # --- ⚠️⚠️⚠️ 設定區 (請填入您的 4 把鑰匙) ⚠️⚠️⚠️ ---
 GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/1oCdUsYy8AGp8slJyrlYw2Qy2POgL2eaIp7_8aTVcX3w/edit?gid=1626161493#gid=1626161493"
 IMGBB_API_KEY = "c2f93d2a1a62bd3a6da15f477d2bb88a"
@@ -25,23 +86,21 @@ LINE_CHANNEL_ACCESS_TOKEN = "IaGvcTOmbMFW8wKEJ5MamxfRx7QVo0kX1IyCqwKZw0WX2nxAVYY
 LINE_USER_ID = "U55199b00fb78da85bb285db6d00b6ff5"
 # ---------------------------------------------------
 
-# --- 自定義 CSS ---
+# --- 自定義 CSS (用於卡片樣式) ---
 st.markdown("""
     <style>
-    .stApp { background-color: #f8f9fa; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; }
-    #MainMenu {visibility: hidden;} footer {visibility: hidden;}
-    .brand-title { font-weight: 900; font-size: 2.5rem; color: #1a1a1a; text-align: center; letter-spacing: 2px; margin-bottom: 20px; text-transform: uppercase; }
+    .brand-title { font-weight: 900; font-size: 2.5rem; color: #1a1a1a !important; text-align: center; letter-spacing: 2px; margin-bottom: 20px; text-transform: uppercase; }
     .metric-card { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); border-left: 6px solid #1a1a1a; text-align: center; margin-bottom: 10px; transition: transform 0.2s; }
-    .metric-value { font-size: 2rem; color: #1a1a1a; font-weight: 700; margin: 5px 0; }
-    .metric-label { font-size: 0.85rem; color: #666; font-weight: 600; letter-spacing: 1px; }
+    .metric-value { font-size: 2rem; color: #1a1a1a !important; font-weight: 700; margin: 5px 0; }
+    .metric-label { font-size: 0.85rem; color: #666 !important; font-weight: 600; letter-spacing: 1px; }
     .product-card { background: white; border-radius: 12px; padding: 10px; box-shadow: 0 3px 8px rgba(0,0,0,0.05); margin-bottom: 15px; border: 1px solid #eee; }
     .product-card img { border-radius: 8px; width: 100%; height: 150px; object-fit: cover; }
     .user-card { background: white; border-radius: 10px; padding: 15px; border: 1px solid #e0e0e0; margin-bottom: 10px; display: flex; align-items: center; justify-content: space-between; }
     .user-info { display: flex; flex-direction: column; }
-    .user-name { font-weight: bold; font-size: 1.1rem; color: #333; }
-    .user-role { font-size: 0.8rem; color: #666; background: #f0f0f0; padding: 2px 8px; border-radius: 10px; width: fit-content; margin-top: 5px; }
-    .status-active { color: #28a745; font-weight: bold; font-size: 0.8rem; }
-    .status-inactive { color: #dc3545; font-weight: bold; font-size: 0.8rem; }
+    .user-name { font-weight: bold; font-size: 1.1rem; color: #333 !important; }
+    .user-role { font-size: 0.8rem; color: #666 !important; background: #f0f0f0; padding: 2px 8px; border-radius: 10px; width: fit-content; margin-top: 5px; }
+    .status-active { color: #28a745 !important; font-weight: bold; font-size: 0.8rem; }
+    .status-inactive { color: #dc3545 !important; font-weight: bold; font-size: 0.8rem; }
     .stButton>button { width: 100%; border-radius: 8px; font-weight: 600; height: 3em; border: none; box-shadow: 0 2px 5px rgba(0,0,0,0.1); transition: all 0.2s; }
     .stButton>button:hover { transform: scale(1.02); box-shadow: 0 5px 10px rgba(0,0,0,0.1); }
     </style>
@@ -298,10 +357,10 @@ def main():
                         st.markdown(f"""
                         <div class='product-card'>
                             <img src='{img}'>
-                            <div style='font-weight:bold;margin-top:5px;height:2.4em;overflow:hidden;'>{val['Name']}</div>
+                            <div style='font-weight:bold;margin-top:5px;height:2.4em;overflow:hidden;color:#000;'>{val['Name']}</div>
                             <small style='color:#888'>{val['SKU']}</small>
                             <div style='display:flex;justify-content:space-between;margin-top:5px;'>
-                                <b>${val['Price']}</b> <span style='background:#f0f0f0;padding:2px 6px;border-radius:4px;'>Q:{val['Qty']}</span>
+                                <b style='color:#000'>${val['Price']}</b> <span style='background:#f0f0f0;padding:2px 6px;border-radius:4px;color:#000'>Q:{val['Qty']}</span>
                             </div>
                         </div>""", unsafe_allow_html=True)
 
