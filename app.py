@@ -12,72 +12,116 @@ from io import BytesIO
 
 # --- 1. 系統全域設定 ---
 st.set_page_config(
-    page_title="IFUKUK 核心戰情", 
+    page_title="營運總覽", 
     layout="wide", 
     page_icon="🛡️",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="collapsed" # 手機版預設收起側邊欄，釋放空間
 )
 
 # ==========================================
-# 🛑 【MATRIX-V11 視覺強制修復補丁】開始
-# 說明：此區塊強制鎖定手機版顏色，解決隱形文字問題
+# 🛑 【MATRIX-V11 & V12 視覺聯合修復補丁】
+# 說明：整合原有的顏色修復與新的手機版面優化
 # ==========================================
 st.markdown("""
     <style>
-        /* 1. 全局強制：所有背景鎖死為白色 */
-        .stApp {
-            background-color: #FFFFFF !important;
-        }
-        
-        /* 2. 暴力修正所有普通文字顏色為深黑色 */
-        p, div, h1, h2, h3, h4, span, label, li {
-            color: #000000 !important;
-        }
-        
-        /* 3. 特別修復：Tab 選項卡 (解決看不見的問題) */
-        /* 未選中的 Tab：深灰色 */
-        button[data-baseweb="tab"] div p {
-            color: #555555 !important;
-            font-weight: 600 !important;
-        }
-        /* 被選中的 Tab：紅色高亮 */
-        button[data-baseweb="tab"][aria-selected="true"] div p {
-            color: #FF4B4B !important;
-        }
-
-        /* 4. 特別修復：輸入框與搜尋欄 */
-        /* 輸入框背景淺灰，文字黑色 */
-        input.st-ai, textarea, select {
-            color: #000000 !important;
-            background-color: #F0F2F6 !important;
-        }
-        /* 修正輸入框外圍容器 */
-        div[data-testid="stTextInput"] {
-            color: #000000 !important;
-        }
-        
-        /* 5. 修正指標卡片 (Metrics) 文字 */
-        div[data-testid="stMetricValue"] {
-            color: #000000 !important;
-        }
-        div[data-testid="stMetricLabel"] {
-            color: #666666 !important;
-        }
-
-        /* 6. 強制移除深色模式 (Dark Mode) 干擾 */
+        /* --- Part A: 基礎顏色修復 (保留您原本的設定) --- */
+        .stApp { background-color: #FFFFFF !important; }
+        p, div, h1, h2, h3, h4, span, label, li { color: #000000 !important; }
+        button[data-baseweb="tab"] div p { color: #555555 !important; font-weight: 600 !important; }
+        button[data-baseweb="tab"][aria-selected="true"] div p { color: #FF4B4B !important; }
+        input.st-ai, textarea, select { color: #000000 !important; background-color: #F0F2F6 !important; }
+        div[data-testid="stTextInput"] { color: #000000 !important; }
+        div[data-testid="stMetricValue"] { color: #000000 !important; }
+        div[data-testid="stMetricLabel"] { color: #666666 !important; }
         @media (prefers-color-scheme: dark) {
-            .stApp {
-                background-color: #FFFFFF !important;
-            }
-            h1, h2, h3, p, span {
-                color: #000000 !important;
-            }
+            .stApp { background-color: #FFFFFF !important; }
+            h1, h2, h3, p, span { color: #000000 !important; }
         }
+
+        /* --- Part B: Mobile First 極致優化 (新增) --- */
+        
+        /* 1. 移除頂部肥大留白 */
+        .block-container {
+            padding-top: 0rem !important;
+            padding-bottom: 5rem !important;
+        }
+        
+        /* 2. 隱藏預設 Header (三條線選單移至下方或自定義) */
+        header[data-testid="stHeader"] { display: none; }
+
+        /* 3. 自定義黏性導航欄 (Sticky Navbar) */
+        .navbar-container {
+            position: sticky;
+            top: 0;
+            z-index: 999;
+            background-color: #ffffff;
+            padding: 12px 16px;
+            border-bottom: 1px solid #e5e7eb;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        
+        .navbar-title {
+            font-size: 20px;
+            font-weight: 800;
+            color: #1a1a1a !important;
+            letter-spacing: -0.5px;
+        }
+        
+        .navbar-date {
+            font-size: 11px;
+            color: #6b7280 !important;
+            margin-top: -2px;
+        }
+
+        .user-avatar {
+            width: 32px;
+            height: 32px;
+            background: #000;
+            color: #fff !important;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        /* 4. 優化卡片樣式 */
+        .metric-card {
+            background: white;
+            border-radius: 16px;
+            padding: 16px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+            border: 1px solid #f3f4f6;
+            text-align: center;
+            margin-bottom: 12px;
+        }
+        .metric-value { font-size: 1.8rem; font-weight: 800; margin: 4px 0; }
+        .metric-label { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; opacity: 0.8; }
+        
+        /* 5. 產品卡片優化 */
+        .product-card {
+            background: white;
+            border-radius: 12px;
+            padding: 12px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            margin-bottom: 15px;
+            border: 1px solid #eee;
+        }
+        
+        /* 6. 按鈕優化 */
+        .stButton>button {
+            border-radius: 12px;
+            height: 3.2em;
+            font-weight: 700;
+        }
+
     </style>
 """, unsafe_allow_html=True)
-# ==========================================
-# 🛑 【MATRIX-V11 視覺強制修復補丁】結束
-# ==========================================
 
 # --- ⚠️⚠️⚠️ 設定區 (請填入您的 4 把鑰匙) ⚠️⚠️⚠️ ---
 GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/1oCdUsYy8AGp8slJyrlYw2Qy2POgL2eaIp7_8aTVcX3w/edit?gid=1626161493#gid=1626161493"
@@ -86,27 +130,7 @@ LINE_CHANNEL_ACCESS_TOKEN = "IaGvcTOmbMFW8wKEJ5MamxfRx7QVo0kX1IyCqwKZw0WX2nxAVYY
 LINE_USER_ID = "U55199b00fb78da85bb285db6d00b6ff5"
 # ---------------------------------------------------
 
-# --- 自定義 CSS (用於卡片樣式) ---
-st.markdown("""
-    <style>
-    .brand-title { font-weight: 900; font-size: 2.5rem; color: #1a1a1a !important; text-align: center; letter-spacing: 2px; margin-bottom: 20px; text-transform: uppercase; }
-    .metric-card { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); border-left: 6px solid #1a1a1a; text-align: center; margin-bottom: 10px; transition: transform 0.2s; }
-    .metric-value { font-size: 2rem; color: #1a1a1a !important; font-weight: 700; margin: 5px 0; }
-    .metric-label { font-size: 0.85rem; color: #666 !important; font-weight: 600; letter-spacing: 1px; }
-    .product-card { background: white; border-radius: 12px; padding: 10px; box-shadow: 0 3px 8px rgba(0,0,0,0.05); margin-bottom: 15px; border: 1px solid #eee; }
-    .product-card img { border-radius: 8px; width: 100%; height: 150px; object-fit: cover; }
-    .user-card { background: white; border-radius: 10px; padding: 15px; border: 1px solid #e0e0e0; margin-bottom: 10px; display: flex; align-items: center; justify-content: space-between; }
-    .user-info { display: flex; flex-direction: column; }
-    .user-name { font-weight: bold; font-size: 1.1rem; color: #333 !important; }
-    .user-role { font-size: 0.8rem; color: #666 !important; background: #f0f0f0; padding: 2px 8px; border-radius: 10px; width: fit-content; margin-top: 5px; }
-    .status-active { color: #28a745 !important; font-weight: bold; font-size: 0.8rem; }
-    .status-inactive { color: #dc3545 !important; font-weight: bold; font-size: 0.8rem; }
-    .stButton>button { width: 100%; border-radius: 8px; font-weight: 600; height: 3em; border: none; box-shadow: 0 2px 5px rgba(0,0,0,0.1); transition: all 0.2s; }
-    .stButton>button:hover { transform: scale(1.02); box-shadow: 0 5px 10px rgba(0,0,0,0.1); }
-    </style>
-    """, unsafe_allow_html=True)
-
-# --- 2. 核心連線邏輯 ---
+# --- 2. 核心連線邏輯 (保持不變) ---
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
 
 @st.cache_resource(ttl=3600)
@@ -118,19 +142,13 @@ def get_connection():
     creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
     return gspread.authorize(creds)
 
-# V18.0 核心升級：強制純文字讀取模式 (解決 0 vs 0000 問題)
 def get_data_safe(ws):
     max_retries = 3
     for i in range(max_retries):
         try:
             if ws is None: return pd.DataFrame()
-            # 關鍵修改：使用 get_all_values() 而不是 get_all_records()
-            # 這會將所有內容作為字串列表返回，不進行數字轉換
             raw_data = ws.get_all_values()
-            
             if not raw_data or len(raw_data) < 2: return pd.DataFrame()
-            
-            # 手動將第一行設為標題
             headers = raw_data[0]
             rows = raw_data[1:]
             df = pd.DataFrame(rows, columns=headers)
@@ -154,7 +172,7 @@ def get_worksheet_safe(sh, title, headers):
         return ws
     except: return None
 
-# --- 3. 工具模組 ---
+# --- 3. 工具模組 (保持不變) ---
 def render_image_url(url_input):
     if not url_input: return "https://i.ibb.co/W31w56W/placeholder.png"
     s = str(url_input).strip()
@@ -194,6 +212,19 @@ def log_event(ws_logs, user, action, detail):
         ws_logs.append_row([datetime.now().strftime("%Y-%m-%d %H:%M:%S"), user, action, detail])
     except: pass
 
+# --- 新增功能：渲染 Sticky Navbar ---
+def render_navbar(user_initial):
+    current_date = datetime.now().strftime("%b %d, %A")
+    st.markdown(f"""
+        <div class="navbar-container">
+            <div style="display:flex; flex-direction:column;">
+                <span class="navbar-title">營運總覽</span>
+                <span class="navbar-date">{current_date}</span>
+            </div>
+            <div class="user-avatar">{user_initial}</div>
+        </div>
+    """, unsafe_allow_html=True)
+
 # --- 5. 主程式 ---
 def main():
     if 'logged_in' not in st.session_state:
@@ -219,21 +250,20 @@ def main():
         c1, c2, c3 = st.columns([1, 2, 1])
         with c2:
             st.markdown("<br><br>", unsafe_allow_html=True)
-            st.markdown("<div class='brand-title'>IFUKUK</div>", unsafe_allow_html=True)
+            # 這裡也可以考慮改成 "營運總覽" 風格，但登入頁保留品牌名比較好
+            st.markdown("<div style='text-align:center; font-weight:900; font-size:2rem; margin-bottom:20px;'>IFUKUK</div>", unsafe_allow_html=True)
             with st.form("login"):
                 user_input = st.text_input("帳號")
                 pass_input = st.text_input("密碼", type="password")
                 if st.form_submit_button("登入系統", type="primary"):
                     users_df = get_data_safe(ws_users)
                     if not users_df.empty:
-                        # V18.0: 確保所有資料都是字串，去除前後空白
                         users_df['Name'] = users_df['Name'].astype(str).str.strip()
                         users_df['Password'] = users_df['Password'].astype(str).str.strip()
                         
                         input_u = str(user_input).strip()
                         input_p = str(pass_input).strip()
                         
-                        # 嚴格比對
                         valid = users_df[(users_df['Name'] == input_u) & (users_df['Password'] == input_p) & (users_df['Status'] == 'Active')]
                         
                         if not valid.empty:
@@ -250,61 +280,54 @@ def main():
                         else: st.error("登入失敗")
         return
 
+    # --- 登入後畫面 ---
+    
+    # 1. 渲染頂部導航 (取代舊的 DASHBOARD 標題)
+    user_initial = st.session_state['user_name'][0].upper() if st.session_state['user_name'] else "U"
+    render_navbar(user_initial)
+
     # --- B. 數據讀取 ---
     df = get_data_safe(ws_items)
     cols = ["SKU", "Name", "Category", "Size", "Qty", "Price", "Cost", "Last_Updated", "Image_URL"]
     for c in cols: 
         if c not in df.columns: df[c] = ""
-    # V18.0: 只對數量金額轉數字，SKU 保持字串
     for num in ['Qty', 'Price', 'Cost']:
         df[num] = pd.to_numeric(df[num], errors='coerce').fillna(0).astype(int)
     df['SKU'] = df['SKU'].astype(str)
 
-    # --- C. 側邊欄 ---
+    # --- C. 側邊欄 (保持邏輯，調整顯示) ---
     with st.sidebar:
         st.markdown(f"### 👤 {st.session_state['user_name']}")
         role_label = "🔴 Admin" if st.session_state['user_role'] == 'Admin' else "🟢 Staff"
         st.caption(f"Role: {role_label}")
         
-        with st.expander("⚙️ 個人設定 (修改密碼)"):
+        with st.expander("⚙️ 個人設定"):
             with st.form("pwd"):
                 old = st.text_input("舊密碼", type="password")
                 new = st.text_input("新密碼", type="password")
                 confirm = st.text_input("確認新密碼", type="password")
                 if st.form_submit_button("修改"):
+                    # ... (密碼修改邏輯保持不變) ...
                     if not old or not new: st.error("欄位不可為空")
                     elif new != confirm: st.error("新密碼不一致")
                     else:
                         try:
-                            # V18.0: 徹底解決密碼比對問題
-                            # 重新讀取整張表 (純文字模式)
                             raw_data = ws_users.get_all_values()
-                            headers = raw_data[0]
-                            # 找到 User Name 所在的 Row Index
                             user_row_idx = -1
                             current_pwd_db = ""
-                            
                             for i, row in enumerate(raw_data):
                                 if str(row[0]).strip() == st.session_state['user_name']:
-                                    user_row_idx = i + 1 # Google Sheet 是從 1 開始，列表是從 0 開始
-                                    current_pwd_db = str(row[1]).strip() # 第二欄是密碼
+                                    user_row_idx = i + 1 
+                                    current_pwd_db = str(row[1]).strip()
                                     break
                             
-                            if user_row_idx == -1:
-                                st.error("找不到使用者資料")
+                            if user_row_idx == -1: st.error("找不到使用者資料")
                             else:
-                                input_old = str(old).strip()
-                                if input_old == current_pwd_db:
+                                if str(old).strip() == current_pwd_db:
                                     ws_users.update_cell(user_row_idx, 2, str(new).strip())
                                     log_event(ws_logs, st.session_state['user_name'], "Security", "修改密碼成功")
                                     st.success("✅ 密碼修改成功！")
-                                    time.sleep(1)
-                                else:
-                                    # V18.0: 除錯模式，顯示系統讀到了什麼
-                                    st.error(f"❌ 舊密碼錯誤。")
-                                    st.caption(f"系統讀取: [{current_pwd_db}] vs 您輸入: [{input_old}]")
-                                    st.caption("若兩者看起來一樣但失敗，請確認 Google Sheet 欄位格式是否為「純文字」。")
-
+                                else: st.error(f"❌ 舊密碼錯誤。")
                         except Exception as e: st.error(f"錯誤: {e}")
         st.markdown("---")
         if st.button("🚪 登出"):
@@ -312,38 +335,71 @@ def main():
             st.session_state['logged_in'] = False
             st.rerun()
 
-    # --- D. 戰情儀表板 ---
-    st.markdown("<div class='brand-title' style='font-size:1.8rem;text-align:left;margin-bottom:10px;'>DASHBOARD</div>", unsafe_allow_html=True)
+    # --- D. 戰情儀表板 (視覺重構) ---
+    # 移除舊的 DASHBOARD 標題代碼
+    
     total_qty = df['Qty'].sum()
     total_cost = (df['Qty'] * df['Cost']).sum()
     total_rev = (df['Qty'] * df['Price']).sum()
     total_profit = total_rev - total_cost
 
-    c1, c2, c3, c4 = st.columns(4)
-    with c1: st.markdown(f"<div class='metric-card'><div class='metric-label'>📦 總庫存</div><div class='metric-value'>{total_qty:,}</div></div>", unsafe_allow_html=True)
-    with c2: st.markdown(f"<div class='metric-card' style='border-left-color:#d32f2f;'><div class='metric-label'>💰 總成本</div><div class='metric-value'>${total_cost:,}</div></div>", unsafe_allow_html=True)
-    with c3: st.markdown(f"<div class='metric-card' style='border-left-color:#f1c40f;'><div class='metric-label'>💎 預估營收</div><div class='metric-value'>${total_rev:,}</div></div>", unsafe_allow_html=True)
-    with c4: st.markdown(f"<div class='metric-card' style='border-left-color:#28a745;'><div class='metric-label'>📈 潛在毛利</div><div class='metric-value'>${total_profit:,}</div></div>", unsafe_allow_html=True)
+    # 使用新的 CSS class "metric-card"
+    # 手機版上，我們用 st.columns(2) 讓它變成兩排兩列，比較好看
+    m1, m2 = st.columns(2)
+    with m1:
+        st.markdown(f"""
+            <div class='metric-card'>
+                <div class='metric-label'>📦 總庫存</div>
+                <div class='metric-value'>{total_qty:,}</div>
+            </div>
+            <div class='metric-card'>
+                 <div class='metric-label'>💰 總成本</div>
+                 <div class='metric-value'>${total_cost:,}</div>
+            </div>
+        """, unsafe_allow_html=True)
+    
+    with m2:
+        st.markdown(f"""
+            <div class='metric-card'>
+                <div class='metric-label'>💎 預估營收</div>
+                <div class='metric-value'>${total_rev:,}</div>
+            </div>
+            <div class='metric-card'>
+                 <div class='metric-label'>📈 潛在毛利</div>
+                 <div class='metric-value'>${total_profit:,}</div>
+            </div>
+        """, unsafe_allow_html=True)
 
     if not df.empty:
+        # 下方圖表區
+        st.markdown("<br>", unsafe_allow_html=True)
         cc1, cc2 = st.columns([2, 1])
         with cc1:
             fashion_greys = ['#1a1a1a', '#4d4d4d', '#808080', '#b3b3b3', '#e6e6e6', '#000000']
-            fig = px.pie(df, names='Category', values='Qty', hole=0.4, color_discrete_sequence=fashion_greys)
-            fig.update_layout(height=250, margin=dict(t=0, b=0, l=0, r=0))
+            fig = px.pie(df, names='Category', values='Qty', hole=0.7, color_discrete_sequence=fashion_greys)
+            # 調整圖表高度與 Layout 讓手機版不壅擠
+            fig.update_layout(
+                height=220, 
+                margin=dict(t=20, b=20, l=20, r=20),
+                showlegend=False,
+                annotations=[dict(text='庫存<br>佔比', x=0.5, y=0.5, font_size=12, showarrow=False)]
+            )
             st.plotly_chart(fig, use_container_width=True)
         with cc2:
             st.caption("🚨 缺貨清單")
+            # 這裡把欄位名稱優化顯示
             low = df[df['Qty'] < 5][['SKU', 'Name', 'Qty']]
+            low.columns = ['貨號', '品名', '數量']
             st.dataframe(low, hide_index=True, use_container_width=True)
+    
     st.markdown("---")
 
     # --- E. 功能分頁 ---
     tabs = st.tabs(["🧥 樣品展示", "⚡ POS", "➕ 商品管理", "📝 全知後台"])
 
-    # Tab 1
+    # Tab 1: 樣品展示
     with tabs[0]:
-        q = st.text_input("🔍 搜尋", placeholder="SKU / Name...")
+        q = st.text_input("🔍 搜尋", placeholder="貨號 / 品名...")
         v_df = df.copy()
         if q: v_df = v_df[v_df.apply(lambda x: q.lower() in str(x.values).lower(), axis=1)]
         if not v_df.empty:
@@ -356,18 +412,20 @@ def main():
                         img = render_image_url(val['Image_URL'])
                         st.markdown(f"""
                         <div class='product-card'>
-                            <img src='{img}'>
-                            <div style='font-weight:bold;margin-top:5px;height:2.4em;overflow:hidden;color:#000;'>{val['Name']}</div>
-                            <small style='color:#888'>{val['SKU']}</small>
-                            <div style='display:flex;justify-content:space-between;margin-top:5px;'>
-                                <b style='color:#000'>${val['Price']}</b> <span style='background:#f0f0f0;padding:2px 6px;border-radius:4px;color:#000'>Q:{val['Qty']}</span>
+                            <img src='{img}' style='width:100%;height:150px;object-fit:cover;border-radius:8px;'>
+                            <div style='font-weight:bold;margin-top:8px;font-size:14px;height:2.4em;overflow:hidden;color:#000;'>{val['Name']}</div>
+                            <div style='color:#666;font-size:12px;margin-bottom:4px;'>{val['SKU']}</div>
+                            <div style='display:flex;justify-content:space-between;align-items:center;'>
+                                <b style='color:#000'>${val['Price']}</b> 
+                                <span style='background:#f3f4f6;padding:2px 6px;border-radius:4px;color:#000;font-size:11px;'>Q:{val['Qty']}</span>
                             </div>
                         </div>""", unsafe_allow_html=True)
 
-    # Tab 2
+    # Tab 2: POS
     with tabs[1]:
         c1, c2 = st.columns(2)
         with c1:
+            # 顯示優化: SKU -> 貨號
             opts = df.apply(lambda x: f"{x['SKU']} | {x['Name']}", axis=1).tolist()
             sel = st.selectbox("選擇商品 (支援掃碼)", ["..."] + opts)
             target = None
@@ -404,14 +462,15 @@ def main():
                         time.sleep(1.5)
                         st.rerun()
 
-    # Tab 3
+    # Tab 3: 商品管理 (這裡進行了關鍵的 SKU 用語替換)
     with tabs[2]:
         c1, c2 = st.columns(2)
         with c1:
             st.subheader("新增商品")
             with st.form("new"):
-                sku = st.text_input("SKU")
-                name = st.text_input("名稱")
+                # [關鍵修改] SKU -> 商品貨號 (僅修改顯示 Label)
+                sku = st.text_input("商品貨號 (SKU)")
+                name = st.text_input("商品名稱")
                 cat = st.selectbox("分類", ["上衣", "褲子", "外套", "配件", "其他"])
                 size = st.selectbox("尺寸", ["F","S","M","L","XL"])
                 col_sub1, col_sub2 = st.columns(2)
@@ -421,7 +480,7 @@ def main():
                 img = st.file_uploader("圖片", type=['jpg','png'])
                 if st.form_submit_button("建立"):
                     if sku and name:
-                        if sku in df['SKU'].tolist(): st.error("SKU 已存在")
+                        if sku in df['SKU'].tolist(): st.error("商品貨號已存在")
                         else:
                             u = upload_image_to_imgbb(img) if img else ""
                             ws_items.append_row([sku, name, cat, size, q, price, cost, str(datetime.now()), u])
@@ -429,6 +488,9 @@ def main():
                             st.success("成功")
                             time.sleep(1.5)
                             st.rerun()
+                    else:
+                        st.error("貨號與名稱為必填")
+
         with c2:
             st.subheader("工具箱")
             with st.expander("批量匯入"):
@@ -449,9 +511,10 @@ def main():
                         st.rerun()
                     except: st.error("格式錯誤")
             with st.expander("QR Code"):
-                t = st.selectbox("商品", df['SKU'].tolist())
+                t = st.selectbox("選擇商品產生 QR", df['SKU'].tolist())
                 if t: st.image(generate_qr(t), width=100)
-            d_s = st.selectbox("刪除商品", ["..."]+df['SKU'].tolist())
+            
+            d_s = st.selectbox("刪除商品 (選擇貨號)", ["..."]+df['SKU'].tolist())
             if d_s != "..." and st.button("確認刪除"):
                 ws_items.delete_rows(ws_items.find(d_s).row)
                 log_event(ws_logs, st.session_state['user_name'], "Del_Item", f"刪除: {d_s}")
@@ -485,7 +548,6 @@ def main():
         if st.session_state['user_role'] == 'Admin':
             st.markdown("---")
             st.subheader("👥 人員管理中心")
-            st.caption("🟢 Active = 帳號啟用中 (可登入) | 🔴 Inactive = 帳號停用 (無法登入)")
             
             users_df = get_data_safe(ws_users)
             if not users_df.empty:
