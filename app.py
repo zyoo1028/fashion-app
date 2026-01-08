@@ -20,57 +20,72 @@ st.set_page_config(
 )
 
 # ==========================================
-# 🛑 【MATRIX-V32.1 絕對視覺鎖定補丁】
-# 說明：針對手機 Dark Mode 進行軍規級強制覆蓋
+# 🛑 【MATRIX-V32.2 下拉選單視覺修正補丁】
+# 重點修復：手機深色模式下，Selectbox 選單黑底黑字的問題
 # ==========================================
 st.markdown("""
     <style>
-        /* 1. 全局強制白底 (覆蓋系統深色模式) */
-        [data-testid="stAppViewContainer"] {
-            background-color: #FFFFFF !important;
-        }
-        [data-testid="stSidebar"] {
-            background-color: #F8F9FA !important;
-            border-right: 1px solid #E5E7EB;
-        }
+        /* --- 1. 全局基礎鎖定 --- */
+        .stApp { background-color: #FFFFFF !important; }
+        p, div, h1, h2, h3, h4, span, label, li { color: #000000 !important; }
         
-        /* 2. 全局強制黑字 */
-        h1, h2, h3, h4, h5, h6, p, span, div, label, li {
-            color: #000000 !important;
-        }
-        
-        /* 3. 輸入框與選單強制樣式 (關鍵修復點) */
-        input, textarea {
+        /* --- 2. 輸入框基礎樣式 --- */
+        input, textarea, .stTextInput > div > div {
             color: #000000 !important;
             background-color: #F3F4F6 !important;
-            border: 1px solid #D1D5DB !important;
+            border-color: #D1D5DB !important;
         }
-        /* 修復 Selectbox 在手機上可能變黑的問題 */
+        
+        /* --- 3. [關鍵修復] 下拉選單 (Selectbox) 懸浮視窗 --- */
+        /* 強制懸浮視窗容器為白底 */
+        div[data-baseweb="popover"], div[data-baseweb="menu"] {
+            background-color: #FFFFFF !important;
+            border: 1px solid #E5E7EB !important;
+        }
+        
+        /* 強制選項列表 (ul/li) 為白底黑字 */
+        ul[role="listbox"] {
+            background-color: #FFFFFF !important;
+        }
+        
+        /* 每一個選項 (Option) 的文字顏色 */
+        li[role="option"] div {
+            color: #000000 !important;
+        }
+        
+        /* 選項的背景顏色 (預設白) */
+        li[role="option"] {
+            background-color: #FFFFFF !important;
+        }
+        
+        /* 當手指按壓或滑鼠滑過時的顏色 (淺灰背景 + 黑字) */
+        li[role="option"][aria-selected="true"], li[role="option"]:hover {
+            background-color: #F3F4F6 !important;
+            color: #000000 !important;
+        }
+
+        /* --- 4. 修正 Selectbox 顯示框本身的文字顏色 --- */
         div[data-baseweb="select"] > div {
             background-color: #F3F4F6 !important;
             color: #000000 !important;
             border-color: #D1D5DB !important;
         }
-        /* 下拉選單的選項文字顏色 */
-        div[role="option"] {
+        /* 確保選單內的文字（如分類名稱）是黑色的 */
+        div[data-baseweb="select"] span {
             color: #000000 !important;
-            background-color: #FFFFFF !important;
         }
-        
-        /* 4. Header 強制透明或白底 */
+
+        /* --- 5. 其他元件樣式保持不變 --- */
         header[data-testid="stHeader"] {
-            background-color: rgba(255, 255, 255, 0.95) !important;
+            background-color: transparent !important;
             display: block !important;
             z-index: 9999 !important;
         }
-        
-        /* 5. 調整頂部留白 (適配 Navbar) */
         .block-container {
             padding-top: 6rem !important; 
             padding-bottom: 5rem !important;
         }
 
-        /* 6. 自定義元件樣式 (Navbar, Cards) */
         .navbar-container {
             position: fixed;
             top: 50px; left: 0; width: 100%; z-index: 99;
@@ -90,17 +105,9 @@ st.markdown("""
             margin-bottom: 10px; transition: all 0.2s;
             position: relative; overflow: hidden;
         }
-        /* 修正 metric 數值顏色，確保不被全局 CSS 蓋過權重 */
-        .metric-value { 
-            font-size: 2rem; font-weight: 800; margin: 8px 0; 
-            color: #111111 !important; 
-            letter-spacing: -0.5px; 
-        }
-        .metric-label { 
-            font-size: 0.85rem; letter-spacing: 1px; 
-            color: #666666 !important; 
-            font-weight: 600; text-transform: uppercase; 
-        }
+        .metric-card:hover { transform: translateY(-2px); box-shadow: 0 8px 16px rgba(0,0,0,0.06); }
+        .metric-value { font-size: 2rem; font-weight: 800; margin: 8px 0; color:#111 !important; letter-spacing: -0.5px; }
+        .metric-label { font-size: 0.85rem; letter-spacing: 1px; color:#666 !important; font-weight: 600; text-transform: uppercase; }
         
         .history-card {
             display: flex; align-items: center;
@@ -110,12 +117,7 @@ st.markdown("""
         .history-img { width: 50px; height: 50px; border-radius: 5px; object-fit: cover; margin-right: 10px; }
         .history-tag { background: #ffe0b2; color: #e65100 !important; padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; margin-left: auto; }
 
-        .stButton>button { 
-            border-radius: 8px; height: 3.2em; font-weight: 700; border:none; 
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1); 
-            background-color: #FFFFFF; color: #000000; /* 按鈕預設樣式 */
-            border: 1px solid #E5E7EB;
-        }
+        .stButton>button { border-radius: 8px; height: 3.2em; font-weight: 700; border:none; box-shadow: 0 2px 5px rgba(0,0,0,0.1); background-color: #FFFFFF; color: #000000; border: 1px solid #E5E7EB; }
         
         .cost-tag {
             background-color: #f3f4f6; border: 1px solid #d1d5db;
@@ -123,11 +125,9 @@ st.markdown("""
             font-size: 0.75em; margin-left: 5px; font-weight: normal;
         }
         
-        /* Expander 標題顏色修復 */
-        .streamlit-expanderHeader p {
-            color: #000000 !important;
-            font-weight: 600;
-        }
+        /* 確保 Expander 標題可見 */
+        .streamlit-expanderHeader p { color: #000000 !important; font-weight: 600; }
+        .streamlit-expanderHeader svg { color: #000000 !important; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -301,7 +301,7 @@ def main():
         with c2:
             st.markdown("<br><br><br>", unsafe_allow_html=True)
             st.markdown("<div style='text-align:center; font-weight:900; font-size:2.5rem; margin-bottom:10px;'>IFUKUK</div>", unsafe_allow_html=True)
-            st.markdown("<div style='text-align:center; color:#666; font-size:0.9rem; margin-bottom:30px;'>TEAMWORK ERP V32.1</div>", unsafe_allow_html=True)
+            st.markdown("<div style='text-align:center; color:#666; font-size:0.9rem; margin-bottom:30px;'>TEAMWORK ERP V32.2</div>", unsafe_allow_html=True)
             with st.form("login"):
                 user_input = st.text_input("帳號 (ID)")
                 pass_input = st.text_input("密碼 (Password)", type="password")
