@@ -19,7 +19,7 @@ st.set_page_config(
 )
 
 # ==========================================
-# 🛑 【MATRIX-V46.0 全域聯動與介面重塑核心】
+# 🛑 【MATRIX-V47.0 安全刪除與全域優化核心】
 # ==========================================
 st.markdown("""
     <style>
@@ -42,7 +42,7 @@ st.markdown("""
         li[role="option"] div { color: #000000 !important; }
         li[role="option"]:hover, li[role="option"][aria-selected="true"] { background-color: #F3F4F6 !important; color: #000000 !important; }
 
-        /* --- 3. 卡片樣式 --- */
+        /* --- 3. 卡片與標籤 --- */
         .metric-card { background: linear-gradient(145deg, #ffffff, #f5f7fa); border-radius: 16px; padding: 20px; border: 1px solid #e1e4e8; text-align: center; box-shadow: 0 4px 12px rgba(0,0,0,0.03); margin-bottom: 10px; }
         .metric-value { font-size: 2rem; font-weight: 800; margin: 8px 0; color:#111 !important; }
         .metric-label { font-size: 0.85rem; letter-spacing: 1px; color:#666 !important; font-weight: 600; }
@@ -66,7 +66,7 @@ st.markdown("""
         .stButton>button { border-radius: 8px; height: 3.2em; font-weight: 700; border:none; box-shadow: 0 2px 5px rgba(0,0,0,0.1); background-color: #FFFFFF; color: #000000; border: 1px solid #E5E7EB; }
         [data-testid="stDataFrame"] { border: 1px solid #E5E7EB; border-radius: 8px; overflow: hidden; }
         
-        /* --- 4. 生成區塊與網格樣式 (V45/V46) --- */
+        /* --- 4. 功能區塊樣式 --- */
         .sku-wizard {
             background: linear-gradient(135deg, #f8fafc 0%, #ffffff 100%);
             border: 1px solid #e2e8f0;
@@ -74,9 +74,16 @@ st.markdown("""
             border-radius: 16px;
             margin-bottom: 20px;
         }
+        .delete-zone {
+            background: linear-gradient(135deg, #fef2f2 0%, #fff1f2 100%);
+            border: 1px solid #fecaca;
+            padding: 20px;
+            border-radius: 16px;
+            margin-bottom: 20px;
+        }
         .wizard-header { color: #334155 !important; font-weight: 800; font-size: 1.1em; margin-bottom: 15px; display:flex; align-items:center; gap:8px;}
+        .delete-header { color: #991b1b !important; font-weight: 800; font-size: 1.1em; margin-bottom: 15px; display:flex; align-items:center; gap:8px;}
         
-        /* 強制對齊的 Label 與 提示 */
         .stNumberInput label { font-size: 0.85rem; font-weight: 700; color: #444; }
         .sku-hint { font-size: 0.7rem; color: #94a3b8; margin-top: -15px; margin-bottom: 10px; display: block; font-family: monospace; }
     </style>
@@ -185,7 +192,7 @@ def render_navbar(user_initial):
     """, unsafe_allow_html=True)
 
 # ----------------------------------------------------
-# 🛑 V46.0 核心修正
+# 🛑 V47.0 核心邏輯
 # ----------------------------------------------------
 def get_style_code(sku):
     sku_str = str(sku).strip()
@@ -193,7 +200,6 @@ def get_style_code(sku):
         return sku_str.rsplit('-', 1)[0]
     return sku_str
 
-# V46: 智能排序
 SIZE_ORDER = ["F", "XXS", "XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL"]
 def get_size_sort_key(size_str):
     if size_str in SIZE_ORDER:
@@ -255,7 +261,7 @@ def main():
         with c2:
             st.markdown("<br><br><br>", unsafe_allow_html=True)
             st.markdown("<div style='text-align:center; font-weight:900; font-size:2.5rem; margin-bottom:10px;'>IFUKUK</div>", unsafe_allow_html=True)
-            st.markdown("<div style='text-align:center; color:#666; font-size:0.9rem; margin-bottom:30px;'>MATRIX ERP V46.0</div>", unsafe_allow_html=True)
+            st.markdown("<div style='text-align:center; color:#666; font-size:0.9rem; margin-bottom:30px;'>MATRIX ERP V47.0</div>", unsafe_allow_html=True)
             with st.form("login"):
                 user_input = st.text_input("帳號 (ID)")
                 pass_input = st.text_input("密碼 (Password)", type="password")
@@ -298,8 +304,6 @@ def main():
         df[num] = pd.to_numeric(df[num], errors='coerce').fillna(0).astype(int)
     df['Safe_Level'] = df['Safety_Stock'].apply(lambda x: 5 if x == 0 else x)
     df['SKU'] = df['SKU'].astype(str)
-    
-    # V46: 簡單分割
     df['Style_Code'] = df['SKU'].apply(get_style_code)
     
     users_df = get_data_safe(ws_users)
@@ -358,7 +362,7 @@ def main():
     # --- Tabs ---
     tabs = st.tabs(["📊 視覺庫存", "⚡ POS", "🎁 內部領用", "👔 矩陣管理", "📝 日誌", "👥 Admin"])
 
-    # Tab 1: 視覺總覽 (Grid & Sort Fix)
+    # Tab 1: 視覺總覽
     with tabs[0]:
         if not df.empty:
             c_chart1, c_chart2 = st.columns([1, 1])
@@ -394,7 +398,6 @@ def main():
                 price = int(first_row['Price'])
                 total_qty = group['Qty'].sum()
                 
-                # 🛑 V46: 智能排序與顯示
                 group['size_sort'] = group['Size'].apply(get_size_sort_key)
                 sorted_group = group.sort_values('size_sort')
 
@@ -406,7 +409,6 @@ def main():
                     with c_card2:
                         st.markdown("#### 📝 管理庫存")
                         with st.form(f"dyn_form_{style_code}_{name}"):
-                            # 🛑 V46: 強制 4 欄位網格 + 智能提示
                             inputs = {}
                             grid_cols = st.columns(4)
                             
@@ -416,7 +418,6 @@ def main():
                                     count_of_this_size = sorted_group[sorted_group['Size'] == r_data['Size']].shape[0]
                                     label = f"{r_data['Size']}"
                                     if count_of_this_size > 1:
-                                        # 顯示完整 SKU 尾碼以供辨識
                                         suffix = r_data['SKU']
                                         st.markdown(f"<span class='sku-hint'>{suffix}</span>", unsafe_allow_html=True)
                                     
@@ -571,14 +572,13 @@ def main():
                         st.markdown(card_html.replace('\n', ''), unsafe_allow_html=True)
                     except: pass
 
-    # Tab 4: Mgmt
+    # Tab 4: Mgmt (V47.0 新增刪除模組)
     with tabs[3]:
-        mt1, mt2, mt3 = st.tabs(["🚀 矩陣批量 (新款/追加)", "➕ 單品新增 (智能版)", "✏️ 數據修改"])
+        mt1, mt2, mt3, mt4 = st.tabs(["🚀 矩陣批量", "➕ 單品新增", "✏️ 數據修改", "🗑️ 刪除中心"])
         
         # SubTab 1: 矩陣批量
         with mt1:
             st.markdown("##### 👔 款式矩陣中樞")
-            st.caption("輸入款號，自動判斷新增或追加。")
             all_skus = df['SKU'].tolist()
             existing_styles = sorted(list(set([get_style_code(s) for s in all_skus])))
             
@@ -618,11 +618,9 @@ def main():
                     curr_sel_b = c_curr_b.selectbox("成本幣別", ["TWD", "CNY"], index=["TWD", "CNY"].index(default_currency) if default_currency in ["TWD", "CNY"] else 0)
                     cost_in_b = c_cost_b.number_input("成本金額", value=default_orig_cost if curr_sel_b=="CNY" else default_cost_twd)
                     final_cost_b = int(cost_in_b * st.session_state['exchange_rate']) if curr_sel_b == "CNY" else int(cost_in_b)
-                    
                     img_b = st.file_uploader("圖片 (若不修改請留空)", type=['jpg','png'])
                     
                     st.markdown("#### 2. 尺寸矩陣")
-                    # 🛑 V45/V46: 矩陣輸入網格化
                     size_cols1 = st.columns(5)
                     size_inputs = {}
                     for idx, size in enumerate(SIZE_LIST[:5]):
@@ -679,8 +677,7 @@ def main():
             auto_sku = ""
             auto_name = ""
             auto_img = ""
-            parent_style_info = None
-
+            
             c_gen1, c_gen2 = st.columns([1, 1])
 
             if "開闢新系列" in gen_mode:
@@ -694,7 +691,6 @@ def main():
                 if 'temp_sku' in st.session_state: auto_sku = st.session_state['temp_sku']
 
             elif "同款新色" in gen_mode:
-                # 🛑 V46 關鍵修正：同時使用 Style_Code 和 Name 進行去重，防止同代碼不同款被過濾
                 if not df.empty:
                     style_opts = df[['Style_Code', 'Name']].drop_duplicates(subset=['Style_Code', 'Name']).apply(lambda x: f"{x['Style_Code']} | {x['Name']}", axis=1).tolist()
                 else: style_opts = []
@@ -769,7 +765,7 @@ def main():
                 if st.form_submit_button("新增單品"):
                     if sku_s and name_s:
                         if sku_s in df['SKU'].tolist():
-                            st.error("❌ 貨號已存在！請使用數據修改。")
+                            st.error("❌ 貨號已存在！")
                         else:
                             if img_s:
                                 new_u = upload_image_to_imgbb(img_s)
@@ -807,6 +803,68 @@ def main():
                             if new_u: ws_items.update_cell(r_idx, 9, new_u)
                         log_event(ws_logs, st.session_state['user_name'], "Edit_Item", f"修改: {t_sku}")
                         st.success("修改完成！"); time.sleep(1); st.rerun()
+
+        # SubTab 4: 刪除中心 (V47 NEW)
+        with mt4:
+            st.markdown("<div class='delete-zone'><div class='delete-header'>🗑️ 刪除中心 (Delete Center)</div>", unsafe_allow_html=True)
+            
+            del_mode = st.radio("選擇刪除模式", ["單品刪除 (Single SKU)", "全款刪除 (Whole Style)"], horizontal=True)
+            
+            if del_mode == "單品刪除 (Single SKU)":
+                st.info("此模式將刪除「單一尺寸/單一貨號」。")
+                d_sku_sel = st.selectbox("選擇要刪除的單品", ["..."] + opts, key="del_sku_sel")
+                
+                if d_sku_sel != "...":
+                    target_sku = d_sku_sel.split(" | ")[0]
+                    confirm_del = st.checkbox(f"⚠️ 我確認要永久刪除 [{target_sku}]", key="conf_1")
+                    
+                    if st.button("🚫 執行刪除 (Execute Delete)", type="primary", disabled=not confirm_del):
+                        try:
+                            cell = ws_items.find(target_sku)
+                            ws_items.delete_rows(cell.row)
+                            log_event(ws_logs, st.session_state['user_name'], "Delete_Item", f"Deleted: {target_sku}")
+                            st.success(f"已刪除 {target_sku}"); time.sleep(1); st.rerun()
+                        except:
+                            st.error("刪除失敗，請確認該商品是否存在。")
+
+            elif del_mode == "全款刪除 (Whole Style)":
+                st.warning("🚨 危險操作：此模式將刪除該款式的「所有顏色與尺寸」。")
+                if not df.empty:
+                    style_opts = df[['Style_Code', 'Name']].drop_duplicates(subset=['Style_Code', 'Name']).apply(lambda x: f"{x['Style_Code']} | {x['Name']}", axis=1).tolist()
+                else: style_opts = []
+                
+                d_style_sel = st.selectbox("選擇要刪除的款式", ["..."] + style_opts, key="del_style_sel")
+                
+                if d_style_sel != "...":
+                    target_code = d_style_sel.split(" | ")[0]
+                    target_name = d_style_sel.split(" | ")[1]
+                    
+                    # 預覽將被刪除的項目
+                    to_delete_df = df[(df['Style_Code'] == target_code) & (df['Name'] == target_name)]
+                    st.write("即將刪除以下項目：")
+                    st.dataframe(to_delete_df[['SKU', 'Name', 'Size', 'Qty']])
+                    
+                    confirm_del_all = st.checkbox(f"⚠️ 我確認要永久刪除全系列 [{target_code} {target_name}]", key="conf_2")
+                    
+                    if st.button("☢️ 執行全款刪除 (Delete ALL)", type="primary", disabled=not confirm_del_all):
+                        # 批量刪除邏輯：找出所有行號，從大到小刪除以避免索引位移
+                        try:
+                            rows_to_del = []
+                            for idx, row in to_delete_df.iterrows():
+                                # 需重新查找真實行號，因為 DataFrame 索引不等於 Sheet 行號
+                                cell = ws_items.find(row['SKU'])
+                                rows_to_del.append(cell.row)
+                            
+                            rows_to_del.sort(reverse=True) # 倒序刪除
+                            for r_idx in rows_to_del:
+                                ws_items.delete_rows(r_idx)
+                                
+                            log_event(ws_logs, st.session_state['user_name'], "Delete_Style", f"Deleted Style: {target_code}")
+                            st.success("全系列刪除完成！"); time.sleep(1); st.rerun()
+                        except Exception as e:
+                            st.error(f"刪除過程發生錯誤: {e}")
+            
+            st.markdown("</div>", unsafe_allow_html=True)
 
     # Tab 5: Log
     with tabs[4]:
