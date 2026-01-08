@@ -20,7 +20,7 @@ st.set_page_config(
 )
 
 # ==========================================
-# 🛑 【MATRIX-V32.4 視覺與核心修復補丁】
+# 🛑 【MATRIX-V33.0 視覺核心與響應式網格系統】
 # ==========================================
 st.markdown("""
     <style>
@@ -30,140 +30,110 @@ st.markdown("""
         [data-testid="stSidebar"] { background-color: #F8F9FA !important; border-right: 1px solid #E5E7EB; }
         h1, h2, h3, h4, h5, h6, p, span, div, label, li { color: #000000 !important; }
         
-        /* --- 2. 輸入框與顯示框基礎樣式 --- */
+        /* --- 2. 輸入框與顯示框 --- */
         input, textarea, .stTextInput > div > div, .stNumberInput > div > div {
             color: #000000 !important;
             background-color: #F3F4F6 !important;
             border-color: #D1D5DB !important;
         }
-        /* Selectbox 未展開時的顯示框 */
         div[data-baseweb="select"] > div {
             background-color: #F3F4F6 !important;
             color: #000000 !important;
             border-color: #D1D5DB !important;
         }
 
-        /* ========================================================================
-           3. [關鍵修復] 下拉選單 (Selectbox) 彈出視窗
-           ======================================================================== */
-        /* 強制所有彈出視窗容器為白底黑字 */
-        div[data-baseweb="popover"], div[data-baseweb="menu"] {
+        /* --- 3. 彈出視窗修復 (手機 Dark Mode) --- */
+        div[data-baseweb="popover"], div[data-baseweb="menu"], ul[role="listbox"] {
             background-color: #FFFFFF !important;
             color: #000000 !important;
             border: 1px solid #E5E7EB !important;
         }
-        /* 選項列表容器 */
-        ul[role="listbox"] {
-            background-color: #FFFFFF !important;
-        }
-        /* 每一個選項 (Option) */
-        li[role="option"] {
-            background-color: #FFFFFF !important;
-            color: #000000 !important;
-        }
-        /* 選項內的文字容器 */
-        li[role="option"] div {
-            color: #000000 !important;
-        }
-        /* 滑鼠滑過或選中時的狀態 (淺灰底黑字) */
+        li[role="option"] { background-color: #FFFFFF !important; color: #000000 !important; }
+        li[role="option"] div { color: #000000 !important; }
         li[role="option"]:hover, li[role="option"][aria-selected="true"] {
-            background-color: #F3F4F6 !important;
-            color: #000000 !important;
+            background-color: #F3F4F6 !important; color: #000000 !important;
         }
 
-        /* ========================================================================
-           4. [關鍵修復] 日期選擇器 (Date Picker) 彈出視窗
-           ======================================================================== */
-        /* 鎖定日期選擇器的彈出層容器 */
-        div[data-testid="stDateInput"] > div:nth-of-type(2) > div {
-            background-color: #FFFFFF !important;
-            color: #000000 !important;
-            border: 1px solid #E5E7EB !important;
-        }
-        /* 日曆 Header */
-        div[data-testid="stDateInput"] div[class*="CalendarHeader"] {
-            color: #000000 !important;
-        }
-        div[data-testid="stDateInput"] button[aria-label="Previous month"],
-        div[data-testid="stDateInput"] button[aria-label="Next month"] {
-             color: #000000 !important;
-        }
-        /* 星期幾的標題 */
-        div[data-testid="stDateInput"] div[class*="WeekDays"] {
-            color: #666666 !important;
-        }
-        /* 日曆內的日期按鈕 */
-        div[data-testid="stDateInput"] button[role="gridcell"] {
-            color: #000000 !important;
-            background-color: #FFFFFF !important;
-        }
-        /* 滑鼠滑過日期 */
-        div[data-testid="stDateInput"] button[role="gridcell"]:hover {
-             background-color: #F3F4F6 !important;
-        }
-        /* 被選中的日期 */
-        div[data-testid="stDateInput"] button[role="gridcell"][aria-selected="true"] {
-             background-color: #FF4B4B !important;
-             color: #FFFFFF !important;
-        }
-        /* 今天日期 */
-        div[data-testid="stDateInput"] button[role="gridcell"][tabindex="0"]:not([aria-selected="true"]) {
-             color: #FF4B4B !important;
-             font-weight: bold;
-        }
+        /* --- 4. 日期選擇器修復 --- */
+        div[data-testid="stDateInput"] > div:nth-of-type(2) > div { background-color: #FFFFFF !important; }
+        div[data-testid="stDateInput"] button[role="gridcell"] { color: #000000 !important; background-color: #FFFFFF !important; }
+        div[data-testid="stDateInput"] button[role="gridcell"][aria-selected="true"] { background-color: #FF4B4B !important; color: #FFFFFF !important; }
 
-        /* --- 5. 其他元件樣式 --- */
-        header[data-testid="stHeader"] {
-            background-color: transparent !important;
-            display: block !important;
-            z-index: 9999 !important;
-        }
-        .block-container {
-            padding-top: 6rem !important; 
-            padding-bottom: 5rem !important;
-        }
+        /* --- 5. Navbar & General --- */
+        header[data-testid="stHeader"] { background-color: transparent !important; z-index: 9999; }
+        .block-container { padding-top: 6rem !important; padding-bottom: 5rem !important; }
 
         .navbar-container {
-            position: fixed;
-            top: 50px; left: 0; width: 100%; z-index: 99;
-            background-color: rgba(255, 255, 255, 0.98);
-            backdrop-filter: blur(12px);
-            padding: 12px 24px;
-            border-bottom: 1px solid #e0e0e0;
+            position: fixed; top: 50px; left: 0; width: 100%; z-index: 99;
+            background-color: rgba(255, 255, 255, 0.98); backdrop-filter: blur(12px);
+            padding: 12px 24px; border-bottom: 1px solid #e0e0e0;
             display: flex; justify-content: space-between; align-items: center;
             box-shadow: 0 4px 15px rgba(0,0,0,0.03);
         }
 
+        /* --- 6. V33 全新響應式畫廊 (Gallery Grid) --- */
+        .inventory-grid {
+            display: grid;
+            /* 自動填滿：手機一排約2個，電腦一排約4-5個，根據螢幕寬度自動調整 */
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 16px;
+            padding: 10px 0;
+        }
+        .inv-card {
+            background: #FFFFFF;
+            border: 1px solid #E5E7EB;
+            border-radius: 12px;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            transition: transform 0.2s;
+        }
+        .inv-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            border-color: #000;
+        }
+        .inv-img {
+            width: 100%;
+            height: 120px;
+            object-fit: cover;
+            border-radius: 8px;
+            margin-bottom: 8px;
+        }
+        .inv-title {
+            font-weight: bold;
+            font-size: 14px;
+            color: #111;
+            margin-bottom: 4px;
+            text-align: center;
+            line-height: 1.2;
+            height: 2.4em; /* 限制高度兩行 */
+            overflow: hidden;
+        }
+        .inv-sku { font-size: 11px; color: #666; margin-bottom: 4px; }
+        .inv-price { font-weight: 800; color: #000; font-size: 15px; }
+        .inv-qty { 
+            background: #F3F4F6; color: #000; 
+            padding: 2px 8px; border-radius: 10px; 
+            font-size: 11px; font-weight: bold; margin-top: 4px;
+        }
+        .inv-badge-low { background: #FEE2E2; color: #991B1B; } /* 缺貨紅 */
+
+        /* 其他卡片樣式 */
         .metric-card {
             background: linear-gradient(145deg, #ffffff, #f5f7fa); 
             border-radius: 16px; padding: 20px;
             border: 1px solid #e1e4e8; text-align: center;
             box-shadow: 0 4px 12px rgba(0,0,0,0.03);
-            margin-bottom: 10px; transition: all 0.2s;
-            position: relative; overflow: hidden;
+            margin-bottom: 10px;
         }
-        .metric-card:hover { transform: translateY(-2px); box-shadow: 0 8px 16px rgba(0,0,0,0.06); }
-        .metric-value { font-size: 2rem; font-weight: 800; margin: 8px 0; color:#111 !important; letter-spacing: -0.5px; }
-        .metric-label { font-size: 0.85rem; letter-spacing: 1px; color:#666 !important; font-weight: 600; text-transform: uppercase; }
+        .metric-value { font-size: 2rem; font-weight: 800; margin: 8px 0; color:#111 !important; }
+        .metric-label { font-size: 0.85rem; letter-spacing: 1px; color:#666 !important; font-weight: 600; }
         
-        .history-card {
-            display: flex; align-items: center;
-            background: #fff; border: 1px solid #eee; border-radius: 8px;
-            padding: 10px; margin-bottom: 8px;
-        }
-        .history-img { width: 50px; height: 50px; border-radius: 5px; object-fit: cover; margin-right: 10px; }
-        .history-tag { background: #ffe0b2; color: #e65100 !important; padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; margin-left: auto; }
-
         .stButton>button { border-radius: 8px; height: 3.2em; font-weight: 700; border:none; box-shadow: 0 2px 5px rgba(0,0,0,0.1); background-color: #FFFFFF; color: #000000; border: 1px solid #E5E7EB; }
-        
-        .cost-tag {
-            background-color: #f3f4f6; border: 1px solid #d1d5db;
-            color: #374151 !important; padding: 2px 6px; border-radius: 4px;
-            font-size: 0.75em; margin-left: 5px; font-weight: normal;
-        }
-        
         .streamlit-expanderHeader p { color: #000000 !important; font-weight: 600; }
-        .streamlit-expanderHeader svg { color: #000000 !important; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -215,7 +185,7 @@ def get_worksheet_safe(sh, title, headers):
         return ws
     except: return None
 
-# --- V32 專業工具模組 ---
+# --- V33 專業工具模組 ---
 
 @st.cache_data(ttl=3600)
 def get_live_rate():
@@ -256,15 +226,6 @@ def send_line_push(message):
     data = {"to": LINE_USER_ID, "messages": [{"type": "text", "text": message}]}
     try: requests.post("https://api.line.me/v2/bot/message/push", headers=headers, json=data); return "SUCCESS"
     except: return "ERROR"
-
-def generate_qr(data):
-    qr = qrcode.QRCode(version=1, box_size=10, border=5)
-    qr.add_data(data)
-    qr.make(fit=True)
-    img = qr.make_image(fill_color="black", back_color="white")
-    buf = BytesIO()
-    img.save(buf)
-    return buf.getvalue()
 
 def log_event(ws_logs, user, action, detail):
     try: ws_logs.append_row([datetime.now().strftime("%Y-%m-%d %H:%M:%S"), user, action, detail])
@@ -311,7 +272,7 @@ def generate_smart_sku(category, existing_skus, custom_series=""):
 
 # --- 主程式 ---
 def main():
-    # 關鍵修正點：加上 st.
+    # V32.4 修正：確保 st.session_state 寫法正確
     if 'logged_in' not in st.session_state:
         st.session_state['logged_in'] = False
         st.session_state['user_name'] = ""
@@ -337,7 +298,7 @@ def main():
         with c2:
             st.markdown("<br><br><br>", unsafe_allow_html=True)
             st.markdown("<div style='text-align:center; font-weight:900; font-size:2.5rem; margin-bottom:10px;'>IFUKUK</div>", unsafe_allow_html=True)
-            st.markdown("<div style='text-align:center; color:#666; font-size:0.9rem; margin-bottom:30px;'>TEAMWORK ERP V32.4</div>", unsafe_allow_html=True)
+            st.markdown("<div style='text-align:center; color:#666; font-size:0.9rem; margin-bottom:30px;'>VISUAL ERP V33.0</div>", unsafe_allow_html=True)
             with st.form("login"):
                 user_input = st.text_input("帳號 (ID)")
                 pass_input = st.text_input("密碼 (Password)", type="password")
@@ -439,7 +400,7 @@ def main():
             st.session_state['logged_in'] = False
             st.rerun()
 
-    # --- Dashboard ---
+    # --- Dashboard Metrics (置頂) ---
     total_qty = df['Qty'].sum()
     total_cost = (df['Qty'] * df['Cost']).sum()
     total_rev = (df['Qty'] * df['Price']).sum()
@@ -459,10 +420,61 @@ def main():
     st.markdown("---")
 
     # --- Tabs ---
-    tabs = st.tabs(["⚡ POS", "🎁 內部領用", "📦 商品管理", "📝 日誌", "👥 Admin"])
+    tabs = st.tabs(["📊 總覽與庫存", "⚡ POS", "🎁 內部領用", "📦 商品管理", "📝 日誌", "👥 Admin"])
 
-    # Tab 1: POS
+    # Tab 1: 視覺總覽 (V33 New Feature)
     with tabs[0]:
+        # 1. BI Charts
+        if not df.empty:
+            c_chart1, c_chart2 = st.columns([1, 1])
+            with c_chart1:
+                st.caption("📈 庫存分類佔比")
+                fig_pie = px.pie(df, names='Category', values='Qty', hole=0.5, color_discrete_sequence=px.colors.qualitative.Pastel)
+                fig_pie.update_layout(height=250, margin=dict(t=0, b=0, l=0, r=0))
+                st.plotly_chart(fig_pie, use_container_width=True)
+            with c_chart2:
+                st.caption("📊 重點庫存 (Top 10)")
+                top_items = df.sort_values(by='Qty', ascending=False).head(10)
+                fig_bar = px.bar(top_items, x='Qty', y='Name', orientation='h', text='Qty', color='Qty', color_continuous_scale='Bluered')
+                fig_bar.update_layout(height=250, margin=dict(t=0, b=0, l=0, r=0), yaxis={'categoryorder':'total ascending'})
+                st.plotly_chart(fig_bar, use_container_width=True)
+        
+        st.divider()
+        st.subheader("🖼️ 庫存畫廊 (Visual Inventory)")
+        
+        # 篩選器
+        col_s1, col_s2 = st.columns([2, 1])
+        with col_s1: search_q = st.text_input("🔍 搜尋商品", placeholder="輸入貨號或品名...")
+        with col_s2: filter_cat = st.selectbox("📂 分類篩選", ["全部"] + CAT_LIST)
+        
+        # 資料過濾
+        gallery_df = df.copy()
+        if search_q: gallery_df = gallery_df[gallery_df.apply(lambda x: search_q.lower() in str(x.values).lower(), axis=1)]
+        if filter_cat != "全部": gallery_df = gallery_df[gallery_df['Category'] == filter_cat]
+        
+        # 生成 HTML 網格
+        if not gallery_df.empty:
+            html_cards = ""
+            for idx, row in gallery_df.iterrows():
+                img = render_image_url(row['Image_URL'])
+                qty_class = "inv-qty inv-badge-low" if row['Qty'] < row['Safe_Level'] else "inv-qty"
+                
+                html_cards += f"""
+                <div class="inv-card">
+                    <img src="{img}" class="inv-img">
+                    <div class="inv-title" title="{row['Name']}">{row['Name']}</div>
+                    <div class="inv-sku">{row['SKU']} | {row['Size']}</div>
+                    <div class="inv-price">${row['Price']}</div>
+                    <div class="{qty_class}">庫存: {row['Qty']}</div>
+                </div>
+                """
+            
+            st.markdown(f'<div class="inventory-grid">{html_cards}</div>', unsafe_allow_html=True)
+        else:
+            st.info("沒有找到符合的商品資料")
+
+    # Tab 2: POS
+    with tabs[1]:
         c1, c2 = st.columns([1, 1])
         with c1:
             st.subheader("商品")
@@ -524,8 +536,8 @@ def main():
                             st.success("成功"); time.sleep(1); st.rerun()
                         else: st.error("庫存不足")
 
-    # Tab 2: Internal
-    with tabs[1]:
+    # Tab 3: Internal
+    with tabs[2]:
         st.subheader("🎁 內部領用中心")
         c_i1, c_i2 = st.columns([1, 1])
         with c_i1:
@@ -550,7 +562,7 @@ def main():
                         st.success(f"領用成功！"); time.sleep(2); st.rerun()
         
         st.divider()
-        st.markdown("#### 🖼️ 近期領用紀錄 (Visual History)")
+        st.markdown("#### 🖼️ 近期領用紀錄")
         logs_df = get_data_safe(ws_logs)
         if not logs_df.empty:
             int_logs = logs_df[logs_df['Action'] == 'Internal_Use'].sort_index(ascending=False).head(5)
@@ -561,7 +573,6 @@ def main():
                         img_row = df[df['SKU'] == log_sku]
                         img_url = "https://i.ibb.co/W31w56W/placeholder.png"
                         if not img_row.empty: img_url = render_image_url(img_row.iloc[0]['Image_URL'])
-                        
                         st.markdown(f"""
                         <div class="history-card">
                             <img src="{img_url}" class="history-img">
@@ -575,8 +586,8 @@ def main():
                         """, unsafe_allow_html=True)
                     except: pass
 
-    # Tab 3: Mgmt
-    with tabs[2]:
+    # Tab 4: Mgmt
+    with tabs[3]:
         with st.expander("➕ 新增商品", expanded=False):
             with st.form("new_prod"):
                 st.markdown("##### 1. 基本資料")
@@ -653,8 +664,8 @@ def main():
         st.markdown("##### 📦 庫存總表")
         st.dataframe(df, use_container_width=True)
 
-    # Tab 4: Log
-    with tabs[3]:
+    # Tab 5: Log
+    with tabs[4]:
         st.subheader("🕵️ 稽核日誌")
         c_f1, c_f2, c_f3 = st.columns([1, 1, 1])
         with c_f1: search_date = st.date_input("📅 日期", value=None)
@@ -678,8 +689,8 @@ def main():
             else: st.info("無資料")
         else: st.warning("無紀錄")
 
-    # Tab 5: Admin
-    with tabs[4]:
+    # Tab 6: Admin
+    with tabs[5]:
         if st.session_state['user_role'] == 'Admin':
             st.subheader("👥 人員管理")
             users_df = get_data_safe(ws_users)
