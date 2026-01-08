@@ -527,7 +527,42 @@ def main():
             # 4. 顯示
             agg_df = agg_df.rename(columns=COLUMN_MAPPING)
             show_cols = ["款號(Style)", "商品名稱", "分類", "庫存分佈 (Size:Qty)", "總庫存", "售價(NTD)", "平均成本(NTD)", "參考原幣(CNY)", "最後更新"]
-            st.dataframe(agg_df[show_cols], use_container_width=True)
+            # ==========================================
+# [FIX] V40.1 庫存總表聚合修復補丁 (Aggregation Patch)
+# ==========================================
+st.markdown("#### 📄 庫存總表 (歸戶檢視)")
+
+if df.empty:
+    st.info("目前無庫存數據")
+else:
+    try:
+        # 1. 執行聚合：按款號歸戶，並生成「庫存分佈」字串
+        # 注意：這裡使用 apply 比較耗時但最靈活，能確保字串生成正確
+        agg_df = df.groupby(['Style Code', 'Name', 'Category']).apply(
+            lambda x: pd.Series({
+                'Total Qty': x['Qty'].sum(),
+                '庫存分佈': ' | '.join([f"{row['Size']}:{int(row['Qty'])}" for _, row in x.sort_values('Size').iterrows()]),
+                'Cost_TWD': x['Cost_TWD'].mean() if 'Cost_TWD' in x.columns else 0 # 避免平均成本出錯
+            })
+        ).reset_index() # <--- [關鍵修復]：將 Style Code 等從索引還原為欄位
+
+        # 2. 定義要顯示的欄位 (確保這些名字與上面的 keys 一模一樣)
+        show_cols = ['Style Code', 'Name', 'Category', 'Total Qty', '庫存分佈']
+        
+        # 3. 安全渲染
+        st.dataframe(
+            agg_df[show_cols], 
+            use_container_width=True,
+            column_config={
+                "Total Qty": st.column_config.NumberColumn("總庫存", format="%d"),
+                "Cost_TWD": st.column_config.NumberColumn("平均成本", format="$%d"),
+            },
+            hide_index=True
+        )
+    except Exception as e:
+        st.error(f"數據聚合發生錯誤，請檢查資料完整性: {e}")
+        # 如果聚合失敗，顯示原始數據作為備案
+        st.dataframe(df)
 
     # Tab 2: POS
     with tabs[1]:
