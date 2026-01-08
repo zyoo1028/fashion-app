@@ -19,7 +19,7 @@ st.set_page_config(
 )
 
 # ==========================================
-# 🛑 【MATRIX-V42.0 視覺歸一與同源繼承核心】
+# 🛑 【MATRIX-V44.0 名稱主權與邏輯解耦核心】
 # ==========================================
 st.markdown("""
     <style>
@@ -65,15 +65,15 @@ st.markdown("""
         .stButton>button { border-radius: 8px; height: 3.2em; font-weight: 700; border:none; box-shadow: 0 2px 5px rgba(0,0,0,0.1); background-color: #FFFFFF; color: #000000; border: 1px solid #E5E7EB; }
         [data-testid="stDataFrame"] { border: 1px solid #E5E7EB; border-radius: 8px; overflow: hidden; }
         
-        /* --- 4. V42 智能生成區塊優化 --- */
+        /* --- 4. 生成區塊樣式 --- */
         .sku-wizard {
-            background: linear-gradient(135deg, #f0f9ff 0%, #ffffff 100%);
-            border: 1px solid #bae6fd;
+            background: linear-gradient(135deg, #f0fdf4 0%, #ffffff 100%);
+            border: 1px solid #bbf7d0;
             padding: 15px;
             border-radius: 12px;
             margin-bottom: 20px;
         }
-        .wizard-header { color: #0284c7 !important; font-weight: 800; font-size: 1.1em; margin-bottom: 10px; display:flex; align-items:center; gap:8px;}
+        .wizard-header { color: #15803d !important; font-weight: 800; font-size: 1.1em; margin-bottom: 10px; display:flex; align-items:center; gap:8px;}
     </style>
 """, unsafe_allow_html=True)
 
@@ -179,11 +179,19 @@ def render_navbar(user_initial):
         </div>
     """, unsafe_allow_html=True)
 
-# V39/V42 核心：取得款號 (處理最後一段為尺寸)
+# ----------------------------------------------------
+# 🛑 V44.0 核心修正：簡單分割，不做假設
+# ----------------------------------------------------
 def get_style_code(sku):
-    if '-' in str(sku):
-        return str(sku).rsplit('-', 1)[0]
-    return str(sku)
+    """
+    最單純的物理分割：只切除最後一段。
+    判斷邏輯將後移至「分組聚合 (Grouping)」階段，
+    依靠 [Style_Code + Name] 來區分是同款還是新款。
+    """
+    sku_str = str(sku).strip()
+    if '-' in sku_str:
+        return sku_str.rsplit('-', 1)[0]
+    return sku_str
 
 # V39 核心：生成純數字款號
 def generate_smart_style_code(category, existing_skus):
@@ -201,7 +209,6 @@ def generate_smart_style_code(category, existing_skus):
         if str(sku).startswith(current_prefix):
             try:
                 rest = sku.replace(current_prefix, "")
-                # 排除可能存在的顏色後綴，只取第一段數字
                 seq_part = rest.split("-")[0] 
                 if seq_part.isdigit():
                     seq_num = int(seq_part)
@@ -209,17 +216,6 @@ def generate_smart_style_code(category, existing_skus):
             except: pass
     next_seq = str(max_seq + 1).zfill(3)
     return f"{current_prefix}{next_seq}"
-
-# V42 新增：智能單品生成器 (含新色邏輯)
-def generate_variant_sku(parent_style, color_code, size):
-    # parent_style: TOP-2601
-    # color_code: BLK
-    # size: F
-    # Result: TOP-2601-BLK-F
-    if color_code:
-        return f"{parent_style}-{color_code}-{size}"
-    else:
-        return f"{parent_style}-{size}"
 
 COLUMN_MAPPING = {
     "Style_Code": "款號(Style)", "Name": "商品名稱", "Category": "分類", "Size_Detail": "庫存分佈",
@@ -253,7 +249,7 @@ def main():
         with c2:
             st.markdown("<br><br><br>", unsafe_allow_html=True)
             st.markdown("<div style='text-align:center; font-weight:900; font-size:2.5rem; margin-bottom:10px;'>IFUKUK</div>", unsafe_allow_html=True)
-            st.markdown("<div style='text-align:center; color:#666; font-size:0.9rem; margin-bottom:30px;'>MATRIX ERP V42.0</div>", unsafe_allow_html=True)
+            st.markdown("<div style='text-align:center; color:#666; font-size:0.9rem; margin-bottom:30px;'>MATRIX ERP V44.0</div>", unsafe_allow_html=True)
             with st.form("login"):
                 user_input = st.text_input("帳號 (ID)")
                 pass_input = st.text_input("密碼 (Password)", type="password")
@@ -297,7 +293,7 @@ def main():
     df['Safe_Level'] = df['Safety_Stock'].apply(lambda x: 5 if x == 0 else x)
     df['SKU'] = df['SKU'].astype(str)
     
-    # V42 核心：Style_Code 生成
+    # V44: 簡單分割，不做假設
     df['Style_Code'] = df['SKU'].apply(get_style_code)
     
     users_df = get_data_safe(ws_users)
@@ -335,7 +331,7 @@ def main():
             st.session_state['logged_in'] = False
             st.rerun()
 
-    # --- Dashboard (V39 完整還原) ---
+    # --- Dashboard ---
     total_qty = df['Qty'].sum()
     total_cost = (df['Qty'] * df['Cost']).sum()
     total_rev = (df['Qty'] * df['Price']).sum()
@@ -367,8 +363,8 @@ def main():
                 st.plotly_chart(fig_pie, use_container_width=True)
             with c_chart2:
                 st.caption("📊 重點庫存 (Top 10)")
-                # V42 修正：根據 Style_Code 聚合，避免同款因名稱不同而被拆分
-                top_items = df.groupby('Style_Code').agg({'Qty':'sum', 'Name':'first'}).sort_values(by='Qty', ascending=False).head(10)
+                # V44: Group by Style_Code AND Name to ensure accuracy
+                top_items = df.groupby(['Style_Code', 'Name']).agg({'Qty':'sum'}).reset_index().sort_values(by='Qty', ascending=False).head(10)
                 fig_bar = px.bar(top_items, x='Qty', y='Name', orientation='h', text='Qty', color='Qty', color_continuous_scale='Bluered')
                 fig_bar.update_layout(height=250, margin=dict(t=0, b=0, l=0, r=0), yaxis={'categoryorder':'total ascending'})
                 st.plotly_chart(fig_bar, use_container_width=True)
@@ -384,24 +380,23 @@ def main():
         if search_q: gallery_df = gallery_df[gallery_df.apply(lambda x: search_q.lower() in str(x.values).lower(), axis=1)]
         if filter_cat != "全部": gallery_df = gallery_df[gallery_df['Category'] == filter_cat]
         
-        # V42 核心修正：強制合併顯示
-        # 即使資料庫中同一款號有不同分類(Top/Out)，這裡強制 groupby Style_Code，並取第一筆資料的分類與圖片，避免卡片重複
         if not gallery_df.empty:
-            grouped = gallery_df.groupby('Style_Code')
+            # 🛑 V44 關鍵：聚合鍵加入 'Name'，區分 "同系列但不同名稱" 的新款
+            grouped = gallery_df.groupby(['Style_Code', 'Name'])
             
-            for style_code, group in grouped:
-                first_row = group.iloc[0] # 強制取第一筆代表此款
+            for (style_code, name), group in grouped:
+                first_row = group.iloc[0] 
                 img = render_image_url(first_row['Image_URL'])
-                name = first_row['Name']
+                # name 和 style_code 已經在 key 裡
                 price = int(first_row['Price'])
                 total_qty = group['Qty'].sum()
                 
                 size_tags_html = ""
+                # 簡單排序尺寸
                 size_order = {s: i for i, s in enumerate(SIZE_LIST)}
                 group['sort_key'] = group['Size'].map(size_order).fillna(99)
                 sorted_group = group.sort_values('sort_key')
                 
-                # 合併該款所有尺寸，無論原始分類為何
                 for _, row in sorted_group.iterrows():
                     s_class = "size-tag no-stock" if row['Qty'] == 0 else "size-tag has-stock"
                     size_tags_html += f"<span class='{s_class}'>{row['Size']}: <b>{row['Qty']}</b></span>"
@@ -413,13 +408,13 @@ def main():
                         st.markdown(f"**NT$ {price}**")
                     with c_card2:
                         st.markdown("#### 📝 管理庫存")
-                        with st.form(f"dyn_form_{style_code}"):
+                        with st.form(f"dyn_form_{style_code}_{name}"): # Key need to be unique
                             inputs = {}
                             cols = st.columns(4)
-                            for i, (_, row) in enumerate(sorted_group.iterrows()):
-                                with cols[i % 4]:
-                                    # 使用 row['SKU'] 確保更新到正確的單一 SKU
-                                    inputs[row['SKU']] = st.number_input(f"{row['Size']}", value=int(row['Qty']), key=f"d_{row['SKU']}")
+                            for idx, row in sorted_group.iterrows():
+                                with cols[idx % 4]:
+                                    label = f"{row['Size']}"
+                                    inputs[row['SKU']] = st.number_input(label, value=int(row['Qty']), key=f"d_{row['SKU']}")
                             
                             if st.form_submit_button("💾 更新此款庫存"):
                                 changes = []
@@ -436,11 +431,9 @@ def main():
 
         st.markdown("##### 📦 庫存明細 (歸戶檢視)")
         if not gallery_df.empty:
-            # [Fix] V42: Group by Style_Code ONLY. 
-            # Category 和 Name 使用 'first' 來避免因資料不一致導致的重複行。
-            agg_df = gallery_df.groupby('Style_Code').agg({
-                'Name': 'first',
-                'Category': 'first', # 強制歸一
+            # 🛑 V44 關鍵：列表同樣加入 Name 進行分組
+            agg_df = gallery_df.groupby(['Style_Code', 'Name']).agg({
+                'Category': 'first',
                 'Qty': 'sum',
                 'Price': 'max',
                 'Cost': 'mean',
@@ -449,14 +442,15 @@ def main():
                 'Last_Updated': 'max'
             }).reset_index()
             
-            def get_stock_dist(style_code):
-                grp = gallery_df[gallery_df['Style_Code'] == style_code]
+            def get_stock_dist(row):
+                # 需同時符合 Code 與 Name
+                grp = gallery_df[(gallery_df['Style_Code'] == row['Style_Code']) & (gallery_df['Name'] == row['Name'])]
                 dist = []
                 for _, r in grp.iterrows():
                     dist.append(f"{r['Size']}:{r['Qty']}")
                 return ", ".join(dist)
             
-            agg_df['Size_Detail'] = agg_df['Style_Code'].apply(get_stock_dist)
+            agg_df['Size_Detail'] = agg_df.apply(get_stock_dist, axis=1)
             agg_df['Total_Qty'] = agg_df['Qty']
             agg_df['Avg_Cost'] = agg_df['Cost'].astype(int)
             agg_df['Ref_Orig_Cost'] = agg_df.apply(lambda x: f"¥{x['Orig_Cost']}" if x['Orig_Currency'] == 'CNY' else "-", axis=1)
@@ -570,11 +564,11 @@ def main():
                         st.markdown(card_html.replace('\n', ''), unsafe_allow_html=True)
                     except: pass
 
-    # Tab 4: Mgmt (V42: 單品新增優化 - 同源繼承)
+    # Tab 4: Mgmt
     with tabs[3]:
         mt1, mt2, mt3 = st.tabs(["🚀 矩陣批量 (新款/追加)", "➕ 單品新增 (智能版)", "✏️ 數據修改"])
         
-        # SubTab 1: 矩陣批量 (V39 原封不動)
+        # SubTab 1: 矩陣批量
         with mt1:
             st.markdown("##### 👔 款式矩陣中樞")
             st.caption("輸入款號，自動判斷新增或追加。")
@@ -667,11 +661,10 @@ def main():
                             st.success(f"完成！更新 {updated_count} 筆，新增 {created_count} 筆。"); time.sleep(2); st.rerun()
                         else: st.error("請填寫完整")
 
-        # SubTab 2: 單品新增 (V42: 加入同款不同色邏輯)
+        # SubTab 2: 單品新增
         with mt2:
             st.markdown("<div class='sku-wizard'><div class='wizard-header'>🧠 智能單品生成 (Smart Single Add)</div>", unsafe_allow_html=True)
             
-            # --- V42 智能生成控制台 ---
             gen_mode = st.radio("選擇模式", ["✨ 開闢新系列 (New Series)", "🎨 同款新色 (Color Variant)", "🔗 追加尺寸 (Append Size)", "✍️ 手動輸入"], horizontal=True)
             
             auto_sku = ""
@@ -682,10 +675,10 @@ def main():
             c_gen1, c_gen2 = st.columns([1, 1])
 
             if "開闢新系列" in gen_mode:
-                with c_gen1: g_cat = st.selectbox("1. 選擇分類", CAT_LIST, key="v42_cat")
-                with c_gen2: g_size = st.selectbox("2. 選擇尺寸", SIZE_LIST, key="v42_size")
+                with c_gen1: g_cat = st.selectbox("1. 選擇分類", CAT_LIST, key="v44_cat")
+                with c_gen2: g_size = st.selectbox("2. 選擇尺寸", SIZE_LIST, key="v44_size")
                 if st.button("🎲 生成建議貨號", use_container_width=True):
-                    # 這裡只生成 TOP-2601-F
+                    # V44: 保持建議，但不強求
                     style_base = generate_smart_style_code(g_cat, df['SKU'].tolist())
                     auto_sku = f"{style_base}-{g_size}"
                     st.session_state['temp_sku'] = auto_sku
@@ -693,40 +686,34 @@ def main():
                 if 'temp_sku' in st.session_state: auto_sku = st.session_state['temp_sku']
 
             elif "同款新色" in gen_mode:
-                # 選擇現有款式，然後生成 TOP-2601-BLK-F
                 if not df.empty:
                     style_opts = df[['Style_Code', 'Name']].drop_duplicates('Style_Code').apply(lambda x: f"{x['Style_Code']} | {x['Name']}", axis=1).tolist()
                 else: style_opts = []
                 
                 with c_gen1: 
-                    sel_parent = st.selectbox("1. 選擇母系列 (繼承圖片/成本)", ["..."] + style_opts, key="v42_parent")
+                    sel_parent = st.selectbox("1. 選擇母系列 (繼承圖片/成本)", ["..."] + style_opts, key="v44_parent")
                 with c_gen2:
-                    # 輸入色碼與尺寸
                     c_col1, c_col2 = st.columns(2)
-                    color_code = c_col1.text_input("2a. 新色代碼 (Ex: BK)", key="v42_color")
-                    g_size_col = c_col2.selectbox("2b. 尺寸", SIZE_LIST, key="v42_size_col")
+                    color_code = c_col1.text_input("2a. 新色代碼 (Ex: BK)", key="v44_color")
+                    g_size_col = c_col2.selectbox("2b. 尺寸", SIZE_LIST, key="v44_size_col")
                 
                 if sel_parent != "..." and color_code:
                     p_code = sel_parent.split(" | ")[0]
                     p_name = sel_parent.split(" | ")[1]
                     auto_sku = f"{p_code}-{color_code}-{g_size_col}"
                     auto_name = p_name
-                    # 抓圖與成本
                     try:
                         p_row = df[df['Style_Code'] == p_code].iloc[0]
                         auto_img = p_row['Image_URL']
-                        st.info(f"🎨 已繼承 [{p_code}] 資料，將建立新色 [{color_code}]。")
-                        # 這裡可以隱藏傳遞成本，但在下方的 Form 會顯示為 0，需使用者手動確認或後台自動帶入? 
-                        # 為了簡化，我們讓使用者在下方表單看到圖片繼承，成本需手動確認 (或自動填入 form)
-                        # 在此介面我們只能傳遞 sku, name, img
+                        st.info(f"🎨 已繼承 [{p_code}] 資料。")
                     except: pass
             
             elif "追加尺寸" in gen_mode:
                  if not df.empty:
                     style_opts = df[['Style_Code', 'Name']].drop_duplicates('Style_Code').apply(lambda x: f"{x['Style_Code']} | {x['Name']}", axis=1).tolist()
                  else: style_opts = []
-                 with c_gen1: sel_p = st.selectbox("1. 選擇款式", ["..."] + style_opts, key="v42_append")
-                 with c_gen2: g_sz = st.selectbox("2. 追加尺寸", SIZE_LIST, key="v42_sz_app")
+                 with c_gen1: sel_p = st.selectbox("1. 選擇款式", ["..."] + style_opts, key="v44_append")
+                 with c_gen2: g_sz = st.selectbox("2. 追加尺寸", SIZE_LIST, key="v44_sz_app")
                  if sel_p != "...":
                      p_c = sel_p.split(" | ")[0]
                      p_n = sel_p.split(" | ")[1]
@@ -737,7 +724,7 @@ def main():
             
             st.markdown("</div>", unsafe_allow_html=True)
 
-            with st.form("single_add_v42"):
+            with st.form("single_add_v44"):
                 c_sa, c_sb = st.columns([1, 1])
                 sku_val = auto_sku if auto_sku else ""
                 name_val = auto_name if auto_name else ""
@@ -748,7 +735,6 @@ def main():
                 c_s1, c_s2, c_s3, c_s4 = st.columns(4)
                 cat_s = c_s1.selectbox("分類", CAT_LIST)
                 
-                # 嘗試自動判斷尺寸
                 def_size_idx = 0
                 if sku_val:
                     last_part = sku_val.split('-')[-1]
@@ -763,7 +749,6 @@ def main():
                 cost_s = c_sc2.number_input("成本金額", 0)
                 
                 st.markdown("---")
-                # 圖片處理
                 final_img_payload = ""
                 if auto_img:
                     st.image(auto_img, width=100, caption="已繼承圖片")
@@ -787,7 +772,7 @@ def main():
                             log_event(ws_logs, st.session_state['user_name'], "New_Item", f"單品: {sku_s}")
                             st.success("成功"); time.sleep(1); st.rerun()
 
-        # SubTab 3: 修改 (V39 原封不動)
+        # SubTab 3: 修改
         with mt3:
             st.markdown("##### ✏️ 數據修改")
             edit_target_sku = st.selectbox("選擇對象", ["..."] + opts)
@@ -813,7 +798,7 @@ def main():
                         log_event(ws_logs, st.session_state['user_name'], "Edit_Item", f"修改: {t_sku}")
                         st.success("修改完成！"); time.sleep(1); st.rerun()
 
-    # Tab 5: Log (V39 完整還原)
+    # Tab 5: Log
     with tabs[4]:
         st.subheader("🕵️ 稽核日誌")
         c_f1, c_f2, c_f3 = st.columns([1, 1, 1])
@@ -837,7 +822,7 @@ def main():
             else: st.info("無資料")
         else: st.warning("無紀錄")
 
-    # Tab 6: Admin (V39 完整還原)
+    # Tab 6: Admin
     with tabs[5]:
         if st.session_state['user_role'] == 'Admin':
             st.subheader("👥 人員管理")
