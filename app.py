@@ -21,11 +21,11 @@ st.set_page_config(
 )
 
 # ==========================================
-# 🛑 【MATRIX-V38.0 聚合引擎與視覺重構】
+# 🛑 【MATRIX-V39.0 視覺聚合與動態管理】
 # ==========================================
 st.markdown("""
     <style>
-        /* --- 1. 全局鎖定 (白底黑字) --- */
+        /* --- 1. 全局鎖定 --- */
         .stApp { background-color: #FFFFFF !important; }
         [data-testid="stAppViewContainer"] { background-color: #FFFFFF !important; }
         [data-testid="stSidebar"] { background-color: #F8F9FA !important; border-right: 1px solid #E5E7EB; }
@@ -43,22 +43,8 @@ st.markdown("""
         li[role="option"] div { color: #000000 !important; }
         li[role="option"]:hover, li[role="option"][aria-selected="true"] { background-color: #F3F4F6 !important; color: #000000 !important; }
 
-        /* --- 3. 元件修復 --- */
-        div[data-testid="stDateInput"] > div:nth-of-type(2) > div { background-color: #FFFFFF !important; }
-        div[data-testid="stDateInput"] button[role="gridcell"] { color: #000000 !important; background-color: #FFFFFF !important; }
-        header[data-testid="stHeader"] { background-color: transparent !important; z-index: 9999; }
-        .block-container { padding-top: 6rem !important; padding-bottom: 5rem !important; }
-
-        .navbar-container {
-            position: fixed; top: 50px; left: 0; width: 100%; z-index: 99;
-            background-color: rgba(255, 255, 255, 0.98); backdrop-filter: blur(12px);
-            padding: 12px 24px; border-bottom: 1px solid #e0e0e0;
-            display: flex; justify-content: space-between; align-items: center;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.03);
-        }
-
-        /* --- 4. V38 聚合卡片樣式 (Grouped Card) --- */
-        .inventory-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 16px; padding: 10px 0; }
+        /* --- 3. V39 卡片樣式 (支援詳細庫存) --- */
+        .inventory-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; padding: 10px 0; }
         
         .inv-card {
             background: #FFFFFF; border: 1px solid #E5E7EB; border-radius: 12px;
@@ -71,18 +57,15 @@ st.markdown("""
         .inv-style-code { font-size: 11px; color: #666; margin-bottom: 6px; font-family: monospace; background: #eee; padding: 2px 6px; border-radius: 4px; }
         .inv-price { font-weight: 800; color: #000; font-size: 15px; margin-bottom: 6px; }
         
-        /* 聚合標記 (Badge) */
-        .inv-badge-group { 
-            position: absolute; top: 10px; right: 10px; 
-            background: rgba(0,0,0,0.7); color: #fff; 
-            font-size: 10px; padding: 2px 6px; border-radius: 4px; 
+        /* 尺寸庫存標籤 (S:10) */
+        .size-tags { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; margin-top: auto; width: 100%; }
+        .size-tag { 
+            font-size: 11px; background: #fff; color: #333; 
+            padding: 3px 6px; border-radius: 4px; border: 1px solid #ddd;
+            display: flex; align-items: center; justify-content: center;
         }
-        
-        /* 尺寸總覽條 */
-        .size-tags { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; margin-top: auto; }
-        .size-tag { font-size: 10px; background: #f3f4f6; color: #333; padding: 2px 5px; border-radius: 3px; border: 1px solid #e5e7eb; }
-        .size-tag.has-stock { background: #d1fae5; color: #065f46; border-color: #a7f3d0; } /* 有貨綠色 */
-        .size-tag.no-stock { background: #fee2e2; color: #991b1b; border-color: #fecaca; text-decoration: line-through; } /* 缺貨紅色 */
+        .size-tag b { margin-left: 3px; color: #000; }
+        .size-tag.no-stock { background: #fee2e2; color: #991b1b; border-color: #fecaca; opacity: 0.7; } 
 
         .metric-card { background: linear-gradient(145deg, #ffffff, #f5f7fa); border-radius: 16px; padding: 20px; border: 1px solid #e1e4e8; text-align: center; box-shadow: 0 4px 12px rgba(0,0,0,0.03); margin-bottom: 10px; }
         .metric-value { font-size: 2rem; font-weight: 800; margin: 8px 0; color:#111 !important; }
@@ -96,6 +79,7 @@ st.markdown("""
         .streamlit-expanderHeader p { color: #000000 !important; font-weight: 600; }
         [data-testid="stDataFrame"] { border: 1px solid #E5E7EB; border-radius: 8px; overflow: hidden; }
         
+        .manage-btn { margin-top: 10px; width: 100%; }
         .smart-detect { background-color: #d1fae5; color: #065f46; padding: 8px; border-radius: 6px; font-size: 0.85rem; margin-bottom: 10px; border: 1px solid #a7f3d0; }
     </style>
 """, unsafe_allow_html=True)
@@ -148,7 +132,7 @@ def get_worksheet_safe(sh, title, headers):
         return ws
     except: return None
 
-# --- V38 專業工具模組 ---
+# --- V39 專業工具模組 ---
 
 @st.cache_data(ttl=3600)
 def get_live_rate():
@@ -211,15 +195,15 @@ def render_navbar(user_initial):
         </div>
     """, unsafe_allow_html=True)
 
-# V38 新增：解析款號 (Style Code)
+# V39 核心：取得款號 (移除尺寸後綴)
 def get_style_code(sku):
-    # 假設 SKU 格式為 TOP-2601-001-S 或 TOP-2601-S
-    # 邏輯：去掉最後一個 '-' 後面的部分（通常是尺寸）
     if '-' in str(sku):
+        # 假設格式 TOP-2601-S 或 TOP-2601-001-S
+        # 邏輯：移除最後一個 - 之後的部分 (視為尺寸)
         return str(sku).rsplit('-', 1)[0]
     return str(sku)
 
-# V34 智能款號生成 (保留)
+# V39 核心：生成款號 (不帶尺寸)
 def generate_smart_style_code(category, existing_skus, custom_series=""):
     if custom_series:
         prefix = custom_series.upper().strip()
@@ -234,22 +218,24 @@ def generate_smart_style_code(category, existing_skus, custom_series=""):
     
     current_prefix = f"{prefix}-"
     max_seq = 0
+    # 遍歷現有 SKU (找出同系列最大序號)
     for sku in existing_skus:
         if str(sku).startswith(current_prefix):
             try:
+                # 移除前綴，剩餘部分如 001-S 或 001
                 rest = sku.replace(current_prefix, "")
-                seq_part = rest.split("-")[0] 
+                # 取第一段數字
+                seq_part = rest.split("-")[0]
                 seq_num = int(seq_part)
                 if seq_num > max_seq: max_seq = seq_num
             except: pass
     next_seq = str(max_seq + 1).zfill(3)
     return f"{current_prefix}{next_seq}"
 
-# V38 漢化映射
+# V39 漢化映射
 COLUMN_MAPPING = {
-    "SKU": "商品貨號", "Name": "商品名稱", "Category": "分類", "Size": "尺寸",
-    "Qty": "庫存量", "Price": "售價(NTD)", "Cost": "成本(NTD)", "Last_Updated": "最後更新",
-    "Safety_Stock": "安全庫存", "Orig_Currency": "原幣別", "Orig_Cost": "原幣成本", "Safe_Level": "警戒線"
+    "Style_Code": "款號(Style)", "Name": "商品名稱", "Category": "分類", "Size_Detail": "庫存分佈",
+    "Total_Qty": "總庫存", "Price": "售價(NTD)", "Avg_Cost": "平均成本(NTD)", "Ref_Orig_Cost": "參考原幣(CNY)", "Last_Updated": "最後更新"
 }
 
 # --- 主程式 ---
@@ -279,7 +265,7 @@ def main():
         with c2:
             st.markdown("<br><br><br>", unsafe_allow_html=True)
             st.markdown("<div style='text-align:center; font-weight:900; font-size:2.5rem; margin-bottom:10px;'>IFUKUK</div>", unsafe_allow_html=True)
-            st.markdown("<div style='text-align:center; color:#666; font-size:0.9rem; margin-bottom:30px;'>MATRIX ERP V38.0</div>", unsafe_allow_html=True)
+            st.markdown("<div style='text-align:center; color:#666; font-size:0.9rem; margin-bottom:30px;'>MATRIX ERP V39.0</div>", unsafe_allow_html=True)
             with st.form("login"):
                 user_input = st.text_input("帳號 (ID)")
                 pass_input = st.text_input("密碼 (Password)", type="password")
@@ -323,7 +309,7 @@ def main():
     df['Safe_Level'] = df['Safety_Stock'].apply(lambda x: 5 if x == 0 else x)
     df['SKU'] = df['SKU'].astype(str)
     
-    # V38: 聚合款號欄位
+    # V39: 核心聚合欄位 Style_Code
     df['Style_Code'] = df['SKU'].apply(get_style_code)
     
     users_df = get_data_safe(ws_users)
@@ -343,15 +329,12 @@ def main():
             source = st.session_state.get('rate_source', 'Manual')
             status_color = "green" if "Live" in source else "orange"
             st.caption(f"Source: :{status_color}[{source}]")
-            
             current_rate = st.session_state['exchange_rate']
             new_rate = st.number_input("RMB to TWD", value=current_rate, step=0.01, format="%.2f")
-            
             if new_rate != current_rate:
                 st.session_state['exchange_rate'] = new_rate
                 st.session_state['rate_source'] = "Manual Override"
                 st.toast(f"匯率已手動鎖定為: {new_rate}")
-
             if st.button("🔄 重抓 Live 匯率"):
                 live_r, success = get_live_rate()
                 st.session_state['exchange_rate'] = live_r
@@ -371,7 +354,6 @@ def main():
                         for i, row in enumerate(raw_data):
                             if str(row[0]).strip() == st.session_state['user_name']:
                                 user_row_idx = i + 1; stored_pwd = str(row[1]).strip(); break
-                        
                         is_valid = check_hash(old, stored_pwd) if len(stored_pwd)==64 else (old == stored_pwd)
                         if is_valid:
                             ws_users.update_cell(user_row_idx, 2, make_hash(new))
@@ -389,7 +371,6 @@ def main():
     total_cost = (df['Qty'] * df['Cost']).sum()
     total_rev = (df['Qty'] * df['Price']).sum()
     profit = total_rev - total_cost
-    
     rmb_stock_value = 0
     if not df.empty and 'Orig_Currency' in df.columns:
         rmb_items = df[df['Orig_Currency'] == 'CNY']
@@ -404,9 +385,9 @@ def main():
     st.markdown("---")
 
     # --- Tabs ---
-    tabs = st.tabs(["📊 視覺庫存 (聚合版)", "⚡ POS", "🎁 內部領用", "👔 矩陣管理", "📝 日誌", "👥 Admin"])
+    tabs = st.tabs(["📊 視覺庫存", "⚡ POS", "🎁 內部領用", "👔 矩陣管理", "📝 日誌", "👥 Admin"])
 
-    # Tab 1: 視覺總覽 (V38: 聚合引擎)
+    # Tab 1: 視覺總覽 (V39: 智能聚合)
     with tabs[0]:
         if not df.empty:
             c_chart1, c_chart2 = st.columns([1, 1])
@@ -416,31 +397,29 @@ def main():
                 fig_pie.update_layout(height=250, margin=dict(t=0, b=0, l=0, r=0))
                 st.plotly_chart(fig_pie, use_container_width=True)
             with c_chart2:
-                st.caption("📊 重點庫存 (Top 10 款式)")
-                # V38: 改為以 Style_Code 聚合排名
+                st.caption("📊 重點庫存 (Top 10)")
+                # V39: 依據款號聚合排名
                 top_items = df.groupby('Style_Code').agg({'Qty':'sum', 'Name':'first'}).sort_values(by='Qty', ascending=False).head(10)
                 fig_bar = px.bar(top_items, x='Qty', y='Name', orientation='h', text='Qty', color='Qty', color_continuous_scale='Bluered')
                 fig_bar.update_layout(height=250, margin=dict(t=0, b=0, l=0, r=0), yaxis={'categoryorder':'total ascending'})
                 st.plotly_chart(fig_bar, use_container_width=True)
         
         st.divider()
-        st.subheader("🖼️ 庫存畫廊 (Style Gallery)")
+        st.subheader("🖼️ 庫存畫廊 (Visual Inventory)")
         
         col_s1, col_s2 = st.columns([2, 1])
-        with col_s1: search_q = st.text_input("🔍 搜尋商品 (款號/名稱)", placeholder="輸入...")
+        with col_s1: search_q = st.text_input("🔍 搜尋商品", placeholder="輸入貨號或品名...")
         with col_s2: filter_cat = st.selectbox("📂 分類篩選", ["全部"] + CAT_LIST)
         
-        # 篩選邏輯
         gallery_df = df.copy()
         if search_q: gallery_df = gallery_df[gallery_df.apply(lambda x: search_q.lower() in str(x.values).lower(), axis=1)]
         if filter_cat != "全部": gallery_df = gallery_df[gallery_df['Category'] == filter_cat]
         
-        # V38 核心：以款號 (Style_Code) 進行聚合
+        # V39 核心：聚合顯示邏輯
         if not gallery_df.empty:
-            # Group by Style_Code
             grouped = gallery_df.groupby('Style_Code')
             
-            html_cards = ""
+            # 使用 container 來動態渲染卡片與展開區
             for style_code, group in grouped:
                 first_row = group.iloc[0]
                 img = render_image_url(first_row['Image_URL'])
@@ -448,53 +427,94 @@ def main():
                 price = int(first_row['Price'])
                 total_qty = group['Qty'].sum()
                 
-                # 生成尺寸標籤
+                # 生成尺寸詳細標籤 (V39: 顯示具體數量)
                 size_tags_html = ""
-                for idx, row in group.iterrows():
+                # 排序尺寸：自定義排序
+                size_order = {s: i for i, s in enumerate(SIZE_LIST)}
+                group['sort_key'] = group['Size'].map(size_order).fillna(99)
+                sorted_group = group.sort_values('sort_key')
+                
+                for _, row in sorted_group.iterrows():
                     s_class = "size-tag no-stock" if row['Qty'] == 0 else "size-tag has-stock"
-                    size_tags_html += f"<span class='{s_class}'>{row['Size']}</span>"
+                    size_tags_html += f"<span class='{s_class}'>{row['Size']}: <b>{row['Qty']}</b></span>"
                 
-                # 判斷是否為聚合卡片
-                count = len(group)
-                badge_html = f"<div class='inv-badge-group'>{count} 規格</div>" if count > 1 else ""
-                
-                card_html = f"""
-                <div class="inv-card">
-                    {badge_html}
-                    <img src="{img}" class="inv-img">
-                    <div class="inv-title" title="{name}">{name}</div>
-                    <div class="inv-style-code">{style_code}</div>
-                    <div class="inv-price">${price}</div>
-                    <div class="inv-qty">總庫存: {total_qty}</div>
-                    <div class="size-tags">{size_tags_html}</div>
-                </div>
-                """
-                html_cards += card_html.replace('\n', '')
+                # 顯示卡片 (HTML)
+                with st.expander(f"📦 {name} ({style_code}) - 總庫存: {total_qty}", expanded=False):
+                    c_card1, c_card2 = st.columns([1, 2])
+                    with c_card1:
+                        st.image(img, use_column_width=True)
+                        st.markdown(f"**NT$ {price}**")
+                    with c_card2:
+                        st.markdown("#### 📝 管理庫存 (Dynamic Stock)")
+                        # V39: 動態庫存管理介面
+                        with st.form(f"dyn_form_{style_code}"):
+                            # 動態生成所有尺寸的輸入框
+                            inputs = {}
+                            cols = st.columns(4)
+                            for i, (_, row) in enumerate(sorted_group.iterrows()):
+                                with cols[i % 4]:
+                                    inputs[row['Size']] = st.number_input(f"{row['Size']}", value=int(row['Qty']), key=f"d_{style_code}_{row['Size']}")
+                            
+                            if st.form_submit_button("💾 更新此款庫存"):
+                                changes = []
+                                for sz, new_q in inputs.items():
+                                    target_sku = f"{style_code}-{sz}"
+                                    if target_sku in df['SKU'].tolist():
+                                        # 找出並更新
+                                        r = ws_items.find(target_sku).row
+                                        ws_items.update_cell(r, 5, new_q)
+                                        ws_items.update_cell(r, 8, str(datetime.now()))
+                                        changes.append(f"{sz}:{new_q}")
+                                log_event(ws_logs, st.session_state['user_name'], "Quick_Update", f"{style_code} | {', '.join(changes)}")
+                                st.success("更新完成！"); time.sleep(1); st.rerun()
 
-            st.markdown(f'<div class="inventory-grid">{html_cards}</div>', unsafe_allow_html=True)
         else: st.info("無符合資料")
 
-        st.markdown("##### 📦 庫存明細 (雙幣檢視)")
-        display_df = gallery_df.copy()
-        display_df['原幣成本(CNY)'] = display_df.apply(lambda x: f"¥ {x['Orig_Cost']}" if x['Orig_Currency'] == 'CNY' else "-", axis=1)
-        display_df = display_df.drop(columns=['Image_URL', 'Safety_Stock', 'Orig_Currency', 'Orig_Cost', 'Style_Code'], errors='ignore')
-        display_df = display_df.rename(columns=COLUMN_MAPPING)
-        final_cols = [c for c in ["商品貨號", "商品名稱", "分類", "尺寸", "庫存量", "售價(NTD)", "成本(NTD)", "原幣成本(CNY)", "最後更新"] if c in display_df.columns]
-        st.dataframe(display_df[final_cols], use_container_width=True)
+        st.markdown("##### 📦 庫存明細 (聚合檢視)")
+        # V39: 表格聚合邏輯 (Aggregation)
+        if not gallery_df.empty:
+            agg_df = gallery_df.groupby('Style_Code').agg({
+                'Name': 'first',
+                'Category': 'first',
+                'Qty': 'sum',
+                'Price': 'first',
+                'Cost': 'mean', # 平均成本
+                'Orig_Cost': 'first',
+                'Orig_Currency': 'first',
+                'Last_Updated': 'max'
+            }).reset_index()
+            
+            # 生成「庫存分佈」字串
+            def get_stock_dist(style_code):
+                grp = gallery_df[gallery_df['Style_Code'] == style_code]
+                dist = []
+                for _, r in grp.iterrows():
+                    dist.append(f"{r['Size']}:{r['Qty']}")
+                return ", ".join(dist)
+            
+            agg_df['Size_Detail'] = agg_df['Style_Code'].apply(get_stock_dist)
+            
+            # 格式化
+            agg_df['Total_Qty'] = agg_df['Qty']
+            agg_df['Avg_Cost'] = agg_df['Cost'].astype(int)
+            agg_df['Ref_Orig_Cost'] = agg_df.apply(lambda x: f"¥{x['Orig_Cost']}" if x['Orig_Currency'] == 'CNY' else "-", axis=1)
+            
+            agg_df = agg_df.rename(columns=COLUMN_MAPPING)
+            show_cols = ["款號(Style)", "商品名稱", "分類", "庫存分佈", "總庫存", "售價(NTD)", "平均成本(NTD)", "參考原幣(CNY)", "最後更新"]
+            st.dataframe(agg_df[show_cols], use_container_width=True)
 
-    # Tab 2: POS
+    # Tab 2: POS (維持 V38 穩定版)
     with tabs[1]:
         c1, c2 = st.columns([1, 1])
         with c1:
             st.subheader("商品")
             opts = df.apply(lambda x: f"{x['SKU']} | {x['Name']}", axis=1).tolist()
-            sel = st.selectbox("選擇商品 (POS)", ["..."] + opts)
+            sel = st.selectbox("選擇商品", ["..."] + opts)
             target = None
             if sel != "...":
                 target = df[df['SKU'] == sel.split(" | ")[0]].iloc[0]
                 img = render_image_url(target['Image_URL'])
                 orig_show = f"<span class='cost-tag'>原幣: ¥{target['Orig_Cost']}</span>" if target['Orig_Currency'] == 'CNY' else ""
-                
                 card_html = f"""
                 <div style="display:flex; align-items:center; background:#f9f9f9; padding:15px; border-radius:10px;">
                     <img src="{img}" style="width:80px; height:80px; border-radius:8px; object-fit:cover; margin-right:15px;">
@@ -507,12 +527,11 @@ def main():
                 </div>
                 """
                 st.markdown(card_html.replace('\n', ''), unsafe_allow_html=True)
-        
         with c2:
             st.subheader("操作")
             if target is not None:
                 qty = st.number_input("數量", 1)
-                t1, t2 = st.tabs(["📥 進貨 (Restock)", "📤 銷售 (Sale)"])
+                t1, t2 = st.tabs(["📥 進貨", "📤 銷售"])
                 with t1:
                     st.markdown("###### 💰 進貨成本")
                     cost_currency = st.radio("幣別", ["NTD", "CNY"], horizontal=True)
@@ -589,15 +608,13 @@ def main():
                         st.markdown(card_html.replace('\n', ''), unsafe_allow_html=True)
                     except: pass
 
-    # Tab 4: Mgmt (V38: 智能繼承與聚合)
+    # Tab 4: Mgmt
     with tabs[3]:
         mt1, mt2, mt3 = st.tabs(["🚀 矩陣批量 (新款/追加)", "➕ 單品新增", "✏️ 數據修改"])
         
-        # Sub A: 矩陣
         with mt1:
             st.markdown("##### 👔 款式矩陣中樞")
-            st.caption("輸入款號，自動判斷新增或追加。若為追加，自動繼承成本與圖片。")
-            
+            st.caption("輸入款號，自動判斷新增或追加。")
             all_skus = df['SKU'].tolist()
             existing_styles = sorted(list(set([get_style_code(s) for s in all_skus])))
             
@@ -618,42 +635,31 @@ def main():
                 related_skus = df[df['SKU'].str.startswith(input_style + "-")]
                 is_edit_mode = not related_skus.empty
                 
-                # V38 智能繼承邏輯
                 if is_edit_mode:
                     st.markdown(f"<div class='smart-detect'>🟢 <b>[{input_style}] 已存在。已自動繼承成本與圖片。</b></div>", unsafe_allow_html=True)
                     first_row = related_skus.iloc[0]
                     default_name = first_row['Name']
                     default_price = int(first_row['Price'])
-                    # 繼承原幣成本與幣別
                     default_orig_cost = int(first_row['Orig_Cost']) if first_row['Orig_Cost'] > 0 else 0
                     default_currency = first_row['Orig_Currency'] if first_row['Orig_Currency'] in ["TWD", "CNY"] else "TWD"
-                    # 若原幣為0，則繼承台幣成本
                     default_cost_twd = int(first_row['Cost'])
                     default_img = first_row['Image_URL']
                 else:
                     st.markdown(f"<div class='smart-detect'>🔵 <b>[{input_style}] 為新商品。</b></div>", unsafe_allow_html=True)
-                    default_name = ""; default_price = 0; 
-                    default_orig_cost = 0; default_currency = "TWD"; default_cost_twd = 0
-                    default_img = ""
+                    default_name = ""; default_price = 0; default_orig_cost = 0; default_currency = "TWD"; default_cost_twd = 0; default_img = ""
 
                 with st.form("matrix_form"):
                     st.markdown("#### 1. 款式參數")
                     name_b = st.text_input("商品名稱", value=default_name)
                     c_p1, c_p2 = st.columns(2)
                     price_b = c_p1.number_input("售價 (NTD)", value=default_price)
-                    
-                    # 成本 (繼承)
                     c_curr_b, c_cost_b = c_p2.columns([1, 1])
                     curr_sel_b = c_curr_b.selectbox("成本幣別", ["TWD", "CNY"], index=["TWD", "CNY"].index(default_currency))
-                    
-                    # 如果是新商品預設0，如果是舊商品預設繼承值
                     val_to_show = default_orig_cost if default_currency == "CNY" else default_cost_twd
                     if not is_edit_mode: val_to_show = 0
-                    
                     cost_in_b = c_cost_b.number_input("成本金額", value=val_to_show)
                     final_cost_b = int(cost_in_b * st.session_state['exchange_rate']) if curr_sel_b == "CNY" else int(cost_in_b)
                     if curr_sel_b == "CNY": st.caption(f"換算成本: NT${final_cost_b}")
-
                     img_b = st.file_uploader("圖片 (若不修改請留空)", type=['jpg','png'])
                     
                     st.markdown("#### 2. 尺寸矩陣")
@@ -684,10 +690,8 @@ def main():
                             if img_b:
                                 new_u = upload_image_to_imgbb(img_b)
                                 if new_u: final_u = new_u
-                            
                             ocode = "CNY" if curr_sel_b == "CNY" else "TWD"
                             updated_count = 0; created_count = 0
-                            
                             for size, new_q in size_inputs.items():
                                 target_sku = f"{input_style}-{size}"
                                 if target_sku in df['SKU'].tolist():
@@ -696,18 +700,15 @@ def main():
                                     ws_items.update_cell(r, 5, new_q); ws_items.update_cell(r, 6, price_b)
                                     ws_items.update_cell(r, 7, final_cost_b); ws_items.update_cell(r, 8, str(datetime.now()))
                                     if img_b: ws_items.update_cell(r, 9, final_u)
-                                    # V38: 同步更新原幣資訊
                                     ws_items.update_cell(r, 11, ocode); ws_items.update_cell(r, 12, cost_in_b)
                                     updated_count += 1
                                 elif new_q > 0:
                                     ws_items.append_row([target_sku, name_b, cat_batch, size, new_q, price_b, final_cost_b, str(datetime.now()), final_u, 5, ocode, cost_in_b])
                                     created_count += 1
-                            
                             log_event(ws_logs, st.session_state['user_name'], "Matrix_Sync", f"{input_style} | U:{updated_count} C:{created_count}")
                             st.success(f"完成！更新 {updated_count} 筆，新增 {created_count} 筆。"); time.sleep(2); st.rerun()
                         else: st.error("請填寫完整")
 
-        # Sub B: 單品 (保留 V37)
         with mt2:
             st.markdown("##### ➕ 單品新增")
             with st.form("single_add"):
@@ -732,7 +733,6 @@ def main():
                         log_event(ws_logs, st.session_state['user_name'], "New_Item", f"單品: {sku_s}")
                         st.success("成功"); time.sleep(1); st.rerun()
 
-        # Sub C: 修改
         with mt3:
             st.markdown("##### ✏️ 數據修改")
             edit_target_sku = st.selectbox("選擇對象", ["..."] + opts)
@@ -744,8 +744,8 @@ def main():
                     c_e1, c_e2, c_e3 = st.columns(3)
                     e_price = c_e1.number_input("售價", value=int(t_row['Price']))
                     e_safe = c_e2.number_input("安全庫存", value=int(t_row['Safe_Level']))
-                    curr_idx = CAT_LIST.index(t_row['Category']) if t_row['Category'] in CAT_LIST else 0
-                    e_cat = c_e3.selectbox("分類", CAT_LIST, index=curr_idx)
+                    curr_cat_idx = CAT_LIST.index(t_row['Category']) if t_row['Category'] in CAT_LIST else 0
+                    e_cat = c_e3.selectbox("分類", CAT_LIST, index=curr_cat_idx)
                     e_img = st.file_uploader("更新圖片", type=['jpg','png'])
                     if st.form_submit_button("💾 儲存修改"):
                         r_idx = ws_items.find(t_sku).row
@@ -757,14 +757,6 @@ def main():
                             if new_u: ws_items.update_cell(r_idx, 9, new_u)
                         log_event(ws_logs, st.session_state['user_name'], "Edit_Item", f"修改: {t_sku}")
                         st.success("修改完成！"); time.sleep(1); st.rerun()
-
-        st.markdown("##### 📦 庫存總表")
-        display_df = gallery_df.copy()
-        display_df['原幣成本(CNY)'] = display_df.apply(lambda x: f"¥ {x['Orig_Cost']}" if x['Orig_Currency'] == 'CNY' else "-", axis=1)
-        display_df = display_df.drop(columns=['Image_URL', 'Safety_Stock', 'Orig_Currency', 'Orig_Cost', 'Style_Code'], errors='ignore')
-        display_df = display_df.rename(columns=COLUMN_MAPPING)
-        final_cols = [c for c in ["商品貨號", "商品名稱", "分類", "尺寸", "庫存量", "售價(NTD)", "成本(NTD)", "原幣成本(CNY)", "最後更新"] if c in display_df.columns]
-        st.dataframe(display_df[final_cols], use_container_width=True)
 
     # Tab 5: Log
     with tabs[4]:
