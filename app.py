@@ -20,7 +20,8 @@ st.set_page_config(
 )
 
 # ==========================================
-# 🛑 【MATRIX-V33.0 視覺核心與響應式網格系統】
+# 🛑 【MATRIX-V33.1 視覺核心終極重塑補丁】
+# 包含：強制白底黑字、下拉選單修復、表格漢化與美化
 # ==========================================
 st.markdown("""
     <style>
@@ -71,57 +72,7 @@ st.markdown("""
             box-shadow: 0 4px 15px rgba(0,0,0,0.03);
         }
 
-        /* --- 6. V33 全新響應式畫廊 (Gallery Grid) --- */
-        .inventory-grid {
-            display: grid;
-            /* 自動填滿：手機一排約2個，電腦一排約4-5個，根據螢幕寬度自動調整 */
-            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-            gap: 16px;
-            padding: 10px 0;
-        }
-        .inv-card {
-            background: #FFFFFF;
-            border: 1px solid #E5E7EB;
-            border-radius: 12px;
-            padding: 10px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-            transition: transform 0.2s;
-        }
-        .inv-card:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-            border-color: #000;
-        }
-        .inv-img {
-            width: 100%;
-            height: 120px;
-            object-fit: cover;
-            border-radius: 8px;
-            margin-bottom: 8px;
-        }
-        .inv-title {
-            font-weight: bold;
-            font-size: 14px;
-            color: #111;
-            margin-bottom: 4px;
-            text-align: center;
-            line-height: 1.2;
-            height: 2.4em; /* 限制高度兩行 */
-            overflow: hidden;
-        }
-        .inv-sku { font-size: 11px; color: #666; margin-bottom: 4px; }
-        .inv-price { font-weight: 800; color: #000; font-size: 15px; }
-        .inv-qty { 
-            background: #F3F4F6; color: #000; 
-            padding: 2px 8px; border-radius: 10px; 
-            font-size: 11px; font-weight: bold; margin-top: 4px;
-        }
-        .inv-badge-low { background: #FEE2E2; color: #991B1B; } /* 缺貨紅 */
-
-        /* 其他卡片樣式 */
+        /* --- 6. 卡片與按鈕 --- */
         .metric-card {
             background: linear-gradient(145deg, #ffffff, #f5f7fa); 
             border-radius: 16px; padding: 20px;
@@ -132,8 +83,29 @@ st.markdown("""
         .metric-value { font-size: 2rem; font-weight: 800; margin: 8px 0; color:#111 !important; }
         .metric-label { font-size: 0.85rem; letter-spacing: 1px; color:#666 !important; font-weight: 600; }
         
+        .inv-card {
+            background: #FFFFFF; border: 1px solid #E5E7EB; border-radius: 12px;
+            padding: 10px; display: flex; flex-direction: column; align-items: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05); transition: transform 0.2s;
+        }
+        .inv-card:hover { transform: translateY(-3px); box-shadow: 0 5px 15px rgba(0,0,0,0.1); border-color: #000; }
+        .inv-img { width: 100%; height: 120px; object-fit: cover; border-radius: 8px; margin-bottom: 8px; }
+        .inv-title { font-weight: bold; font-size: 14px; color: #111; margin-bottom: 4px; text-align: center; height: 2.4em; overflow: hidden; }
+        .inv-sku { font-size: 11px; color: #666; margin-bottom: 4px; }
+        .inv-price { font-weight: 800; color: #000; font-size: 15px; }
+        .inv-qty { background: #F3F4F6; color: #000; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: bold; margin-top: 4px; }
+        .inv-badge-low { background: #FEE2E2; color: #991B1B; } 
+
+        .history-card { display: flex; align-items: center; background: #fff; border: 1px solid #eee; border-radius: 8px; padding: 10px; margin-bottom: 8px; }
+        .history-img { width: 50px; height: 50px; border-radius: 5px; object-fit: cover; margin-right: 10px; }
+        .history-tag { background: #ffe0b2; color: #e65100 !important; padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; margin-left: auto; }
+
         .stButton>button { border-radius: 8px; height: 3.2em; font-weight: 700; border:none; box-shadow: 0 2px 5px rgba(0,0,0,0.1); background-color: #FFFFFF; color: #000000; border: 1px solid #E5E7EB; }
         .streamlit-expanderHeader p { color: #000000 !important; font-weight: 600; }
+        .inventory-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 16px; padding: 10px 0; }
+        
+        /* 表格優化 */
+        [data-testid="stDataFrame"] { border: 1px solid #E5E7EB; border-radius: 8px; overflow: hidden; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -270,9 +242,24 @@ def generate_smart_sku(category, existing_skus, custom_series=""):
     next_seq = str(max_seq + 1).zfill(3)
     return f"{current_prefix}{next_seq}"
 
+# --- V33.1: 欄位漢化映射表 ---
+COLUMN_MAPPING = {
+    "SKU": "商品貨號",
+    "Name": "商品名稱",
+    "Category": "分類",
+    "Size": "尺寸",
+    "Qty": "庫存量",
+    "Price": "售價(NTD)",
+    "Cost": "成本(NTD)",
+    "Last_Updated": "最後更新",
+    "Safety_Stock": "安全庫存",
+    "Orig_Currency": "原幣別",
+    "Orig_Cost": "原幣金額",
+    "Safe_Level": "警戒線"
+}
+
 # --- 主程式 ---
 def main():
-    # V32.4 修正：確保 st.session_state 寫法正確
     if 'logged_in' not in st.session_state:
         st.session_state['logged_in'] = False
         st.session_state['user_name'] = ""
@@ -298,7 +285,7 @@ def main():
         with c2:
             st.markdown("<br><br><br>", unsafe_allow_html=True)
             st.markdown("<div style='text-align:center; font-weight:900; font-size:2.5rem; margin-bottom:10px;'>IFUKUK</div>", unsafe_allow_html=True)
-            st.markdown("<div style='text-align:center; color:#666; font-size:0.9rem; margin-bottom:30px;'>VISUAL ERP V33.0</div>", unsafe_allow_html=True)
+            st.markdown("<div style='text-align:center; color:#666; font-size:0.9rem; margin-bottom:30px;'>TEAMWORK ERP V33.1</div>", unsafe_allow_html=True)
             with st.form("login"):
                 user_input = st.text_input("帳號 (ID)")
                 pass_input = st.text_input("密碼 (Password)", type="password")
@@ -400,7 +387,7 @@ def main():
             st.session_state['logged_in'] = False
             st.rerun()
 
-    # --- Dashboard Metrics (置頂) ---
+    # --- Dashboard ---
     total_qty = df['Qty'].sum()
     total_cost = (df['Qty'] * df['Cost']).sum()
     total_rev = (df['Qty'] * df['Price']).sum()
@@ -422,9 +409,8 @@ def main():
     # --- Tabs ---
     tabs = st.tabs(["📊 總覽與庫存", "⚡ POS", "🎁 內部領用", "📦 商品管理", "📝 日誌", "👥 Admin"])
 
-    # Tab 1: 視覺總覽 (V33 New Feature)
+    # Tab 1: 視覺總覽 (V33.1: 表格漢化與簡化)
     with tabs[0]:
-        # 1. BI Charts
         if not df.empty:
             c_chart1, c_chart2 = st.columns([1, 1])
             with c_chart1:
@@ -440,25 +426,21 @@ def main():
                 st.plotly_chart(fig_bar, use_container_width=True)
         
         st.divider()
-        st.subheader("🖼️ 庫存畫廊 (Visual Inventory)")
+        st.subheader("🖼️ 庫存畫廊")
         
-        # 篩選器
         col_s1, col_s2 = st.columns([2, 1])
         with col_s1: search_q = st.text_input("🔍 搜尋商品", placeholder="輸入貨號或品名...")
         with col_s2: filter_cat = st.selectbox("📂 分類篩選", ["全部"] + CAT_LIST)
         
-        # 資料過濾
         gallery_df = df.copy()
         if search_q: gallery_df = gallery_df[gallery_df.apply(lambda x: search_q.lower() in str(x.values).lower(), axis=1)]
         if filter_cat != "全部": gallery_df = gallery_df[gallery_df['Category'] == filter_cat]
         
-        # 生成 HTML 網格
         if not gallery_df.empty:
             html_cards = ""
             for idx, row in gallery_df.iterrows():
                 img = render_image_url(row['Image_URL'])
                 qty_class = "inv-qty inv-badge-low" if row['Qty'] < row['Safe_Level'] else "inv-qty"
-                
                 html_cards += f"""
                 <div class="inv-card">
                     <img src="{img}" class="inv-img">
@@ -468,10 +450,8 @@ def main():
                     <div class="{qty_class}">庫存: {row['Qty']}</div>
                 </div>
                 """
-            
             st.markdown(f'<div class="inventory-grid">{html_cards}</div>', unsafe_allow_html=True)
-        else:
-            st.info("沒有找到符合的商品資料")
+        else: st.info("無符合資料")
 
     # Tab 2: POS
     with tabs[1]:
@@ -586,7 +566,7 @@ def main():
                         """, unsafe_allow_html=True)
                     except: pass
 
-    # Tab 4: Mgmt
+    # Tab 4: Mgmt (V33.1: 表格漢化)
     with tabs[3]:
         with st.expander("➕ 新增商品", expanded=False):
             with st.form("new_prod"):
@@ -662,7 +642,21 @@ def main():
                         except Exception as e: st.error(f"失敗: {str(e)}")
 
         st.markdown("##### 📦 庫存總表")
-        st.dataframe(df, use_container_width=True)
+        
+        # V33.1: 表格漢化與簡化
+        # 1. 隱藏不必要的技術欄位
+        display_df = df.drop(columns=['Image_URL', 'Safety_Stock', 'Orig_Currency', 'Orig_Cost'], errors='ignore')
+        
+        # 2. 重新命名欄位 (漢化)
+        display_df = display_df.rename(columns=COLUMN_MAPPING)
+        
+        # 3. 調整欄位順序 (讓重要的在前面)
+        desired_order = ["商品貨號", "商品名稱", "分類", "尺寸", "庫存量", "售價(NTD)", "成本(NTD)", "最後更新"]
+        # 確保只選取存在的欄位
+        final_cols = [c for c in desired_order if c in display_df.columns]
+        display_df = display_df[final_cols]
+        
+        st.dataframe(display_df, use_container_width=True)
 
     # Tab 5: Log
     with tabs[4]:
