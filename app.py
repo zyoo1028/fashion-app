@@ -20,8 +20,7 @@ st.set_page_config(
 )
 
 # ==========================================
-# 🛑 【MATRIX-V33.1 視覺核心終極重塑補丁】
-# 包含：強制白底黑字、下拉選單修復、表格漢化與美化
+# 🛑 【MATRIX-V33.2 視覺核心終極重塑補丁】
 # ==========================================
 st.markdown("""
     <style>
@@ -242,7 +241,7 @@ def generate_smart_sku(category, existing_skus, custom_series=""):
     next_seq = str(max_seq + 1).zfill(3)
     return f"{current_prefix}{next_seq}"
 
-# --- V33.1: 欄位漢化映射表 ---
+# --- V33.2: 欄位漢化映射表 (新增：原幣成本) ---
 COLUMN_MAPPING = {
     "SKU": "商品貨號",
     "Name": "商品名稱",
@@ -254,7 +253,7 @@ COLUMN_MAPPING = {
     "Last_Updated": "最後更新",
     "Safety_Stock": "安全庫存",
     "Orig_Currency": "原幣別",
-    "Orig_Cost": "原幣金額",
+    "Orig_Cost": "原幣成本", # 資料庫原生欄位
     "Safe_Level": "警戒線"
 }
 
@@ -285,7 +284,7 @@ def main():
         with c2:
             st.markdown("<br><br><br>", unsafe_allow_html=True)
             st.markdown("<div style='text-align:center; font-weight:900; font-size:2.5rem; margin-bottom:10px;'>IFUKUK</div>", unsafe_allow_html=True)
-            st.markdown("<div style='text-align:center; color:#666; font-size:0.9rem; margin-bottom:30px;'>TEAMWORK ERP V33.1</div>", unsafe_allow_html=True)
+            st.markdown("<div style='text-align:center; color:#666; font-size:0.9rem; margin-bottom:30px;'>TEAMWORK ERP V33.2</div>", unsafe_allow_html=True)
             with st.form("login"):
                 user_input = st.text_input("帳號 (ID)")
                 pass_input = st.text_input("密碼 (Password)", type="password")
@@ -409,7 +408,7 @@ def main():
     # --- Tabs ---
     tabs = st.tabs(["📊 總覽與庫存", "⚡ POS", "🎁 內部領用", "📦 商品管理", "📝 日誌", "👥 Admin"])
 
-    # Tab 1: 視覺總覽 (V33.1: 表格漢化與簡化)
+    # Tab 1: 視覺總覽 (V33.2: 新增雙幣欄位顯示)
     with tabs[0]:
         if not df.empty:
             c_chart1, c_chart2 = st.columns([1, 1])
@@ -452,6 +451,29 @@ def main():
                 """
             st.markdown(f'<div class="inventory-grid">{html_cards}</div>', unsafe_allow_html=True)
         else: st.info("無符合資料")
+
+        # ----------------------------------------
+        # V33.2: 庫存表格 (雙幣顯示邏輯)
+        # ----------------------------------------
+        st.markdown("##### 📦 庫存明細 (雙幣檢視)")
+        
+        display_df = gallery_df.copy() # 使用篩選後的資料
+        
+        # 邏輯核心：如果 Orig_Currency 是 CNY，就把 Orig_Cost 格式化成 "¥ 100"，否則顯示 "-"
+        display_df['原幣成本(CNY)'] = display_df.apply(
+            lambda x: f"¥ {x['Orig_Cost']}" if x['Orig_Currency'] == 'CNY' else "-", axis=1
+        )
+        
+        # 移除不需要顯示的欄位
+        display_df = display_df.drop(columns=['Image_URL', 'Safety_Stock', 'Orig_Currency', 'Orig_Cost'], errors='ignore')
+        
+        # 漢化並重排
+        display_df = display_df.rename(columns=COLUMN_MAPPING)
+        desired_order = ["商品貨號", "商品名稱", "分類", "尺寸", "庫存量", "售價(NTD)", "成本(NTD)", "原幣成本(CNY)", "最後更新"]
+        final_cols = [c for c in desired_order if c in display_df.columns]
+        display_df = display_df[final_cols]
+        
+        st.dataframe(display_df, use_container_width=True)
 
     # Tab 2: POS
     with tabs[1]:
@@ -566,7 +588,7 @@ def main():
                         """, unsafe_allow_html=True)
                     except: pass
 
-    # Tab 4: Mgmt (V33.1: 表格漢化)
+    # Tab 4: Mgmt
     with tabs[3]:
         with st.expander("➕ 新增商品", expanded=False):
             with st.form("new_prod"):
@@ -642,21 +664,14 @@ def main():
                         except Exception as e: st.error(f"失敗: {str(e)}")
 
         st.markdown("##### 📦 庫存總表")
-        
-        # V33.1: 表格漢化與簡化
-        # 1. 隱藏不必要的技術欄位
-        display_df = df.drop(columns=['Image_URL', 'Safety_Stock', 'Orig_Currency', 'Orig_Cost'], errors='ignore')
-        
-        # 2. 重新命名欄位 (漢化)
+        # V33.2 雙幣顯示區塊 (與 Tab 1 保持一致)
+        display_df = gallery_df.copy()
+        display_df['原幣成本(CNY)'] = display_df.apply(lambda x: f"¥ {x['Orig_Cost']}" if x['Orig_Currency'] == 'CNY' else "-", axis=1)
+        display_df = display_df.drop(columns=['Image_URL', 'Safety_Stock', 'Orig_Currency', 'Orig_Cost'], errors='ignore')
         display_df = display_df.rename(columns=COLUMN_MAPPING)
-        
-        # 3. 調整欄位順序 (讓重要的在前面)
-        desired_order = ["商品貨號", "商品名稱", "分類", "尺寸", "庫存量", "售價(NTD)", "成本(NTD)", "最後更新"]
-        # 確保只選取存在的欄位
+        desired_order = ["商品貨號", "商品名稱", "分類", "尺寸", "庫存量", "售價(NTD)", "成本(NTD)", "原幣成本(CNY)", "最後更新"]
         final_cols = [c for c in desired_order if c in display_df.columns]
-        display_df = display_df[final_cols]
-        
-        st.dataframe(display_df, use_container_width=True)
+        st.dataframe(display_df[final_cols], use_container_width=True)
 
     # Tab 5: Log
     with tabs[4]:
