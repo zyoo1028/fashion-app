@@ -20,62 +20,101 @@ st.set_page_config(
 )
 
 # ==========================================
-# 🛑 【MATRIX-V32.2 下拉選單視覺修正補丁】
-# 重點修復：手機深色模式下，Selectbox 選單黑底黑字的問題
+# 🛑 【MATRIX-V32.3 視覺核心終極重塑補丁】
+# 重點修復：手機深色模式下，下拉選單與日期選擇器「黑底黑字」無法觀看的問題。
+# 採用更底層的 CSS 強制覆蓋策略。
 # ==========================================
 st.markdown("""
     <style>
-        /* --- 1. 全局基礎鎖定 --- */
+        /* --- 1. 全局基礎鎖定 (白底黑字) --- */
         .stApp { background-color: #FFFFFF !important; }
-        p, div, h1, h2, h3, h4, span, label, li { color: #000000 !important; }
+        [data-testid="stAppViewContainer"] { background-color: #FFFFFF !important; }
+        [data-testid="stSidebar"] { background-color: #F8F9FA !important; border-right: 1px solid #E5E7EB; }
+        h1, h2, h3, h4, h5, h6, p, span, div, label, li { color: #000000 !important; }
         
-        /* --- 2. 輸入框基礎樣式 --- */
-        input, textarea, .stTextInput > div > div {
+        /* --- 2. 輸入框與顯示框基礎樣式 --- */
+        input, textarea, .stTextInput > div > div, .stNumberInput > div > div {
             color: #000000 !important;
             background-color: #F3F4F6 !important;
             border-color: #D1D5DB !important;
         }
-        
-        /* --- 3. [關鍵修復] 下拉選單 (Selectbox) 懸浮視窗 --- */
-        /* 強制懸浮視窗容器為白底 */
-        div[data-baseweb="popover"], div[data-baseweb="menu"] {
-            background-color: #FFFFFF !important;
-            border: 1px solid #E5E7EB !important;
-        }
-        
-        /* 強制選項列表 (ul/li) 為白底黑字 */
-        ul[role="listbox"] {
-            background-color: #FFFFFF !important;
-        }
-        
-        /* 每一個選項 (Option) 的文字顏色 */
-        li[role="option"] div {
-            color: #000000 !important;
-        }
-        
-        /* 選項的背景顏色 (預設白) */
-        li[role="option"] {
-            background-color: #FFFFFF !important;
-        }
-        
-        /* 當手指按壓或滑鼠滑過時的顏色 (淺灰背景 + 黑字) */
-        li[role="option"][aria-selected="true"], li[role="option"]:hover {
-            background-color: #F3F4F6 !important;
-            color: #000000 !important;
-        }
-
-        /* --- 4. 修正 Selectbox 顯示框本身的文字顏色 --- */
+        /* Selectbox 未展開時的顯示框 */
         div[data-baseweb="select"] > div {
             background-color: #F3F4F6 !important;
             color: #000000 !important;
             border-color: #D1D5DB !important;
         }
-        /* 確保選單內的文字（如分類名稱）是黑色的 */
-        div[data-baseweb="select"] span {
+
+        /* ========================================================================
+           3. [關鍵修復] 下拉選單 (Selectbox) 彈出視窗
+           ======================================================================== */
+        /* 強制所有彈出視窗容器為白底黑字 */
+        div[data-baseweb="popover"], div[data-baseweb="menu"] {
+            background-color: #FFFFFF !important;
+            color: #000000 !important;
+            border: 1px solid #E5E7EB !important;
+        }
+        /* 選項列表容器 */
+        ul[role="listbox"] {
+            background-color: #FFFFFF !important;
+        }
+        /* 每一個選項 (Option) */
+        li[role="option"] {
+            background-color: #FFFFFF !important;
+            color: #000000 !important;
+        }
+        /* 選項內的文字容器 */
+        li[role="option"] div {
+            color: #000000 !important;
+        }
+        /* 滑鼠滑過或選中時的狀態 (淺灰底黑字) */
+        li[role="option"]:hover, li[role="option"][aria-selected="true"] {
+            background-color: #F3F4F6 !important;
             color: #000000 !important;
         }
 
-        /* --- 5. 其他元件樣式保持不變 --- */
+        /* ========================================================================
+           4. [關鍵修復] 日期選擇器 (Date Picker) 彈出視窗
+           ======================================================================== */
+        /* 鎖定日期選擇器的彈出層容器 */
+        div[data-testid="stDateInput"] > div:nth-of-type(2) > div {
+            background-color: #FFFFFF !important;
+            color: #000000 !important;
+            border: 1px solid #E5E7EB !important;
+        }
+        /* 日曆 Header (月份、年份顯示與切換按鈕) */
+        div[data-testid="stDateInput"] div[class*="CalendarHeader"] {
+            color: #000000 !important;
+        }
+        div[data-testid="stDateInput"] button[aria-label="Previous month"],
+        div[data-testid="stDateInput"] button[aria-label="Next month"] {
+             color: #000000 !important;
+        }
+        /* 星期幾的標題 (Su, Mo, Tu...) */
+        div[data-testid="stDateInput"] div[class*="WeekDays"] {
+            color: #666666 !important;
+        }
+        /* 日曆內的日期按鈕 */
+        div[data-testid="stDateInput"] button[role="gridcell"] {
+            color: #000000 !important;
+            background-color: #FFFFFF !important;
+        }
+        /* 滑鼠滑過日期 */
+        div[data-testid="stDateInput"] button[role="gridcell"]:hover {
+             background-color: #F3F4F6 !important;
+        }
+        /* 被選中的日期 */
+        div[data-testid="stDateInput"] button[role="gridcell"][aria-selected="true"] {
+             background-color: #FF4B4B !important; /* Streamlit 預設紅 */
+             color: #FFFFFF !important;
+        }
+        /* 今天日期 */
+        div[data-testid="stDateInput"] button[role="gridcell"][tabindex="0"]:not([aria-selected="true"]) {
+             color: #FF4B4B !important;
+             font-weight: bold;
+        }
+
+        /* --- 5. 其他元件樣式 (保持不變) --- */
         header[data-testid="stHeader"] {
             background-color: transparent !important;
             display: block !important;
@@ -276,7 +315,7 @@ def generate_smart_sku(category, existing_skus, custom_series=""):
 
 # --- 主程式 ---
 def main():
-    if 'logged_in' not in st.session_state:
+    if 'logged_in' not in session_state:
         st.session_state['logged_in'] = False
         st.session_state['user_name'] = ""
         st.session_state['user_role'] = ""
@@ -301,7 +340,7 @@ def main():
         with c2:
             st.markdown("<br><br><br>", unsafe_allow_html=True)
             st.markdown("<div style='text-align:center; font-weight:900; font-size:2.5rem; margin-bottom:10px;'>IFUKUK</div>", unsafe_allow_html=True)
-            st.markdown("<div style='text-align:center; color:#666; font-size:0.9rem; margin-bottom:30px;'>TEAMWORK ERP V32.2</div>", unsafe_allow_html=True)
+            st.markdown("<div style='text-align:center; color:#666; font-size:0.9rem; margin-bottom:30px;'>TEAMWORK ERP V32.3</div>", unsafe_allow_html=True)
             with st.form("login"):
                 user_input = st.text_input("帳號 (ID)")
                 pass_input = st.text_input("密碼 (Password)", type="password")
