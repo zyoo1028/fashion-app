@@ -20,7 +20,7 @@ st.set_page_config(
 )
 
 # ==========================================
-# 🛑 【MATRIX-V103.0 欄位衝突修復與數據一致性核心】
+# 🛑 【MATRIX-V103.1 歷史修正與緊急救援核心】
 # ==========================================
 st.markdown("""
     <style>
@@ -119,7 +119,7 @@ def get_data_safe(ws):
             if not raw_data or len(raw_data) < 2: return pd.DataFrame()
             
             headers = raw_data[0]
-            # V103: Deduplicate Headers Logic
+            # V103.1 FIX: 欄位去重與安全讀取 (防止 Duplicate column error)
             seen = {}
             new_headers = []
             for h in headers:
@@ -132,20 +132,17 @@ def get_data_safe(ws):
             
             rows = raw_data[1:]
             
-            # V103: Auto-Fix Headers if Qty_CN is missing
+            # Auto-Fix Headers if Qty_CN is missing (Safe Patch)
             if "Qty_CN" not in new_headers:
                 ws.update_cell(1, len(new_headers)+1, "Qty_CN")
                 new_headers.append("Qty_CN")
-                # Reload data after update
                 raw_data = ws.get_all_values()
                 rows = raw_data[1:]
 
-            # Safe Create DF
             df = pd.DataFrame(rows)
-            # Ensure columns match length (padding if needed)
+            # Safe Column Assignment
             if not df.empty:
                 if len(df.columns) < len(new_headers):
-                    # Pad with empty strings
                     for _ in range(len(new_headers) - len(df.columns)):
                         df[len(df.columns)] = ""
                 df.columns = new_headers[:len(df.columns)]
@@ -232,7 +229,7 @@ def render_navbar(user_initial):
     """, unsafe_allow_html=True)
 
 # ----------------------------------------------------
-# 🛑 V103.0 核心邏輯
+# 🛑 V103.1 核心邏輯
 # ----------------------------------------------------
 def get_style_code(sku):
     sku_str = str(sku).strip()
@@ -314,7 +311,7 @@ def main():
         with c2:
             st.markdown("<br><br><br>", unsafe_allow_html=True)
             st.markdown("<div style='text-align:center; font-weight:900; font-size:2.5rem; margin-bottom:10px;'>IFUKUK</div>", unsafe_allow_html=True)
-            st.markdown("<div style='text-align:center; color:#666; font-size:0.9rem; margin-bottom:30px;'>MATRIX ERP V103.0</div>", unsafe_allow_html=True)
+            st.markdown("<div style='text-align:center; color:#666; font-size:0.9rem; margin-bottom:30px;'>MATRIX ERP V103.1</div>", unsafe_allow_html=True)
             with st.form("login"):
                 user_input = st.text_input("帳號 (ID)")
                 pass_input = st.text_input("密碼 (Password)", type="password")
@@ -342,7 +339,7 @@ def main():
                                 st.rerun()
                             else: st.error("密碼錯誤")
                         else: st.error("帳號無效")
-                    else: st.error("系統無資料")
+                    else: st.error("系統無資料 (可能是讀取錯誤，請聯繫管理員)")
         return
 
     # --- 主畫面 ---
@@ -397,7 +394,7 @@ def main():
             st.session_state['logged_in'] = False
             st.rerun()
 
-    # --- Dashboard (V101) ---
+    # --- Dashboard ---
     total_qty_tw = df['Qty'].sum()
     total_qty_cn = df['Qty_CN'].sum()
     total_qty = total_qty_tw + total_qty_cn
@@ -425,7 +422,7 @@ def main():
     # --- Tabs ---
     tabs = st.tabs(["📊 視覺庫存", "🛒 POS (購物車)", "📈 銷售戰情", "🎁 內部領用/稽核", "👔 矩陣管理", "📝 日誌", "👥 Admin"])
 
-    # Tab 1: 視覺總覽 (V101)
+    # Tab 1: 視覺總覽
     with tabs[0]:
         if not df.empty:
             c_chart1, c_chart2 = st.columns([1, 1])
@@ -529,7 +526,7 @@ def main():
             show_cols = ["款號(Style)", "商品名稱", "分類", "庫存分佈 (TW | CN)", "總庫存 (TW+CN)", "售價(NTD)", "平均成本(NTD)", "參考原幣(CNY)", "最後更新"]
             st.dataframe(agg_df[show_cols], use_container_width=True)
 
-    # Tab 2: POS (V101: Deduct TW)
+    # Tab 2: POS
     with tabs[1]:
         c1, c2 = st.columns([1, 1])
         with c1:
@@ -741,51 +738,33 @@ def main():
                         else: st.error("找不到日誌。")
         else: st.info("無紀錄。")
 
-    # Tab 5: Mgmt (V102: 雙向調撥)
+    # Tab 5: Mgmt
     with tabs[4]:
         mt2, mt3, mt4, mt5 = st.tabs(["➕ 單品/全系列新增", "⚡ 雙向調撥樞紐", "🛠️ 貨號重鑄", "🗑️ 刪除中心"])
         
-        # V102: Bi-Directional Transfer Hub
         with mt3:
             st.markdown("<div class='transfer-zone'><div class='transfer-header'>⚡ 雙向調撥樞紐 (Bi-Directional Transfer)</div>", unsafe_allow_html=True)
-            
-            # Direction Selection
             trans_mode = st.radio("選擇調撥方向", ["🅰️ 修正/分流 (🇹🇼 TW -> 🇨🇳 CN)", "🅱️ 貨櫃抵台 (🇨🇳 CN -> 🇹🇼 TW)"], horizontal=True)
-            
-            if not df.empty:
-                sku_opts = df.apply(lambda x: f"{x['SKU']} | {x['Name']} | 🇹🇼:{x['Qty']} / 🇨🇳:{x['Qty_CN']}", axis=1).tolist()
+            if not df.empty: sku_opts = df.apply(lambda x: f"{x['SKU']} | {x['Name']} | 🇹🇼:{x['Qty']} / 🇨🇳:{x['Qty_CN']}", axis=1).tolist()
             else: sku_opts = []
-            
             sel_trans_sku = st.selectbox("選擇調撥商品", ["..."] + sku_opts, key="bi_trans_sel")
-            
             if sel_trans_sku != "...":
-                t_sku = sel_trans_sku.split(" | ")[0]
-                t_row = df[df['SKU'] == t_sku].iloc[0]
-                max_tw = int(t_row['Qty'])
-                max_cn = int(t_row['Qty_CN'])
-                
+                t_sku = sel_trans_sku.split(" | ")[0]; t_row = df[df['SKU'] == t_sku].iloc[0]; max_tw = int(t_row['Qty']); max_cn = int(t_row['Qty_CN'])
                 c_bt1, c_bt2 = st.columns(2)
-                
                 if "TW -> CN" in trans_mode:
                     move_qty = c_bt1.number_input("移往中國數量", min_value=1, max_value=max_tw if max_tw > 0 else 1, value=1)
                     if max_tw == 0: st.warning("⚠️ 台灣無庫存，無法調撥。")
                     if c_bt2.button("🚀 執行分流 (TW->CN)", type="primary", disabled=(max_tw==0)):
-                        r = ws_items.find(t_sku).row
-                        ws_items.update_cell(r, 5, max_tw - move_qty) # TW -
-                        ws_items.update_cell(r, 13, max_cn + move_qty) # CN +
+                        r = ws_items.find(t_sku).row; ws_items.update_cell(r, 5, max_tw - move_qty); ws_items.update_cell(r, 13, max_cn + move_qty)
                         log_event(ws_logs, st.session_state['user_name'], "Transfer_TW_CN", f"{t_sku} Qty:{move_qty}")
                         st.success(f"分流成功！🇹🇼 -{move_qty} / 🇨🇳 +{move_qty}"); time.sleep(2); st.rerun()
-                        
                 else: # CN -> TW
                     move_qty = c_bt1.number_input("抵達台灣數量", min_value=1, max_value=max_cn if max_cn > 0 else 1, value=1)
                     if max_cn == 0: st.warning("⚠️ 中國無庫存，無法調撥。")
                     if c_bt2.button("🚢 確認抵台 (CN->TW)", type="primary", disabled=(max_cn==0)):
-                        r = ws_items.find(t_sku).row
-                        ws_items.update_cell(r, 5, max_tw + move_qty) # TW +
-                        ws_items.update_cell(r, 13, max_cn - move_qty) # CN -
+                        r = ws_items.find(t_sku).row; ws_items.update_cell(r, 5, max_tw + move_qty); ws_items.update_cell(r, 13, max_cn - move_qty)
                         log_event(ws_logs, st.session_state['user_name'], "Transfer_CN_TW", f"{t_sku} Qty:{move_qty}")
                         st.success(f"抵台成功！🇹🇼 +{move_qty} / 🇨🇳 -{move_qty}"); time.sleep(2); st.rerun()
-            
             st.markdown("</div>", unsafe_allow_html=True)
 
         with mt2:
