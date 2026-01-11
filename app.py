@@ -10,24 +10,24 @@ import base64
 import hashlib
 import math
 import re
-import calendar  # V104: 引入日曆模組
+import calendar
 
 # --- 1. 系統全域設定 (App-Like Config) ---
 st.set_page_config(
-    page_title="IFUKUK V104", 
+    page_title="IFUKUK V104.1", 
     layout="wide", 
     page_icon="🌏",
-    initial_sidebar_state="collapsed" # V104: 手機優先，預設收起側邊欄，讓主畫面更寬
+    initial_sidebar_state="collapsed"
 )
 
 # ==========================================
-# 🛑 【OMEGA V104.0 視覺核心 (CSS Injection)】
+# 🛑 【OMEGA V104.1 視覺核心 (CSS Injection)】
 # ==========================================
 st.markdown("""
     <style>
         /* --- 0. 全局重置與 App 質感 --- */
         .stApp { background-color: #F8F9FA !important; }
-        .block-container { padding-top: 1rem !important; padding-bottom: 5rem !important; } /* 減少頂部留白，增加底部緩衝 */
+        .block-container { padding-top: 1rem !important; padding-bottom: 5rem !important; }
         
         /* --- 1. 卡片式設計 (Card UI) --- */
         .omega-card {
@@ -39,7 +39,7 @@ st.markdown("""
             margin-bottom: 12px;
             transition: transform 0.2s;
         }
-        .omega-card:active { transform: scale(0.98); } /* 手機點擊回饋 */
+        .omega-card:active { transform: scale(0.98); } 
 
         /* --- 2. 排班日曆樣式 (Roster Matrix) --- */
         .day-card {
@@ -95,11 +95,9 @@ st.markdown("""
 
 # --- 設定區 ---
 GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/1oCdUsYy8AGp8slJyrlYw2Qy2POgL2eaIp7_8aTVcX3w/edit?gid=1626161493#gid=1626161493"
-IMGBB_API_KEY = "c2f93d2a1a62bd3a6da15f477d2bb88a"
 SHEET_HEADERS = ["SKU", "Name", "Category", "Size", "Qty", "Price", "Cost", "Last_Updated", "Image_URL", "Safety_Stock", "Orig_Currency", "Orig_Cost", "Qty_CN"]
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
 
-# --- 核心連線 (維持 V103 邏輯) ---
 @st.cache_resource(ttl=600)
 def get_connection():
     if "gcp_service_account" not in st.secrets:
@@ -150,7 +148,7 @@ def get_worksheet_safe(sh, title, headers):
         return ws
     except: return None
 
-# --- 工具模組 (V104 增強版) ---
+# --- 工具模組 ---
 def get_taiwan_time_str():
     return (datetime.utcnow() + timedelta(hours=8)).strftime("%Y-%m-%d %H:%M:%S")
 
@@ -166,16 +164,10 @@ def log_event(ws_logs, user, action, detail):
     try: ws_logs.append_row([get_taiwan_time_str(), user, action, detail])
     except: pass
 
-def get_style_code(sku): return str(sku).strip().rsplit('-', 1)[0] if '-' in str(sku) else str(sku).strip()
-
-SIZE_ORDER = ["F", "XXS", "XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL"]
-def get_size_sort_key(size_str): return SIZE_ORDER.index(size_str) if size_str in SIZE_ORDER else 99
-
 # --- V104 智能排班邏輯 ---
 def get_staff_color(name):
-    # 自動為不同名字分配顏色
     colors = ["#3B82F6", "#10B981", "#F59E0B", "#8B5CF6", "#EC4899", "#6366F1"]
-    hash_val = sum(ord(c) for c in name)
+    hash_val = sum(ord(c) for c in str(name))
     return colors[hash_val % len(colors)]
 
 def render_shift_calendar(sh, users_list):
@@ -186,25 +178,21 @@ def render_shift_calendar(sh, users_list):
     with col_h1:
         st.subheader("🗓️ 排班戰情室 (Roster Matrix)")
     
-    # 年月選擇器
     now = datetime.utcnow() + timedelta(hours=8)
     c_y, c_m = st.columns(2)
     sel_year = c_y.number_input("年份", min_value=2024, max_value=2030, value=now.year)
     sel_month = c_m.selectbox("月份", range(1, 13), index=now.month - 1)
     
-    # 建立日曆數據
     cal = calendar.monthcalendar(sel_year, sel_month)
     month_name = calendar.month_name[sel_month]
     
     st.markdown(f"<h3 style='text-align:center; color:#444;'>{month_name} {sel_year}</h3>", unsafe_allow_html=True)
     
-    # 星期標頭
     cols = st.columns(7)
     days_header = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"]
     for i, d in enumerate(days_header):
         cols[i].markdown(f"<div style='text-align:center; font-weight:bold; color:#888;'>{d}</div>", unsafe_allow_html=True)
     
-    # 日曆網格
     for week in cal:
         cols = st.columns(7)
         for i, day in enumerate(week):
@@ -213,14 +201,9 @@ def render_shift_calendar(sh, users_list):
                     st.markdown("<div style='min-height:80px;'></div>", unsafe_allow_html=True)
                 else:
                     date_str = f"{sel_year}-{str(sel_month).zfill(2)}-{str(day).zfill(2)}"
-                    
-                    # 獲取該日班表
                     day_shifts = shifts_df[shifts_df['Date'] == date_str] if not shifts_df.empty else pd.DataFrame()
-                    
                     has_note = False
                     badges_html = ""
-                    
-                    # 處理顯示資料
                     if not day_shifts.empty:
                         for _, row in day_shifts.iterrows():
                             s_name = row['Staff']
@@ -228,16 +211,10 @@ def render_shift_calendar(sh, users_list):
                             bg_color = get_staff_color(s_name)
                             badges_html += f"<span class='shift-badge' style='background-color:{bg_color}'>{s_name}</span>"
                             if s_note and len(s_note) > 0: has_note = True
-                    
                     note_html = "<div class='note-indicator'></div>" if has_note else ""
-                    
-                    # 渲染卡片
                     if st.button(f"{day}", key=f"btn_day_{date_str}", use_container_width=True):
                         st.session_state['selected_date'] = date_str
                         st.rerun()
-
-                    # 為了顯示樣式，我們用 markdown 覆蓋在 button 下方 (視覺騙局)，或直接顯示資訊
-                    # Streamlit button 不能包含 HTML，所以我們在 button 下方顯示 badge
                     st.markdown(f"""
                         <div style='position:relative; margin-top:-60px; pointer-events:none; z-index:1; padding:5px;'>
                             <div style='float:right;'>{note_html}</div>
@@ -246,13 +223,10 @@ def render_shift_calendar(sh, users_list):
                     """, unsafe_allow_html=True)
                     st.markdown("<br>", unsafe_allow_html=True)
 
-    # 編輯區 (Modal-like Expander)
     if 'selected_date' in st.session_state:
         target_date = st.session_state['selected_date']
         with st.expander(f"📝 編輯班表：{target_date}", expanded=True):
-            # 讀取當天現有資料
             current_shifts = shifts_df[shifts_df['Date'] == target_date] if not shifts_df.empty else pd.DataFrame()
-            
             c_edit1, c_edit2 = st.columns(2)
             with c_edit1:
                 st.markdown("##### ➕ 新增排班")
@@ -262,26 +236,19 @@ def render_shift_calendar(sh, users_list):
                     if st.form_submit_button("排入班表"):
                         ws_shifts.append_row([target_date, s_staff, "一般", s_note, st.session_state['user_name']])
                         st.success("已排入"); time.sleep(0.5); st.rerun()
-            
             with c_edit2:
                 st.markdown("##### 🗑️ 當日已排人員")
                 if not current_shifts.empty:
                     for _, row in current_shifts.iterrows():
                         col_info, col_del = st.columns([3, 1])
-                        with col_info:
-                            st.info(f"👤 {row['Staff']} | 📝 {row['Note']}")
+                        with col_info: st.info(f"👤 {row['Staff']} | 📝 {row['Note']}")
                         with col_del:
-                            # 由於 gspread 刪除特定行較慢，這裡做簡易處理：顯示刪除按鈕
-                            # 在真實 V104 中，建議用 batch update，此處用尋找並刪除
                             if st.button("移除", key=f"del_{target_date}_{row['Staff']}"):
-                                # 尋找並刪除邏輯
                                 all_vals = ws_shifts.get_all_values()
                                 for idx, val in enumerate(all_vals):
                                     if len(val) > 1 and val[0] == target_date and val[1] == row['Staff']:
-                                        ws_shifts.delete_rows(idx + 1)
-                                        st.rerun()
-                else:
-                    st.caption("尚無排班")
+                                        ws_shifts.delete_rows(idx + 1); st.rerun()
+                else: st.caption("尚無排班")
 
 # --- 主程式 ---
 def main():
@@ -289,7 +256,6 @@ def main():
         st.session_state['logged_in'] = False
         st.session_state['user_name'] = ""
         st.session_state['user_role'] = ""
-    
     if 'pos_cart' not in st.session_state: st.session_state['pos_cart'] = []
     
     sh = init_db()
@@ -299,83 +265,90 @@ def main():
     ws_logs = get_worksheet_safe(sh, "Logs", ["Timestamp", "User", "Action", "Details"])
     ws_users = get_worksheet_safe(sh, "Users", ["Name", "Password", "Role", "Status", "Created_At"])
 
-    # --- 登入頁面 (V104: 簡約美學) ---
+    # --- 登入頁面 (V104.1 FIX: 強韌登入邏輯) ---
     if not st.session_state['logged_in']:
         c1, c2, c3 = st.columns([1, 2, 1])
         with c2:
             st.markdown("<br><br>", unsafe_allow_html=True)
             st.markdown("<div style='text-align:center; font-weight:900; font-size:3rem; color:#111;'>IFUKUK</div>", unsafe_allow_html=True)
-            st.markdown("<div style='text-align:center; color:#666; font-size:1rem; letter-spacing:2px; margin-bottom:40px;'>OMEGA V104.0</div>", unsafe_allow_html=True)
+            st.markdown("<div style='text-align:center; color:#666; font-size:1rem; letter-spacing:2px; margin-bottom:40px;'>OMEGA V104.1 (Stable)</div>", unsafe_allow_html=True)
             with st.form("login"):
                 user_input = st.text_input("ID")
                 pass_input = st.text_input("PASSWORD", type="password")
+                
                 if st.form_submit_button("ENTER SYSTEM", type="primary"):
-                    users_df = get_data_safe(ws_users)
-                    input_u = str(user_input).strip(); input_p = str(pass_input).strip()
-                    if users_df.empty and input_u == "Boss" and input_p == "1234":
-                        ws_users.append_row(["Boss", make_hash("1234"), "Admin", "Active", get_taiwan_time_str()])
-                        st.rerun()
-                    if not users_df.empty:
-                        target = users_df[(users_df['Name'] == input_u) & (users_df['Status'] == 'Active')]
-                        if not target.empty:
-                            stored = target.iloc[0]['Password']
-                            if (len(stored)==64 and check_hash(input_p, stored)) or (input_p == stored):
-                                st.session_state['logged_in'] = True; st.session_state['user_name'] = input_u; st.session_state['user_role'] = target.iloc[0]['Role']
-                                log_event(ws_logs, input_u, "Login", "V104 Login")
-                                st.rerun()
-                            else: st.error("Invalid Password")
-                        else: st.error("User Not Found")
+                    # V104.1 Fix: 加入讀取回饋與嚴格錯誤捕捉
+                    with st.spinner("Checking Credentials..."):
+                        users_df = get_data_safe(ws_users)
+                        input_u = str(user_input).strip()
+                        input_p = str(pass_input).strip()
+                        
+                        if not input_u:
+                            st.error("❌ 請輸入 ID")
+                            st.stop()
+
+                        # 1. 優先處理 Boss 初始化 (當資料庫真的為空時)
+                        if users_df.empty and input_u == "Boss" and input_p == "1234":
+                            ws_users.append_row(["Boss", make_hash("1234"), "Admin", "Active", get_taiwan_time_str()])
+                            st.success("Admin Initialized. Please Login.")
+                            time.sleep(1)
+                            st.rerun()
+                        
+                        # 2. 正常登入檢查
+                        if not users_df.empty:
+                            target = users_df[(users_df['Name'] == input_u) & (users_df['Status'] == 'Active')]
+                            if not target.empty:
+                                stored = target.iloc[0]['Password']
+                                if (len(stored)==64 and check_hash(input_p, stored)) or (input_p == stored):
+                                    st.session_state['logged_in'] = True
+                                    st.session_state['user_name'] = input_u
+                                    st.session_state['user_role'] = target.iloc[0]['Role']
+                                    log_event(ws_logs, input_u, "Login", "V104 Login")
+                                    st.rerun()
+                                else:
+                                    st.error("❌ 密碼錯誤 (Invalid Password)")
+                            else:
+                                st.error(f"❌ 找不到使用者: {input_u}")
+                        else:
+                            # 3. 捕捉「資料庫讀取失敗」或「非 Boss 的空資料庫登入」
+                            st.error("⚠️ 資料庫連線異常或為空，且非 Admin 初始帳號。")
         return
 
-    # --- 主導航 (App-Like Top Nav) ---
+    # --- 主導航 ---
     user = st.session_state['user_name']
-    role = st.session_state['user_role']
     st.markdown(f"""
         <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px solid #eee;">
             <div style="font-weight:900; font-size:1.2rem;">IFUKUK <span style="font-weight:400; font-size:0.8rem; color:#888;">| {user}</span></div>
-            <div style="font-size:0.8rem; background:#eee; padding:4px 8px; border-radius:8px;">V104.0</div>
+            <div style="font-size:0.8rem; background:#eee; padding:4px 8px; border-radius:8px;">V104.1</div>
         </div>
     """, unsafe_allow_html=True)
 
-    # --- 核心數據獲取 ---
     df = get_data_safe(ws_items)
     for c in ["Qty","Price","Qty_CN"]: df[c] = pd.to_numeric(df[c], errors='coerce').fillna(0).astype(int)
     
-    # --- V104 拇指導航選單 (取代 Tabs) ---
-    # 利用 radio 模擬底部或頂部導航
     nav_options = ["🛒 POS", "📊 庫存", "🗓️ 班表", "📈 戰情", "🛠️ 管理", "🚪 登出"]
     nav_sel = st.radio("", nav_options, horizontal=True, label_visibility="collapsed")
 
-    # --- 🛒 POS (V104: 畫廊模式) ---
+    # --- 🛒 POS ---
     if nav_sel == "🛒 POS":
         c_pos_left, c_pos_right = st.columns([3, 2])
-        
         with c_pos_left:
             st.markdown("#### 🛍️ 商品畫廊")
-            # 拇指過濾器
             cats = ["全部"] + list(df['Category'].unique()) if not df.empty else []
-            sel_cat = st.selectbox("分類篩選", cats, label_visibility="collapsed") # V104: 暫時保留 Selectbox 但加強樣式，未來可用 pills
-            
-            # 搜尋
+            sel_cat = st.selectbox("分類篩選", cats, label_visibility="collapsed")
             search_txt = st.text_input("🔍 快速搜尋...", placeholder="輸入關鍵字...")
-            
-            # 篩選邏輯
             view_df = df.copy()
             if sel_cat != "全部": view_df = view_df[view_df['Category'] == sel_cat]
             if search_txt: view_df = view_df[view_df.apply(lambda x: search_txt.lower() in str(x.values).lower(), axis=1)]
             
-            # 顯示網格 (Grid Layout)
             if not view_df.empty:
-                # 每個 Row 顯示 3 個卡片 (手機上會自動堆疊)
                 cols_per_row = 3
                 rows = [view_df.iloc[i:i+cols_per_row] for i in range(0, len(view_df), cols_per_row)]
-                
                 for row_data in rows:
                     cols = st.columns(cols_per_row)
                     for idx, (_, item) in enumerate(row_data.iterrows()):
                         with cols[idx]:
                             img_url = render_image_url(item['Image_URL'])
-                            # 使用 HTML 渲染漂亮的卡片
                             st.markdown(f"""
                                 <div class="product-card">
                                     <div class="prod-img-box"><img src="{img_url}" style="width:100%; height:100%; object-fit:cover;"></div>
@@ -387,16 +360,13 @@ def main():
                                     </div>
                                 </div>
                             """, unsafe_allow_html=True)
-                            
-                            # 動作按鈕 (Streamlit Button)
                             if st.button("➕", key=f"add_{item['SKU']}", use_container_width=True):
                                 st.session_state['pos_cart'].append({
                                     "sku": item['SKU'], "name": item['Name'], "size": item['Size'],
                                     "price": int(item['Price']), "qty": 1, "subtotal": int(item['Price'])
                                 })
                                 st.toast(f"已加入: {item['Name']}")
-            else:
-                st.info("無符合商品")
+            else: st.info("無符合商品")
 
         with c_pos_right:
             st.markdown("#### 🧾 購物車")
@@ -410,23 +380,15 @@ def main():
                             <b>${c_item['subtotal']}</b>
                         </div>
                     """, unsafe_allow_html=True)
-                
                 st.markdown(f"<div style='text-align:right; font-size:1.5rem; font-weight:900; margin:10px 0;'>Total: ${cart_total}</div>", unsafe_allow_html=True)
-                
-                if st.button("🗑️ 清空", use_container_width=True):
-                    st.session_state['pos_cart'] = []; st.rerun()
-                
+                if st.button("🗑️ 清空", use_container_width=True): st.session_state['pos_cart'] = []; st.rerun()
                 st.markdown("---")
-                # 結帳表單
                 with st.form("checkout_v104"):
                     c_pay1, c_pay2 = st.columns(2)
                     pay_method = c_pay1.selectbox("付款", ["現金", "刷卡", "轉帳"])
                     sale_person = c_pay2.selectbox("經手", [user] + list(ws_users.col_values(1)[1:]))
                     note = st.text_input("備註")
-                    
                     if st.form_submit_button("✅ 確認結帳", type="primary"):
-                        # 執行扣庫存邏輯 (同 V103)
-                        ratio = 1 # 簡化邏輯，若有折扣需在此計算
                         sale_details = []
                         for c_item in st.session_state['pos_cart']:
                             cell = ws_items.find(c_item['sku'])
@@ -435,38 +397,29 @@ def main():
                                 if curr >= c_item['qty']:
                                     ws_items.update_cell(cell.row, 5, curr - c_item['qty'])
                                     sale_details.append(f"{c_item['sku']} x1")
-                                else:
-                                    st.error(f"{c_item['sku']} 庫存不足"); st.stop()
-                        
+                                else: st.error(f"{c_item['sku']} 庫存不足"); st.stop()
                         full_log = f"Sale | Total:${cart_total} | {', '.join(sale_details)} | {note} | {pay_method} | By:{sale_person}"
                         log_event(ws_logs, user, "Sale", full_log)
                         st.session_state['pos_cart'] = []
-                        st.balloons() # V104: 視覺回饋
-                        st.success(f"結帳完成 ${cart_total}")
-                        time.sleep(1); st.rerun()
-            else:
-                st.info("購物車是空的，請點擊左側商品加入。")
+                        st.balloons(); st.success(f"結帳完成 ${cart_total}"); time.sleep(1); st.rerun()
+            else: st.info("購物車是空的")
 
-    # --- 📊 庫存 (V104: 卡片式總覽) ---
+    # --- 📊 庫存 ---
     elif nav_sel == "📊 庫存":
         st.subheader("📦 庫存總覽")
-        # 簡單統計
         m1, m2 = st.columns(2)
         m1.markdown(f"<div class='metric-box'><div class='metric-val'>{df['Qty'].sum()}</div><div class='metric-lbl'>台灣總庫存</div></div>", unsafe_allow_html=True)
         m2.markdown(f"<div class='metric-box'><div class='metric-val'>{len(df)}</div><div class='metric-lbl'>總品項數</div></div>", unsafe_allow_html=True)
         st.markdown("<br>", unsafe_allow_html=True)
-        
-        # 顯示 Dataframe (保留 V103 的完整性，但放在 expander 避免手機太長)
         with st.expander("📄 詳細庫存表 (點擊展開)", expanded=True):
             st.dataframe(df[["SKU", "Name", "Category", "Size", "Qty", "Qty_CN", "Price"]], use_container_width=True)
 
-    # --- 🗓️ 班表 (V104: 戰情室) ---
+    # --- 🗓️ 班表 ---
     elif nav_sel == "🗓️ 班表":
-        # 獲取員工列表
         users_list = ws_users.col_values(1)[1:] if ws_users else []
         render_shift_calendar(sh, users_list)
 
-    # --- 📈 戰情 (簡易版) ---
+    # --- 📈 戰情 ---
     elif nav_sel == "📈 戰情":
         logs_df = get_data_safe(ws_logs)
         st.subheader("📈 銷售數據")
@@ -476,16 +429,14 @@ def main():
             st.dataframe(sales, use_container_width=True)
         else: st.info("無數據")
 
-    # --- 🛠️ 管理 (保留 V103 功能入口) ---
+    # --- 🛠️ 管理 ---
     elif nav_sel == "🛠️ 管理":
-        st.warning("⚠️ 進階管理功能請使用桌面版 V103 介面操作 (包含刪除、重鑄、調撥等複雜操作)。")
-        with st.expander("🛠️ 快速調撥 (TW <-> CN)"):
-            st.write("此處功能即將在 V104.1 開放")
+        st.warning("⚠️ 進階管理功能請使用桌面版 V103 介面操作。")
+        with st.expander("🛠️ 快速調撥 (TW <-> CN)"): st.write("此處功能即將在 V104.1 開放")
 
     # --- 🚪 登出 ---
     elif nav_sel == "🚪 登出":
-        st.session_state['logged_in'] = False
-        st.rerun()
+        st.session_state['logged_in'] = False; st.rerun()
 
 if __name__ == "__main__":
     main()
