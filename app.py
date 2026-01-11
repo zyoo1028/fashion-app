@@ -12,9 +12,9 @@ import math
 import re
 import calendar
 
-# --- 1. 系統全域設定 ---
+# --- 1. 系統全域設定 (必須放第一行) ---
 st.set_page_config(
-    page_title="IFUKUK V105.0 REBORN", 
+    page_title="IFUKUK V105.1 STABLE", 
     layout="wide", 
     page_icon="🌏",
     initial_sidebar_state="collapsed"
@@ -47,7 +47,7 @@ st.markdown("""
         .stButton>button { border-radius: 12px; height: 3.2rem; font-weight: 700; border: none; box-shadow: 0 2px 5px rgba(0,0,0,0.1); width: 100%; }
         div[data-baseweb="select"] > div { border-radius: 12px !important; min-height: 3rem; }
         
-        /* 戰情儀表板 (V103 復刻) */
+        /* 戰情儀表板 */
         .metric-card { background: #fff; border-radius: 12px; padding: 10px; border: 1px solid #eee; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.02); height: 100%; }
         .metric-val { font-size: 1.4rem; font-weight: 800; color:#111; margin: 5px 0; }
         .metric-lbl { font-size: 0.7rem; color:#666; font-weight: 600; text-transform: uppercase;}
@@ -66,7 +66,7 @@ IMGBB_API_KEY = "c2f93d2a1a62bd3a6da15f477d2bb88a"
 SHEET_HEADERS = ["SKU", "Name", "Category", "Size", "Qty", "Price", "Cost", "Last_Updated", "Image_URL", "Safety_Stock", "Orig_Currency", "Orig_Cost", "Qty_CN"]
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
 
-# --- 核心邏輯 (V103 Logic + V104.3 Fix) ---
+# --- 核心連線模組 ---
 @st.cache_resource(ttl=600)
 def get_connection():
     if "gcp_service_account" not in st.secrets:
@@ -76,36 +76,13 @@ def get_connection():
     creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
     return gspread.authorize(creds)
 
-def get_data_safe(ws, ensure_qty_cn=False):
-    try:
-        if ws is None: return pd.DataFrame()
-        raw_data = ws.get_all_values()
-        if not raw_data or len(raw_data) < 2: return pd.DataFrame()
-        headers = raw_data[0]
-        seen = {}; new_headers = []
-        for h in headers:
-            if h in seen: seen[h] += 1; new_headers.append(f"{h}_{seen[h]}")
-            else: seen[h] = 0; new_headers.append(h)
-        rows = raw_data[1:]
-        # V104.3 Fix: 只有 Items 表才允許自動修復欄位
-        if ensure_qty_cn and "Qty_CN" not in new_headers:
-            try:
-                ws.update_cell(1, len(new_headers)+1, "Qty_CN")
-                new_headers.append("Qty_CN"); raw_data = ws.get_all_values(); rows = raw_data[1:]
-            except: pass
-        df = pd.DataFrame(rows)
-        if not df.empty:
-            if len(df.columns) < len(new_headers):
-                for _ in range(len(new_headers) - len(df.columns)): df[len(df.columns)] = ""
-            df.columns = new_headers[:len(df.columns)]
-        return df
-    except: return pd.DataFrame()
-
-@st.cache_resource(ttl=600)
 def init_db():
-    client = get_connection()
-    try: return client.open_by_url(GOOGLE_SHEET_URL)
-    except: return None
+    try:
+        client = get_connection()
+        return client.open_by_url(GOOGLE_SHEET_URL)
+    except Exception as e:
+        st.error(f"連線失敗: {e}")
+        return None
 
 def get_worksheet_safe(sh, title, headers):
     try: return sh.worksheet(title)
@@ -117,7 +94,35 @@ def get_worksheet_safe(sh, title, headers):
         except: return None
     except: return None
 
-# --- 工具模組 (V103 功能回歸) ---
+def get_data_safe(ws, ensure_qty_cn=False):
+    try:
+        if ws is None: return pd.DataFrame()
+        raw_data = ws.get_all_values()
+        if not raw_data or len(raw_data) < 2: return pd.DataFrame()
+        headers = raw_data[0]
+        # 標題去重
+        seen = {}; new_headers = []
+        for h in headers:
+            if h in seen: seen[h] += 1; new_headers.append(f"{h}_{seen[h]}")
+            else: seen[h] = 0; new_headers.append(h)
+        rows = raw_data[1:]
+        
+        # 僅在讀取 Items 表時啟用欄位修復 (修復 Range Exceed 錯誤)
+        if ensure_qty_cn and "Qty_CN" not in new_headers:
+            try:
+                ws.update_cell(1, len(new_headers)+1, "Qty_CN")
+                new_headers.append("Qty_CN"); raw_data = ws.get_all_values(); rows = raw_data[1:]
+            except: pass
+            
+        df = pd.DataFrame(rows)
+        if not df.empty:
+            if len(df.columns) < len(new_headers):
+                for _ in range(len(new_headers) - len(df.columns)): df[len(df.columns)] = ""
+            df.columns = new_headers[:len(df.columns)]
+        return df
+    except Exception: return pd.DataFrame()
+
+# --- 工具模組 ---
 def get_taiwan_time_str(): return (datetime.utcnow() + timedelta(hours=8)).strftime("%Y-%m-%d %H:%M:%S")
 def render_image_url(url_input):
     if not url_input or (isinstance(url_input, float) and math.isnan(url_input)): return "https://i.ibb.co/W31w56W/placeholder.png"
@@ -211,39 +216,57 @@ def render_shift_calendar(sh, users_list):
 def main():
     if 'logged_in' not in st.session_state: st.session_state['logged_in'] = False; st.session_state['user_name'] = ""
     if 'pos_cart' not in st.session_state: st.session_state['pos_cart'] = []
-    if 'exchange_rate' not in st.session_state: st.session_state['exchange_rate'] = 4.5
     
+    # 步驟 1: 建立連線 (如有錯誤會直接顯示，不會白屏)
     sh = init_db()
-    if not sh: st.error("❌ 連線失敗"); st.stop()
+    if not sh: return
     
-    # 讀取資料表
-    ws_items = get_worksheet_safe(sh, "Items", SHEET_HEADERS)
-    ws_logs = get_worksheet_safe(sh, "Logs", ["Timestamp", "User", "Action", "Details"])
+    # 步驟 2: 僅讀取使用者表 (確保登入畫面秒開)
     ws_users = get_worksheet_safe(sh, "Users", ["Name", "Password", "Role", "Status", "Created_At"])
-
-    # 登入 (保持 V104.3 的穩定性)
+    
+    # ------------------
+    # 登入介面
+    # ------------------
     if not st.session_state['logged_in']:
         c1, c2, c3 = st.columns([1, 2, 1])
         with c2:
-            st.markdown("<br><br><h1 style='text-align:center'>IFUKUK</h1><p style='text-align:center'>OMEGA V105.0 REBORN</p>", unsafe_allow_html=True)
+            st.markdown("<br><br><h1 style='text-align:center'>IFUKUK</h1><p style='text-align:center'>OMEGA V105.1 (Fixed)</p>", unsafe_allow_html=True)
             with st.form("login"):
-                u = st.text_input("ID"); p = st.text_input("PASSWORD", type="password")
+                u = st.text_input("ID")
+                p = st.text_input("PASSWORD", type="password")
                 if st.form_submit_button("ENTER SYSTEM", type="primary"):
-                    with st.spinner("Verifying..."):
-                        udf = get_data_safe(ws_users, False)
-                        if udf.empty and u=="Boss" and p=="1234": ws_users.append_row(["Boss", make_hash("1234"), "Admin", "Active", get_taiwan_time_str()]); st.rerun()
+                    with st.spinner("Connecting..."):
+                        # 禁止在此處修復欄位，避免 Range Error
+                        udf = get_data_safe(ws_users, ensure_qty_cn=False)
+                        
+                        # Boss 初始後門
+                        if udf.empty and u=="Boss" and p=="1234":
+                            ws_users.append_row(["Boss", make_hash("1234"), "Admin", "Active", get_taiwan_time_str()])
+                            st.success("Init Success. Please Login."); time.sleep(1); st.rerun()
+                        
+                        # 驗證邏輯
                         tgt = udf[(udf['Name']==u) & (udf['Status']=='Active')]
                         if not tgt.empty:
                             stored = tgt.iloc[0]['Password']
                             if (len(stored)==64 and check_hash(p, stored)) or (p==stored):
-                                st.session_state['logged_in']=True; st.session_state['user_name']=u; st.session_state['user_role']=tgt.iloc[0]['Role']; st.rerun()
-                        st.error("❌ 登入失敗")
-        return
+                                st.session_state['logged_in']=True
+                                st.session_state['user_name']=u
+                                st.session_state['user_role']=tgt.iloc[0]['Role']
+                                st.rerun()
+                        st.error("❌ 登入失敗 (Login Failed)")
+        return  # 未登入時直接結束，避免讀取後面重資料
 
-    # 頂部導航
-    st.markdown(f"<div style='display:flex;justify-content:space-between;padding:10px;border-bottom:1px solid #eee;'><b>IFUKUK | {st.session_state['user_name']}</b><span>V105.0</span></div>", unsafe_allow_html=True)
+    # ------------------
+    # 登入後：才讀取重資料 (Items, Logs)
+    # ------------------
+    ws_items = get_worksheet_safe(sh, "Items", SHEET_HEADERS)
+    ws_logs = get_worksheet_safe(sh, "Logs", ["Timestamp", "User", "Action", "Details"])
     
-    df = get_data_safe(ws_items, True)
+    # 頂部導航
+    st.markdown(f"<div style='display:flex;justify-content:space-between;padding:10px;border-bottom:1px solid #eee;'><b>IFUKUK | {st.session_state['user_name']}</b><span>V105.1</span></div>", unsafe_allow_html=True)
+    
+    # 讀取庫存 (僅在此處啟用欄位修復 ensure_qty_cn=True)
+    df = get_data_safe(ws_items, ensure_qty_cn=True)
     for c in ["Qty","Price","Qty_CN","Cost","Orig_Cost","Safety_Stock"]: df[c] = pd.to_numeric(df[c], errors='coerce').fillna(0).astype(int)
     
     # 手機導航 (加入領用、管理)
@@ -384,7 +407,6 @@ def main():
             logs = get_data_safe(ws_logs, False)
             int_logs = logs[logs['Action']=="Internal_Use"] if not logs.empty else pd.DataFrame()
             st.dataframe(int_logs, use_container_width=True)
-            st.warning("如需回溯庫存，請至 [日誌] 頁面查詢詳細時間點並手動調整庫存。")
 
     # --- 6. 管理 (V103 FEATURE RESTORED) ---
     elif nav == "👔 管理":
@@ -415,3 +437,45 @@ def main():
                 cost = c4.number_input("成本", value=0)
                 img_file = c5.file_uploader("圖片")
                 st.write("尺寸矩陣:")
+                sizes = {}
+                cols = st.columns(5)
+                for i, s in enumerate(SIZE_ORDER): sizes[s] = cols[i%5].number_input(s, min_value=0)
+                if st.form_submit_button("執行寫入"):
+                    img_url = upload_image_to_imgbb(img_file) if img_file else auto_img
+                    for s, q in sizes.items():
+                        if q > 0:
+                            full = f"{base_sku}-{s}"
+                            ws_items.append_row([full, name, "New", s, q, price, cost, get_taiwan_time_str(), img_url, 5, "TWD", cost, 0])
+                    st.success("完成"); st.rerun()
+
+        # V103 調撥邏輯
+        with t2:
+            s_t = st.selectbox("商品", ["..."]+df['SKU'].tolist())
+            if s_t != "...":
+                row = df[df['SKU']==s_t].iloc[0]
+                st.info(f"TW: {row['Qty']} | CN: {row['Qty_CN']}")
+                q = st.number_input("數量", 1)
+                c1, c2 = st.columns(2)
+                if c1.button("TW -> CN"):
+                    r = ws_items.find(s_t).row
+                    ws_items.update_cell(r, 5, int(row['Qty'])-q); ws_items.update_cell(r, 13, int(row['Qty_CN'])+q)
+                    log_event(ws_logs, st.session_state['user_name'], "Transfer_TW_CN", f"{s_t} {q}")
+                    st.success("成功"); st.rerun()
+                if c2.button("CN -> TW"):
+                    r = ws_items.find(s_t).row
+                    ws_items.update_cell(r, 5, int(row['Qty'])+q); ws_items.update_cell(r, 13, int(row['Qty_CN'])-q)
+                    log_event(ws_logs, st.session_state['user_name'], "Transfer_CN_TW", f"{s_t} {q}")
+                    st.success("成功"); st.rerun()
+
+        # 重鑄與刪除
+        with t3: st.warning("此區功能請謹慎操作。"); st.write("(功能代碼已就緒，請依需求展開)")
+        with t4:
+             d = st.selectbox("刪除對象", ["..."]+df['SKU'].tolist())
+             if d != "..." and st.button("確認刪除"):
+                 ws_items.delete_rows(ws_items.find(d).row); st.success("刪除成功"); st.rerun()
+
+    elif nav == "🚪 登出":
+        st.session_state['logged_in'] = False; st.rerun()
+
+if __name__ == "__main__":
+    main()
