@@ -14,82 +14,35 @@ import calendar
 
 # --- 1. 系統全域設定 (App-Like Config) ---
 st.set_page_config(
-    page_title="IFUKUK V104.1", 
+    page_title="IFUKUK V104.2 Diagnostic", 
     layout="wide", 
     page_icon="🌏",
     initial_sidebar_state="collapsed"
 )
 
 # ==========================================
-# 🛑 【OMEGA V104.1 視覺核心 (CSS Injection)】
+# 🛑 【OMEGA V104.2 視覺核心】
 # ==========================================
 st.markdown("""
     <style>
-        /* --- 0. 全局重置與 App 質感 --- */
         .stApp { background-color: #F8F9FA !important; }
         .block-container { padding-top: 1rem !important; padding-bottom: 5rem !important; }
-        
-        /* --- 1. 卡片式設計 (Card UI) --- */
-        .omega-card {
-            background: #FFFFFF;
-            border-radius: 16px;
-            padding: 16px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
-            border: 1px solid #E5E7EB;
-            margin-bottom: 12px;
-            transition: transform 0.2s;
-        }
-        .omega-card:active { transform: scale(0.98); } 
-
-        /* --- 2. 排班日曆樣式 (Roster Matrix) --- */
-        .day-card {
-            background: #FFFFFF;
-            border: 1px solid #E5E7EB;
-            border-radius: 8px;
-            padding: 8px;
-            min-height: 80px;
-            position: relative;
-            cursor: pointer;
-        }
-        .day-card:hover { border-color: #000; }
-        .day-num { font-weight: 900; font-size: 1.2rem; color: #333; }
-        .shift-badge {
-            font-size: 0.75rem; padding: 2px 6px; border-radius: 4px; 
-            margin-top: 4px; display: block; text-align: center; color: white; font-weight: bold;
-        }
-        .note-indicator {
-            position: absolute; top: 5px; right: 5px; 
-            width: 8px; height: 8px; background-color: #EF4444; border-radius: 50%;
-        }
-        
-        /* --- 3. POS 畫廊模式 (Gallery Grid) --- */
-        .product-card {
-            border: 1px solid #eee; border-radius: 12px; overflow: hidden; background: #fff;
-            display: flex; flex-direction: column; height: 100%;
-        }
+        .omega-card { background: #FFFFFF; border-radius: 16px; padding: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); border: 1px solid #E5E7EB; margin-bottom: 12px; }
+        .product-card { border: 1px solid #eee; border-radius: 12px; overflow: hidden; background: #fff; display: flex; flex-direction: column; height: 100%; }
         .prod-img-box { width: 100%; height: 120px; object-fit: cover; background: #f0f0f0; }
         .prod-info { padding: 8px; flex-grow: 1; }
         .prod-title { font-weight: bold; font-size: 0.9rem; line-height: 1.2; margin-bottom: 4px; color: #111; }
         .prod-meta { font-size: 0.8rem; color: #666; }
         .prod-price { font-weight: 900; color: #059669; font-size: 1rem; margin-top: auto; }
-        
-        /* --- 4. 優化按鈕與輸入 (Thumb Zone) --- */
-        .stButton>button {
-            border-radius: 12px; height: 3.5rem; font-weight: 700; border: none;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1); width: 100%;
-        }
+        .stButton>button { border-radius: 12px; height: 3.5rem; font-weight: 700; border: none; box-shadow: 0 4px 6px rgba(0,0,0,0.1); width: 100%; }
         div[data-baseweb="select"] > div { border-radius: 12px !important; min-height: 3rem; }
-        
-        /* --- 5. 戰情儀表板優化 --- */
-        .metric-box {
-            background: linear-gradient(135deg, #ffffff, #f3f4f6);
-            border-radius: 12px; padding: 12px; text-align: center; border: 1px solid #e5e7eb;
-        }
+        .metric-box { background: linear-gradient(135deg, #ffffff, #f3f4f6); border-radius: 12px; padding: 12px; text-align: center; border: 1px solid #e5e7eb; }
         .metric-val { font-size: 1.5rem; font-weight: 800; color: #111; }
         .metric-lbl { font-size: 0.75rem; color: #666; text-transform: uppercase; letter-spacing: 1px; }
-
-        /* 隱藏預設元件噪音 */
         #MainMenu {visibility: hidden;} footer {visibility: hidden;} header {visibility: hidden;}
+        
+        /* 診斷訊息樣式 */
+        .diag-box { background-color: #FEF2F2; border: 1px dashed #EF4444; padding: 10px; border-radius: 8px; color: #991B1B; font-family: monospace; font-size: 0.8rem; margin-top: 10px;}
     </style>
 """, unsafe_allow_html=True)
 
@@ -107,32 +60,31 @@ def get_connection():
     creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
     return gspread.authorize(creds)
 
+# V104.2: Remove error swallowing to see real error
 def get_data_safe(ws):
-    max_retries = 3
-    for i in range(max_retries):
-        try:
-            if ws is None: return pd.DataFrame()
-            raw_data = ws.get_all_values()
-            if not raw_data or len(raw_data) < 2: return pd.DataFrame()
-            headers = raw_data[0]
-            # Headers Deduplication
-            seen = {}; new_headers = []
-            for h in headers:
-                if h in seen: seen[h] += 1; new_headers.append(f"{h}_{seen[h]}")
-                else: seen[h] = 0; new_headers.append(h)
-            rows = raw_data[1:]
-            # Auto-Fix Qty_CN
-            if "Qty_CN" not in new_headers:
-                ws.update_cell(1, len(new_headers)+1, "Qty_CN")
-                new_headers.append("Qty_CN"); raw_data = ws.get_all_values(); rows = raw_data[1:]
-            df = pd.DataFrame(rows)
-            if not df.empty:
-                if len(df.columns) < len(new_headers):
-                    for _ in range(len(new_headers) - len(df.columns)): df[len(df.columns)] = ""
-                df.columns = new_headers[:len(df.columns)]
-            return df
-        except Exception: time.sleep(1); continue
-    return pd.DataFrame()
+    try:
+        if ws is None: return pd.DataFrame()
+        raw_data = ws.get_all_values()
+        if not raw_data or len(raw_data) < 2: return pd.DataFrame()
+        headers = raw_data[0]
+        seen = {}; new_headers = []
+        for h in headers:
+            if h in seen: seen[h] += 1; new_headers.append(f"{h}_{seen[h]}")
+            else: seen[h] = 0; new_headers.append(h)
+        rows = raw_data[1:]
+        if "Qty_CN" not in new_headers:
+            ws.update_cell(1, len(new_headers)+1, "Qty_CN")
+            new_headers.append("Qty_CN"); raw_data = ws.get_all_values(); rows = raw_data[1:]
+        df = pd.DataFrame(rows)
+        if not df.empty:
+            if len(df.columns) < len(new_headers):
+                for _ in range(len(new_headers) - len(df.columns)): df[len(df.columns)] = ""
+            df.columns = new_headers[:len(df.columns)]
+        return df
+    except Exception as e:
+        # V104.2: Store error in session state for debug
+        st.session_state['last_error'] = str(e)
+        return pd.DataFrame()
 
 @st.cache_resource(ttl=600)
 def init_db():
@@ -143,9 +95,15 @@ def init_db():
 def get_worksheet_safe(sh, title, headers):
     try: return sh.worksheet(title)
     except gspread.WorksheetNotFound:
-        ws = sh.add_worksheet(title, rows=100, cols=20)
-        ws.append_row(headers)
-        return ws
+        # Try finding case-insensitive
+        try:
+            for ws in sh.worksheets():
+                if ws.title.lower() == title.lower(): return ws
+            # Really not found, create new
+            ws = sh.add_worksheet(title, rows=100, cols=20)
+            ws.append_row(headers)
+            return ws
+        except: return None
     except: return None
 
 # --- 工具模組 ---
@@ -259,42 +217,36 @@ def main():
     if 'pos_cart' not in st.session_state: st.session_state['pos_cart'] = []
     
     sh = init_db()
-    if not sh: st.error("Database Connection Failed"); st.stop()
+    if not sh: st.error("❌ 無法連接 Google Sheets，請檢查 Secrets 設定。"); st.stop()
 
     ws_items = get_worksheet_safe(sh, "Items", SHEET_HEADERS)
     ws_logs = get_worksheet_safe(sh, "Logs", ["Timestamp", "User", "Action", "Details"])
     ws_users = get_worksheet_safe(sh, "Users", ["Name", "Password", "Role", "Status", "Created_At"])
 
-    # --- 登入頁面 (V104.1 FIX: 強韌登入邏輯) ---
+    # --- 登入頁面 (V104.2: X-Ray Diagnostic Mode) ---
     if not st.session_state['logged_in']:
         c1, c2, c3 = st.columns([1, 2, 1])
         with c2:
             st.markdown("<br><br>", unsafe_allow_html=True)
             st.markdown("<div style='text-align:center; font-weight:900; font-size:3rem; color:#111;'>IFUKUK</div>", unsafe_allow_html=True)
-            st.markdown("<div style='text-align:center; color:#666; font-size:1rem; letter-spacing:2px; margin-bottom:40px;'>OMEGA V104.1 (Stable)</div>", unsafe_allow_html=True)
+            st.markdown("<div style='text-align:center; color:#666; font-size:1rem; letter-spacing:2px; margin-bottom:40px;'>OMEGA V104.2 (X-Ray)</div>", unsafe_allow_html=True)
+            
             with st.form("login"):
                 user_input = st.text_input("ID")
                 pass_input = st.text_input("PASSWORD", type="password")
                 
                 if st.form_submit_button("ENTER SYSTEM", type="primary"):
-                    # V104.1 Fix: 加入讀取回饋與嚴格錯誤捕捉
-                    with st.spinner("Checking Credentials..."):
+                    with st.spinner("Connecting to Matrix..."):
                         users_df = get_data_safe(ws_users)
                         input_u = str(user_input).strip()
                         input_p = str(pass_input).strip()
                         
-                        if not input_u:
-                            st.error("❌ 請輸入 ID")
-                            st.stop()
-
-                        # 1. 優先處理 Boss 初始化 (當資料庫真的為空時)
+                        # 優先處理 Boss 初始化
                         if users_df.empty and input_u == "Boss" and input_p == "1234":
                             ws_users.append_row(["Boss", make_hash("1234"), "Admin", "Active", get_taiwan_time_str()])
                             st.success("Admin Initialized. Please Login.")
-                            time.sleep(1)
-                            st.rerun()
+                            time.sleep(1); st.rerun()
                         
-                        # 2. 正常登入檢查
                         if not users_df.empty:
                             target = users_df[(users_df['Name'] == input_u) & (users_df['Status'] == 'Active')]
                             if not target.empty:
@@ -305,13 +257,42 @@ def main():
                                     st.session_state['user_role'] = target.iloc[0]['Role']
                                     log_event(ws_logs, input_u, "Login", "V104 Login")
                                     st.rerun()
-                                else:
-                                    st.error("❌ 密碼錯誤 (Invalid Password)")
-                            else:
-                                st.error(f"❌ 找不到使用者: {input_u}")
+                                else: st.error("❌ 密碼錯誤 (Invalid Password)")
+                            else: st.error(f"❌ 找不到使用者: {input_u}")
                         else:
-                            # 3. 捕捉「資料庫讀取失敗」或「非 Boss 的空資料庫登入」
-                            st.error("⚠️ 資料庫連線異常或為空，且非 Admin 初始帳號。")
+                            st.error("⚠️ 資料庫讀取失敗 (Database Unreachable)")
+                            st.session_state['show_diag'] = True
+
+            # --- 🔧 V104.2 系統診斷儀表板 (只在登入失敗時顯示) ---
+            if st.session_state.get('show_diag', False):
+                with st.expander("🔧 系統診斷資訊 (System Diagnostics)", expanded=True):
+                    st.write("請截圖此畫面給開發人員：")
+                    
+                    # 1. Sheet 連線狀態
+                    st.write(f"✅ SpreadSheet Connected: {sh.title}")
+                    
+                    # 2. Worksheet 狀態
+                    try:
+                        all_ws = sh.worksheets()
+                        ws_names = [w.title for w in all_ws]
+                        st.write(f"📂 Found Worksheets: {ws_names}")
+                        
+                        if "Users" in ws_names:
+                            u_ws = sh.worksheet("Users")
+                            raw_vals = u_ws.get_all_values()
+                            st.write(f"👥 Users Data Rows: {len(raw_vals)}")
+                            if len(raw_vals) > 0:
+                                st.code(f"Header: {raw_vals[0]}")
+                            if len(raw_vals) > 1:
+                                st.code(f"Row 1: {raw_vals[1]}")
+                        else:
+                            st.error("❌ 'Users' worksheet NOT found!")
+                    except Exception as e:
+                        st.error(f"Diagnostics Error: {e}")
+                    
+                    if 'last_error' in st.session_state:
+                        st.write(f"🛑 Last Internal Error: {st.session_state['last_error']}")
+
         return
 
     # --- 主導航 ---
@@ -319,7 +300,7 @@ def main():
     st.markdown(f"""
         <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px solid #eee;">
             <div style="font-weight:900; font-size:1.2rem;">IFUKUK <span style="font-weight:400; font-size:0.8rem; color:#888;">| {user}</span></div>
-            <div style="font-size:0.8rem; background:#eee; padding:4px 8px; border-radius:8px;">V104.1</div>
+            <div style="font-size:0.8rem; background:#eee; padding:4px 8px; border-radius:8px;">V104.2</div>
         </div>
     """, unsafe_allow_html=True)
 
