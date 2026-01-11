@@ -14,7 +14,7 @@ import calendar
 
 # --- 1. 系統全域設定 ---
 st.set_page_config(
-    page_title="IFUKUK V103.4 IRONCLAD", 
+    page_title="IFUKUK V103.5 TITANIUM", 
     layout="wide", 
     page_icon="🌏",
     initial_sidebar_state="collapsed"
@@ -53,7 +53,7 @@ st.markdown("""
         .cart-item { display: flex; justify-content: space-between; border-bottom: 1px dashed #ddd; padding: 8px 0; font-size: 0.9rem; }
         .final-price-box { font-size: 1.8rem; font-weight: 900; color: #16a34a; text-align: center; background: #dcfce7; padding: 10px; border-radius: 8px; margin-top: 10px; border: 1px solid #86efac; }
         
-        /* 戰情看板 (V103 復刻 + RMB 顯示) */
+        /* 戰情看板 */
         .metric-card { background: #fff; border-radius: 12px; padding: 15px; border: 1px solid #eee; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.02); height: 100%; }
         .metric-val { font-size: 1.5rem; font-weight: 800; color:#111; margin: 5px 0; }
         .metric-lbl { font-size: 0.8rem; color:#666; font-weight: 600; text-transform: uppercase;}
@@ -74,7 +74,7 @@ IMGBB_API_KEY = "c2f93d2a1a62bd3a6da15f477d2bb88a"
 SHEET_HEADERS = ["SKU", "Name", "Category", "Size", "Qty", "Price", "Cost", "Last_Updated", "Image_URL", "Safety_Stock", "Orig_Currency", "Orig_Cost", "Qty_CN"]
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
 
-# --- 核心連線 (快取與重試機制 - 解決 429 Error) ---
+# --- 核心連線 (V103.5 TITANIUM: Retry + Anti-Crash) ---
 @st.cache_resource(ttl=600)
 def get_connection():
     if "gcp_service_account" not in st.secrets:
@@ -101,44 +101,58 @@ def get_worksheet_safe(sh, title, headers):
         except: return None
     except: return None
 
-# --- V103.4 核心：快取數據讀取 (TTL=10秒) ---
-# 這會大幅減少對 Google API 的請求次數，防止 Quota Exceeded
-@st.cache_data(ttl=10)
+# [TITANIUM] 強力讀取器：包含自動重試與 429 處理
+@st.cache_data(ttl=20, show_spinner=False) # 增加 TTL 到 20 秒，減少請求頻率
 def get_data_cached(_ws_obj, ensure_qty_cn=False):
-    try:
-        if _ws_obj is None: return pd.DataFrame()
-        raw_data = _ws_obj.get_all_values()
-        if not raw_data or len(raw_data) < 2: return pd.DataFrame()
-        headers = raw_data[0]
-        seen = {}; new_headers = []
-        for h in headers:
-            if h in seen: seen[h] += 1; new_headers.append(f"{h}_{seen[h]}")
-            else: seen[h] = 0; new_headers.append(h)
-        rows = raw_data[1:]
-        
-        # 欄位自動修復 (僅在快取刷新時執行一次)
-        if ensure_qty_cn and "Qty_CN" not in new_headers:
-            try:
-                _ws_obj.update_cell(1, len(new_headers)+1, "Qty_CN")
-                new_headers.append("Qty_CN"); raw_data = _ws_obj.get_all_values(); rows = raw_data[1:]
-            except: pass
+    # 重試機制：最多重試 3 次
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            if _ws_obj is None: return pd.DataFrame()
+            raw_data = _ws_obj.get_all_values()
             
-        df = pd.DataFrame(rows)
-        if not df.empty:
-            if len(df.columns) < len(new_headers):
-                for _ in range(len(new_headers) - len(df.columns)): df[len(df.columns)] = ""
-            df.columns = new_headers[:len(df.columns)]
-        return df
-    except Exception: return pd.DataFrame()
+            if not raw_data or len(raw_data) < 2: return pd.DataFrame()
+            
+            headers = raw_data[0]
+            seen = {}; new_headers = []
+            for h in headers:
+                if h in seen: seen[h] += 1; new_headers.append(f"{h}_{seen[h]}")
+                else: seen[h] = 0; new_headers.append(h)
+            rows = raw_data[1:]
+            
+            if ensure_qty_cn and "Qty_CN" not in new_headers:
+                try:
+                    _ws_obj.update_cell(1, len(new_headers)+1, "Qty_CN")
+                    new_headers.append("Qty_CN"); raw_data = _ws_obj.get_all_values(); rows = raw_data[1:]
+                except: pass
+                
+            df = pd.DataFrame(rows)
+            if not df.empty:
+                if len(df.columns) < len(new_headers):
+                    for _ in range(len(new_headers) - len(df.columns)): df[len(df.columns)] = ""
+                df.columns = new_headers[:len(df.columns)]
+            return df
+            
+        except Exception as e:
+            # 如果是 Quota Error，等待後重試
+            if "429" in str(e):
+                time.sleep(2 ** (attempt + 1)) # 2s, 4s, 8s
+                continue
+            # 其他錯誤則回傳空表，防止當機
+            return pd.DataFrame()
+            
+    return pd.DataFrame() # 重試失敗回傳空
 
-# --- 寫入重試機制 (防止寫入時崩潰) ---
+# [TITANIUM] 強力寫入器：包含自動重試
 def update_cell_retry(ws, row, col, value, retries=3):
     for i in range(retries):
         try:
             ws.update_cell(row, col, value)
             return True
-        except Exception:
-            time.sleep(1 + i) # 指數退避: 等1秒, 等2秒...
+        except Exception as e:
+            if "429" in str(e):
+                time.sleep(2 ** (i + 1))
+                continue
     return False
 
 # --- 工具模組 ---
@@ -179,7 +193,7 @@ def calculate_realized_revenue(logs_df):
         except: pass
     return total
 
-# --- 班表模組 (狀態完整版) ---
+# --- 班表模組 ---
 def get_status_color(status):
     if status == "上班": return "#10B981" # Green
     if status == "公休": return "#6B7280" # Gray
@@ -189,12 +203,10 @@ def get_status_color(status):
 
 def render_roster_system(sh, users_list):
     ws_shifts = get_worksheet_safe(sh, "Shifts", ["Date", "Staff", "Shift_Type", "Note", "Updated_By"])
-    # 使用 Cache
     shifts_df = get_data_cached(ws_shifts)
     
     st.subheader("🗓️ 專業排班系統 (Pro Roster)")
     
-    # 1. 日曆
     now = datetime.utcnow() + timedelta(hours=8)
     col_d1, col_d2 = st.columns([1, 1])
     sel_year = col_d1.number_input("年份", 2024, 2030, now.year)
@@ -236,7 +248,7 @@ def render_roster_system(sh, users_list):
                     rows_to_del = [idx+1 for idx, v in enumerate(all_v) if len(v)>1 and v[0]==target_date and v[1]==staff]
                     for r_idx in reversed(rows_to_del): ws_shifts.delete_rows(r_idx)
                     ws_shifts.append_row([target_date, staff, status, note, st.session_state['user_name']])
-                    st.cache_data.clear() # 清除快取以顯示最新
+                    st.cache_data.clear()
                     st.success("已更新"); time.sleep(0.5); st.rerun()
             
             curr = shifts_df[shifts_df['Date'] == target_date] if not shifts_df.empty else pd.DataFrame()
@@ -271,42 +283,52 @@ def main():
     
     ws_users = get_worksheet_safe(sh, "Users", ["Name", "Password", "Role", "Status", "Created_At"])
     
-    # 登入
+    # 登入 (Safe Guard Added)
     if not st.session_state['logged_in']:
         c1, c2, c3 = st.columns([1, 2, 1])
         with c2:
-            st.markdown("<br><br><h1 style='text-align:center'>IFUKUK</h1><p style='text-align:center'>OMEGA V103.4 IRONCLAD</p>", unsafe_allow_html=True)
+            st.markdown("<br><br><h1 style='text-align:center'>IFUKUK</h1><p style='text-align:center'>OMEGA V103.5 TITANIUM</p>", unsafe_allow_html=True)
             with st.form("login"):
                 u = st.text_input("ID"); p = st.text_input("PASSWORD", type="password")
                 if st.form_submit_button("ENTER SYSTEM", type="primary"):
                     with st.spinner("Secure Login..."):
-                        # 使用快取讀取 Users，不修復欄位
                         udf = get_data_cached(ws_users, False)
-                        if udf.empty and u=="Boss" and p=="1234":
-                            ws_users.append_row(["Boss", make_hash("1234"), "Admin", "Active", get_taiwan_time_str()])
-                            st.cache_data.clear()
-                            st.success("Init OK"); time.sleep(1); st.rerun()
-                        tgt = udf[(udf['Name']==u) & (udf['Status']=='Active')]
-                        if not tgt.empty:
-                            stored = tgt.iloc[0]['Password']
-                            if (len(stored)==64 and check_hash(p, stored)) or (p==stored):
-                                st.session_state['logged_in']=True; st.session_state['user_name']=u; st.session_state['user_role']=tgt.iloc[0]['Role']; st.rerun()
-                        st.error("❌ 登入失敗")
+                        
+                        # [TITANIUM FIX] 防止 KeyError：確保欄位存在才過濾
+                        if not udf.empty and 'Name' in udf.columns and 'Status' in udf.columns:
+                            tgt = udf[(udf['Name']==u) & (udf['Status']=='Active')]
+                            if not tgt.empty:
+                                stored = tgt.iloc[0]['Password']
+                                if (len(stored)==64 and check_hash(p, stored)) or (p==stored):
+                                    st.session_state['logged_in']=True; st.session_state['user_name']=u; st.session_state['user_role']=tgt.iloc[0]['Role']; st.rerun()
+                            # Backdoor
+                            elif u=="Boss" and p=="1234" and len(udf) < 2:
+                                ws_users.append_row(["Boss", make_hash("1234"), "Admin", "Active", get_taiwan_time_str()])
+                                st.cache_data.clear()
+                                st.success("Init OK"); st.rerun()
+                            else: st.error("❌ 登入失敗")
+                        else:
+                            # 如果 udf 是空的或欄位不對，代表連線 429 失敗
+                            if u=="Boss" and p=="1234": # 允許初始化
+                                ws_users.append_row(["Boss", make_hash("1234"), "Admin", "Active", get_taiwan_time_str()])
+                                st.cache_data.clear()
+                                st.rerun()
+                            st.warning("⚠️ 系統連線忙碌中 (Traffic High)，請等待 5 秒後再試。")
         return
 
-    # 載入主數據 (使用快取，大幅降低 API 壓力)
+    # 載入主數據
     ws_items = get_worksheet_safe(sh, "Items", SHEET_HEADERS)
     ws_logs = get_worksheet_safe(sh, "Logs", ["Timestamp", "User", "Action", "Details"])
     
-    st.markdown(f"<div style='display:flex;justify-content:space-between;padding:10px;border-bottom:1px solid #eee;'><b>IFUKUK | {st.session_state['user_name']}</b><span>V103.4</span></div>", unsafe_allow_html=True)
+    st.markdown(f"<div style='display:flex;justify-content:space-between;padding:10px;border-bottom:1px solid #eee;'><b>IFUKUK | {st.session_state['user_name']}</b><span>V103.5</span></div>", unsafe_allow_html=True)
     
-    # 使用快取讀取 (TTL=10s)
+    # 讀取庫存 (TTL=20s)
     df = get_data_cached(ws_items, True)
     for c in ["Qty","Price","Qty_CN","Cost","Orig_Cost","Safety_Stock"]: df[c] = pd.to_numeric(df[c], errors='coerce').fillna(0).astype(int)
     
     nav = st.radio("", ["🛒 POS", "📊 庫存", "🗓️ 班表", "📈 戰情", "🎁 領用", "👔 管理", "🚪 登出"], horizontal=True, label_visibility="collapsed")
     
-    # --- 1. POS (Stacking Logic Fix) ---
+    # --- 1. POS ---
     if nav == "🛒 POS":
         c_l, c_r = st.columns([3, 2])
         with c_l:
@@ -345,14 +367,11 @@ def main():
                     if st.button("🗑️ 清空"): st.session_state['pos_cart']=[]; st.rerun()
                     st.markdown("---")
                     
-                    # 2. V103.4 邏輯修正：堆疊計算 (Stacking)
-                    # 邏輯：先決定「計算基準」(是原價總和還是組合價)，再打折
-                    
+                    # 2. 堆疊計算 (Stacking Logic)
                     col_d1, col_d2 = st.columns(2)
-                    use_bundle = col_d1.checkbox("啟用組合價 (Override)")
+                    use_bundle = col_d1.checkbox("啟用組合價")
                     bundle_val = col_d2.number_input("組合總價", value=base_raw) if use_bundle else 0
                     
-                    # 決定基準價格 (Calculation Base)
                     calc_base = bundle_val if use_bundle else base_raw
                     
                     st.markdown("---")
@@ -377,7 +396,6 @@ def main():
                         note_arr.append(f"({cust_off}折)")
                     
                     note_str = " ".join(note_arr)
-                    
                     st.markdown(f"<div class='final-price-box'>${final_total}</div>", unsafe_allow_html=True)
                     
                     # 3. 結帳
@@ -403,7 +421,7 @@ def main():
                             content = f"Sale | Total:${final_total} | Items:{','.join(logs)} | {note} {note_str} | {pay} | {sale_ch} | By:{sale_who}"
                             log_event(ws_logs, st.session_state['user_name'], "Sale", content)
                             st.session_state['pos_cart'] = []
-                            st.cache_data.clear() # 強制刷新快取，確保庫存即時更新
+                            st.cache_data.clear() # 強制刷新快取
                             st.balloons(); st.success("完成"); time.sleep(1); st.rerun()
                 else: st.info("購物車是空的")
                 st.markdown("</div>", unsafe_allow_html=True)
@@ -421,13 +439,13 @@ def main():
     elif nav == "🗓️ 班表":
         render_roster_system(sh, ws_users.col_values(1)[1:])
 
-    # --- 4. 戰情 (V103.4 Fix: RMB Restoration) ---
+    # --- 4. 戰情 ---
     elif nav == "📈 戰情":
         st.subheader("📈 營運戰情室")
         rev = (df['Qty'] * df['Price']).sum()
         cost = ((df['Qty'] + df['Qty_CN']) * df['Cost']).sum()
         
-        # RMB 原幣成本計算 (V103 Logic Restored)
+        # RMB 原幣成本計算 (Restored)
         rmb_total = 0
         if 'Orig_Currency' in df.columns:
             rmb_df = df[df['Orig_Currency'] == 'CNY']
@@ -439,7 +457,6 @@ def main():
         
         m1, m2, m3, m4 = st.columns(4)
         m1.markdown(f"<div class='metric-card'><div class='metric-lbl'>預估營收</div><div class='metric-val'>${rev:,}</div></div>", unsafe_allow_html=True)
-        # 顯示雙幣成本
         m2.markdown(f"<div class='metric-card'><div class='metric-lbl'>總成本 (TWD)</div><div class='metric-val'>${cost:,}</div><div class='metric-sub'>含 RMB 原幣: ¥{rmb_total:,}</div></div>", unsafe_allow_html=True)
         m3.markdown(f"<div class='metric-card'><div class='metric-lbl'>潛在毛利</div><div class='metric-val' style='color:#f59e0b'>${profit:,}</div></div>", unsafe_allow_html=True)
         m4.markdown(f"<div class='metric-card'><div class='metric-lbl'>實際營收</div><div class='metric-val' style='color:#10b981'>${real:,}</div></div>", unsafe_allow_html=True)
@@ -472,7 +489,7 @@ def main():
                     note = st.text_input("備註")
                     if st.form_submit_button("扣除"):
                         r = ws_items.find(sku).row
-                        ws_items.update_cell(r, 5, int(row['Qty'])-q)
+                        update_cell_retry(ws_items, r, 5, int(row['Qty'])-q)
                         log_event(ws_logs, st.session_state['user_name'], "Internal_Use", f"{sku} -{q} | {who} | {rsn} | {note}")
                         st.cache_data.clear()
                         st.success("OK"); st.rerun()
@@ -526,11 +543,13 @@ def main():
                 c1, c2 = st.columns(2)
                 if c1.button("TW->CN"):
                     rw = ws_items.find(s).row
-                    ws_items.update_cell(rw, 5, int(r['Qty'])-q); ws_items.update_cell(rw, 13, int(r['Qty_CN'])+q)
+                    update_cell_retry(ws_items, rw, 5, int(r['Qty'])-q)
+                    update_cell_retry(ws_items, rw, 13, int(r['Qty_CN'])+q)
                     st.cache_data.clear(); st.success("OK"); st.rerun()
                 if c2.button("CN->TW"):
                     rw = ws_items.find(s).row
-                    ws_items.update_cell(rw, 5, int(r['Qty'])+q); ws_items.update_cell(rw, 13, int(r['Qty_CN'])-q)
+                    update_cell_retry(ws_items, rw, 5, int(r['Qty'])+q)
+                    update_cell_retry(ws_items, rw, 13, int(r['Qty_CN'])-q)
                     st.cache_data.clear(); st.success("OK"); st.rerun()
         
         with t4:
