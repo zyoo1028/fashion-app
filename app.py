@@ -12,16 +12,16 @@ import math
 import re
 import calendar
 
-# --- 1. 系統全域設定 (App-Like Config) ---
+# --- 1. 系統全域設定 ---
 st.set_page_config(
-    page_title="IFUKUK V104.2 Diagnostic", 
+    page_title="IFUKUK V104.3 Stable", 
     layout="wide", 
     page_icon="🌏",
     initial_sidebar_state="collapsed"
 )
 
 # ==========================================
-# 🛑 【OMEGA V104.2 視覺核心】
+# 🛑 【OMEGA V104.3 視覺核心】
 # ==========================================
 st.markdown("""
     <style>
@@ -40,9 +40,6 @@ st.markdown("""
         .metric-val { font-size: 1.5rem; font-weight: 800; color: #111; }
         .metric-lbl { font-size: 0.75rem; color: #666; text-transform: uppercase; letter-spacing: 1px; }
         #MainMenu {visibility: hidden;} footer {visibility: hidden;} header {visibility: hidden;}
-        
-        /* 診斷訊息樣式 */
-        .diag-box { background-color: #FEF2F2; border: 1px dashed #EF4444; padding: 10px; border-radius: 8px; color: #991B1B; font-family: monospace; font-size: 0.8rem; margin-top: 10px;}
     </style>
 """, unsafe_allow_html=True)
 
@@ -60,8 +57,8 @@ def get_connection():
     creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
     return gspread.authorize(creds)
 
-# V104.2: Remove error swallowing to see real error
-def get_data_safe(ws):
+# --- V104.3 FIX: 增加 ensure_qty_cn 參數，防止對 Users 表錯誤操作 ---
+def get_data_safe(ws, ensure_qty_cn=False):
     try:
         if ws is None: return pd.DataFrame()
         raw_data = ws.get_all_values()
@@ -72,9 +69,14 @@ def get_data_safe(ws):
             if h in seen: seen[h] += 1; new_headers.append(f"{h}_{seen[h]}")
             else: seen[h] = 0; new_headers.append(h)
         rows = raw_data[1:]
-        if "Qty_CN" not in new_headers:
-            ws.update_cell(1, len(new_headers)+1, "Qty_CN")
-            new_headers.append("Qty_CN"); raw_data = ws.get_all_values(); rows = raw_data[1:]
+        
+        # FIX: 只有當明確要求 ensure_qty_cn 時才執行欄位修復 (僅針對 Items 表)
+        if ensure_qty_cn and "Qty_CN" not in new_headers:
+            try:
+                ws.update_cell(1, len(new_headers)+1, "Qty_CN")
+                new_headers.append("Qty_CN"); raw_data = ws.get_all_values(); rows = raw_data[1:]
+            except: pass # 如果寫入失敗(例如超出邊界)，忽略並繼續讀取，不讓系統崩潰
+
         df = pd.DataFrame(rows)
         if not df.empty:
             if len(df.columns) < len(new_headers):
@@ -82,8 +84,8 @@ def get_data_safe(ws):
             df.columns = new_headers[:len(df.columns)]
         return df
     except Exception as e:
-        # V104.2: Store error in session state for debug
-        st.session_state['last_error'] = str(e)
+        # V104.3: 發生錯誤時回傳空表，並印出錯誤 (除錯用)
+        print(f"Data Load Error: {e}") 
         return pd.DataFrame()
 
 @st.cache_resource(ttl=600)
@@ -95,11 +97,9 @@ def init_db():
 def get_worksheet_safe(sh, title, headers):
     try: return sh.worksheet(title)
     except gspread.WorksheetNotFound:
-        # Try finding case-insensitive
         try:
             for ws in sh.worksheets():
                 if ws.title.lower() == title.lower(): return ws
-            # Really not found, create new
             ws = sh.add_worksheet(title, rows=100, cols=20)
             ws.append_row(headers)
             return ws
@@ -130,7 +130,7 @@ def get_staff_color(name):
 
 def render_shift_calendar(sh, users_list):
     ws_shifts = get_worksheet_safe(sh, "Shifts", ["Date", "Staff", "Shift_Type", "Note", "Updated_By"])
-    shifts_df = get_data_safe(ws_shifts)
+    shifts_df = get_data_safe(ws_shifts, ensure_qty_cn=False) # 明確指定不修復欄位
     
     col_h1, col_h2 = st.columns([2, 1])
     with col_h1:
@@ -219,29 +219,30 @@ def main():
     sh = init_db()
     if not sh: st.error("❌ 無法連接 Google Sheets，請檢查 Secrets 設定。"); st.stop()
 
+    # V104.3 FIX: 確保只有 Items 表才開啟 ensure_qty_cn=True
     ws_items = get_worksheet_safe(sh, "Items", SHEET_HEADERS)
     ws_logs = get_worksheet_safe(sh, "Logs", ["Timestamp", "User", "Action", "Details"])
     ws_users = get_worksheet_safe(sh, "Users", ["Name", "Password", "Role", "Status", "Created_At"])
 
-    # --- 登入頁面 (V104.2: X-Ray Diagnostic Mode) ---
+    # --- 登入頁面 ---
     if not st.session_state['logged_in']:
         c1, c2, c3 = st.columns([1, 2, 1])
         with c2:
             st.markdown("<br><br>", unsafe_allow_html=True)
             st.markdown("<div style='text-align:center; font-weight:900; font-size:3rem; color:#111;'>IFUKUK</div>", unsafe_allow_html=True)
-            st.markdown("<div style='text-align:center; color:#666; font-size:1rem; letter-spacing:2px; margin-bottom:40px;'>OMEGA V104.2 (X-Ray)</div>", unsafe_allow_html=True)
+            st.markdown("<div style='text-align:center; color:#666; font-size:1rem; letter-spacing:2px; margin-bottom:40px;'>OMEGA V104.3 (Stable)</div>", unsafe_allow_html=True)
             
             with st.form("login"):
                 user_input = st.text_input("ID")
                 pass_input = st.text_input("PASSWORD", type="password")
                 
                 if st.form_submit_button("ENTER SYSTEM", type="primary"):
-                    with st.spinner("Connecting to Matrix..."):
-                        users_df = get_data_safe(ws_users)
+                    with st.spinner("Connecting..."):
+                        # V104.3 FIX: 讀取 Users 表時，絕對禁止 ensure_qty_cn
+                        users_df = get_data_safe(ws_users, ensure_qty_cn=False)
                         input_u = str(user_input).strip()
                         input_p = str(pass_input).strip()
                         
-                        # 優先處理 Boss 初始化
                         if users_df.empty and input_u == "Boss" and input_p == "1234":
                             ws_users.append_row(["Boss", make_hash("1234"), "Admin", "Active", get_taiwan_time_str()])
                             st.success("Admin Initialized. Please Login.")
@@ -257,41 +258,10 @@ def main():
                                     st.session_state['user_role'] = target.iloc[0]['Role']
                                     log_event(ws_logs, input_u, "Login", "V104 Login")
                                     st.rerun()
-                                else: st.error("❌ 密碼錯誤 (Invalid Password)")
+                                else: st.error("❌ 密碼錯誤")
                             else: st.error(f"❌ 找不到使用者: {input_u}")
                         else:
-                            st.error("⚠️ 資料庫讀取失敗 (Database Unreachable)")
-                            st.session_state['show_diag'] = True
-
-            # --- 🔧 V104.2 系統診斷儀表板 (只在登入失敗時顯示) ---
-            if st.session_state.get('show_diag', False):
-                with st.expander("🔧 系統診斷資訊 (System Diagnostics)", expanded=True):
-                    st.write("請截圖此畫面給開發人員：")
-                    
-                    # 1. Sheet 連線狀態
-                    st.write(f"✅ SpreadSheet Connected: {sh.title}")
-                    
-                    # 2. Worksheet 狀態
-                    try:
-                        all_ws = sh.worksheets()
-                        ws_names = [w.title for w in all_ws]
-                        st.write(f"📂 Found Worksheets: {ws_names}")
-                        
-                        if "Users" in ws_names:
-                            u_ws = sh.worksheet("Users")
-                            raw_vals = u_ws.get_all_values()
-                            st.write(f"👥 Users Data Rows: {len(raw_vals)}")
-                            if len(raw_vals) > 0:
-                                st.code(f"Header: {raw_vals[0]}")
-                            if len(raw_vals) > 1:
-                                st.code(f"Row 1: {raw_vals[1]}")
-                        else:
-                            st.error("❌ 'Users' worksheet NOT found!")
-                    except Exception as e:
-                        st.error(f"Diagnostics Error: {e}")
-                    
-                    if 'last_error' in st.session_state:
-                        st.write(f"🛑 Last Internal Error: {st.session_state['last_error']}")
+                            st.error("⚠️ 資料庫讀取異常 (Database Unreachable)")
 
         return
 
@@ -300,11 +270,12 @@ def main():
     st.markdown(f"""
         <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px solid #eee;">
             <div style="font-weight:900; font-size:1.2rem;">IFUKUK <span style="font-weight:400; font-size:0.8rem; color:#888;">| {user}</span></div>
-            <div style="font-size:0.8rem; background:#eee; padding:4px 8px; border-radius:8px;">V104.2</div>
+            <div style="font-size:0.8rem; background:#eee; padding:4px 8px; border-radius:8px;">V104.3</div>
         </div>
     """, unsafe_allow_html=True)
 
-    df = get_data_safe(ws_items)
+    # V104.3 FIX: 只有 Items 載入時才允許 ensure_qty_cn=True
+    df = get_data_safe(ws_items, ensure_qty_cn=True)
     for c in ["Qty","Price","Qty_CN"]: df[c] = pd.to_numeric(df[c], errors='coerce').fillna(0).astype(int)
     
     nav_options = ["🛒 POS", "📊 庫存", "🗓️ 班表", "📈 戰情", "🛠️ 管理", "🚪 登出"]
@@ -402,7 +373,7 @@ def main():
 
     # --- 📈 戰情 ---
     elif nav_sel == "📈 戰情":
-        logs_df = get_data_safe(ws_logs)
+        logs_df = get_data_safe(ws_logs, ensure_qty_cn=False)
         st.subheader("📈 銷售數據")
         if not logs_df.empty:
             sales = logs_df[logs_df['Action'] == 'Sale']
