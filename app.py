@@ -20,7 +20,7 @@ st.set_page_config(
 )
 
 # ==========================================
-# 🛑 【MATRIX-V102.0 雙向調撥與庫存分流核心】
+# 🛑 【MATRIX-V103.0 欄位衝突修復與數據一致性核心】
 # ==========================================
 st.markdown("""
     <style>
@@ -60,7 +60,7 @@ st.markdown("""
         .realized-card { border-bottom: 4px solid #10b981; }
         .profit-card { border-bottom: 4px solid #f59e0b; }
 
-        /* --- 4. 庫存卡片 (V101 雙倉版) --- */
+        /* --- 4. 庫存卡片 --- */
         .inv-card-container {
             border: 1px solid #e5e7eb; border-radius: 12px; padding: 12px; margin-bottom: 12px;
             background-color: #ffffff; transition: all 0.2s;
@@ -85,7 +85,7 @@ st.markdown("""
 
         .sku-wizard { background: linear-gradient(135deg, #f0f9ff 0%, #ffffff 100%); border: 1px solid #bae6fd; padding: 20px; border-radius: 16px; margin-bottom: 20px; }
         
-        /* V102 Transfer Zone */
+        /* Transfer Zone */
         .transfer-zone { background: linear-gradient(135deg, #fff7ed 0%, #ffffff 100%); border: 1px solid #fdba74; padding: 20px; border-radius: 16px; margin-bottom: 20px; }
         .transfer-header { color: #c2410c !important; font-weight: 800; font-size: 1.1em; margin-bottom: 15px; display:flex; align-items:center; gap:8px;}
         
@@ -117,17 +117,39 @@ def get_data_safe(ws):
             if ws is None: return pd.DataFrame()
             raw_data = ws.get_all_values()
             if not raw_data or len(raw_data) < 2: return pd.DataFrame()
+            
             headers = raw_data[0]
+            # V103: Deduplicate Headers Logic
+            seen = {}
+            new_headers = []
+            for h in headers:
+                if h in seen:
+                    seen[h] += 1
+                    new_headers.append(f"{h}_{seen[h]}")
+                else:
+                    seen[h] = 0
+                    new_headers.append(h)
+            
             rows = raw_data[1:]
             
-            # V101: Auto-Fix Headers if Qty_CN is missing
-            if "Qty_CN" not in headers:
-                ws.update_cell(1, 13, "Qty_CN")
-                headers.append("Qty_CN")
+            # V103: Auto-Fix Headers if Qty_CN is missing
+            if "Qty_CN" not in new_headers:
+                ws.update_cell(1, len(new_headers)+1, "Qty_CN")
+                new_headers.append("Qty_CN")
+                # Reload data after update
                 raw_data = ws.get_all_values()
                 rows = raw_data[1:]
 
-            df = pd.DataFrame(rows, columns=headers)
+            # Safe Create DF
+            df = pd.DataFrame(rows)
+            # Ensure columns match length (padding if needed)
+            if not df.empty:
+                if len(df.columns) < len(new_headers):
+                    # Pad with empty strings
+                    for _ in range(len(new_headers) - len(df.columns)):
+                        df[len(df.columns)] = ""
+                df.columns = new_headers[:len(df.columns)]
+                
             return df
         except Exception:
             time.sleep(1)
@@ -210,7 +232,7 @@ def render_navbar(user_initial):
     """, unsafe_allow_html=True)
 
 # ----------------------------------------------------
-# 🛑 V102.0 核心邏輯
+# 🛑 V103.0 核心邏輯
 # ----------------------------------------------------
 def get_style_code(sku):
     sku_str = str(sku).strip()
@@ -292,7 +314,7 @@ def main():
         with c2:
             st.markdown("<br><br><br>", unsafe_allow_html=True)
             st.markdown("<div style='text-align:center; font-weight:900; font-size:2.5rem; margin-bottom:10px;'>IFUKUK</div>", unsafe_allow_html=True)
-            st.markdown("<div style='text-align:center; color:#666; font-size:0.9rem; margin-bottom:30px;'>MATRIX ERP V102.0</div>", unsafe_allow_html=True)
+            st.markdown("<div style='text-align:center; color:#666; font-size:0.9rem; margin-bottom:30px;'>MATRIX ERP V103.0</div>", unsafe_allow_html=True)
             with st.form("login"):
                 user_input = st.text_input("帳號 (ID)")
                 pass_input = st.text_input("密碼 (Password)", type="password")
