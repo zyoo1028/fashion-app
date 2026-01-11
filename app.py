@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import gspread
 from google.oauth2.service_account import Credentials
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 import time
 import requests
 import plotly.express as px
@@ -20,7 +20,7 @@ st.set_page_config(
 )
 
 # ==========================================
-# 🛑 【MATRIX-V57.0 商業定價引擎與時空校正核心】
+# 🛑 【MATRIX-V58.0 購物車與堆疊折扣核心】
 # ==========================================
 st.markdown("""
     <style>
@@ -48,16 +48,8 @@ st.markdown("""
         .metric-value { font-size: 2rem; font-weight: 800; margin: 8px 0; color:#111 !important; }
         .metric-label { font-size: 0.85rem; letter-spacing: 1px; color:#666 !important; font-weight: 600; }
         
-        .inv-card {
-            background: #FFFFFF; border: 1px solid #E5E7EB; border-radius: 12px;
-            padding: 12px; margin-bottom: 10px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-        }
-        .size-tag { 
-            font-size: 11px; background: #fff; color: #333; 
-            padding: 3px 6px; border-radius: 4px; border: 1px solid #ddd;
-            margin-right: 4px; display: inline-block;
-        }
+        .inv-card { background: #FFFFFF; border: 1px solid #E5E7EB; border-radius: 12px; padding: 12px; margin-bottom: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        .size-tag { font-size: 11px; background: #fff; color: #333; padding: 3px 6px; border-radius: 4px; border: 1px solid #ddd; margin-right: 4px; display: inline-block; }
         .size-tag.no-stock { background: #fee2e2; color: #991b1b; border-color: #fecaca; } 
 
         .stButton>button { border-radius: 8px; height: 3.2em; font-weight: 700; border:none; box-shadow: 0 2px 5px rgba(0,0,0,0.1); background-color: #FFFFFF; color: #000000; border: 1px solid #E5E7EB; }
@@ -72,9 +64,11 @@ st.markdown("""
         .audit-stat { font-size: 24px; font-weight: 800; color: #c2410c; }
         .audit-title { font-size: 12px; color: #9a3412; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; }
         
-        /* POS Pricing Engine */
-        .pricing-box { background: #f0fdf4; border: 1px solid #bbf7d0; padding: 15px; border-radius: 10px; margin-bottom: 10px; }
-        .final-price-tag { font-size: 1.5rem; font-weight: 900; color: #16a34a; text-align: center; display: block; }
+        /* POS Cart V58 */
+        .cart-box { background: #f8fafc; border: 1px solid #e2e8f0; padding: 15px; border-radius: 12px; margin-bottom: 15px; }
+        .cart-item { display: flex; justify-content: space-between; border-bottom: 1px dashed #cbd5e1; padding: 8px 0; font-size: 0.9rem; }
+        .cart-total { font-size: 1.2rem; font-weight: 800; color: #0f172a; text-align: right; margin-top: 10px; }
+        .final-price-display { font-size: 1.8rem; font-weight: 900; color: #16a34a; text-align: center; background: #dcfce7; padding: 10px; border-radius: 8px; margin-top: 10px; border: 1px solid #86efac; }
         
         .wizard-header { color: #0369a1 !important; font-weight: 800; font-size: 1.1em; margin-bottom: 15px; display:flex; align-items:center; gap:8px;}
         .refactor-header { color: #b45309 !important; font-weight: 800; font-size: 1.1em; margin-bottom: 15px; display:flex; align-items:center; gap:8px;}
@@ -134,13 +128,9 @@ def get_worksheet_safe(sh, title, headers):
         return ws
     except: return None
 
-# --- 工具模組 (V57: Timezone Fix) ---
+# --- 工具模組 ---
 
 def get_taiwan_time_str():
-    """
-    獲取台灣時間 (UTC+8) 的字串格式。
-    解決伺服器位於 UTC 導致的時間誤差。
-    """
     utc_now = datetime.utcnow()
     tw_time = utc_now + timedelta(hours=8)
     return tw_time.strftime("%Y-%m-%d %H:%M:%S")
@@ -179,13 +169,12 @@ def upload_image_to_imgbb(image_file):
         return None
     except: return None
 
-# V57: Log uses Taiwan Time
 def log_event(ws_logs, user, action, detail):
     try: ws_logs.append_row([get_taiwan_time_str(), user, action, detail])
     except: pass
 
 def render_navbar(user_initial):
-    current_date = datetime.utcnow() + timedelta(hours=8) # Display Taiwan Date
+    current_date = datetime.utcnow() + timedelta(hours=8)
     date_str = current_date.strftime("%Y/%m/%d")
     rate = st.session_state.get('exchange_rate', 4.5)
     st.markdown(f"""
@@ -201,18 +190,16 @@ def render_navbar(user_initial):
     """, unsafe_allow_html=True)
 
 # ----------------------------------------------------
-# 🛑 V57.0 核心邏輯
+# 🛑 V58.0 核心邏輯
 # ----------------------------------------------------
 def get_style_code(sku):
     sku_str = str(sku).strip()
-    if '-' in sku_str:
-        return sku_str.rsplit('-', 1)[0]
+    if '-' in sku_str: return sku_str.rsplit('-', 1)[0]
     return sku_str
 
 SIZE_ORDER = ["F", "XXS", "XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL"]
 def get_size_sort_key(size_str):
-    if size_str in SIZE_ORDER:
-        return SIZE_ORDER.index(size_str)
+    if size_str in SIZE_ORDER: return SIZE_ORDER.index(size_str)
     return 99 
 
 def generate_smart_style_code(category, existing_skus):
@@ -221,7 +208,7 @@ def generate_smart_style_code(category, existing_skus):
         "鞋類(Shoe)": "SHOE", "包款(Bag)": "BAG", "帽子(Hat)": "HAT", "飾品(Acc)": "ACC", "其他(Misc)": "MSC"
     }
     prefix = prefix_map.get(category, "GEN")
-    date_code = (datetime.utcnow() + timedelta(hours=8)).strftime("%y%m") # Taiwan Time
+    date_code = (datetime.utcnow() + timedelta(hours=8)).strftime("%y%m")
     prefix = f"{prefix}-{date_code}"
     
     current_prefix = f"{prefix}-"
@@ -254,6 +241,10 @@ def main():
         live_rate, is_success = get_live_rate()
         st.session_state['exchange_rate'] = live_rate
         st.session_state['rate_source'] = "Live API" if is_success else "Manual/Default"
+        
+    # V58: 初始化購物車
+    if 'pos_cart' not in st.session_state:
+        st.session_state['pos_cart'] = []
 
     sh = init_db()
     if not sh: st.error("Database Connection Failed"); st.stop()
@@ -270,7 +261,7 @@ def main():
         with c2:
             st.markdown("<br><br><br>", unsafe_allow_html=True)
             st.markdown("<div style='text-align:center; font-weight:900; font-size:2.5rem; margin-bottom:10px;'>IFUKUK</div>", unsafe_allow_html=True)
-            st.markdown("<div style='text-align:center; color:#666; font-size:0.9rem; margin-bottom:30px;'>MATRIX ERP V57.0</div>", unsafe_allow_html=True)
+            st.markdown("<div style='text-align:center; color:#666; font-size:0.9rem; margin-bottom:30px;'>MATRIX ERP V58.0</div>", unsafe_allow_html=True)
             with st.form("login"):
                 user_input = st.text_input("帳號 (ID)")
                 pass_input = st.text_input("密碼 (Password)", type="password")
@@ -369,7 +360,7 @@ def main():
     st.markdown("---")
 
     # --- Tabs ---
-    tabs = st.tabs(["📊 視覺庫存", "⚡ POS (精準版)", "🎁 內部領用/稽核", "👔 矩陣管理", "📝 日誌", "👥 Admin"])
+    tabs = st.tabs(["📊 視覺庫存", "🛒 POS (購物車)", "🎁 內部領用/稽核", "👔 矩陣管理", "📝 日誌", "👥 Admin"])
 
     # Tab 1: 視覺總覽 (V50)
     with tabs[0]:
@@ -469,116 +460,150 @@ def main():
             show_cols = ["款號(Style)", "商品名稱", "分類", "庫存分佈", "總庫存", "售價(NTD)", "平均成本(NTD)", "參考原幣(CNY)", "最後更新"]
             st.dataframe(agg_df[show_cols], use_container_width=True)
 
-    # Tab 2: POS (V57.0 商業定價引擎)
+    # Tab 2: POS (V58.0 購物車與堆疊折扣版)
     with tabs[1]:
         c1, c2 = st.columns([1, 1])
+        
+        # --- 左側：商品選擇 ---
         with c1:
-            st.subheader("1. 選擇商品 (精準 SKU)")
+            st.subheader("1. 商品選擇 (Product)")
             if not df.empty:
                 sku_opts = df.apply(lambda x: f"{x['SKU']} | {x['Name']} ({x['Size']}) | 現貨:{x['Qty']}", axis=1).tolist()
             else: sku_opts = []
-            sel_sku = st.selectbox("搜尋商品", ["..."] + sku_opts, key="pos_sku_sel")
+            
+            sel_sku = st.selectbox("搜尋商品 (SKU)", ["..."] + sku_opts, key="pos_cart_sel")
+            
             target = None
             if sel_sku != "...":
                 target_sku = sel_sku.split(" | ")[0]
                 target = df[df['SKU'] == target_sku].iloc[0]
                 img = render_image_url(target['Image_URL'])
+                
                 st.markdown(f"""
                 <div style="border:1px solid #e5e7eb; border-radius:12px; padding:15px; display:flex; align-items:center; background:#f9fafb;">
-                    <img src="{img}" style="width:100px; height:100px; object-fit:cover; border-radius:8px; margin-right:20px;">
+                    <img src="{img}" style="width:80px; height:80px; object-fit:cover; border-radius:8px; margin-right:15px;">
                     <div>
-                        <div style="font-weight:900; font-size:20px;">{target['Name']}</div>
-                        <div style="color:#666; font-family:monospace; margin-bottom:5px;">{target['SKU']}</div>
-                        <div style="font-size:14px;">尺寸: <b style="background:#e5e7eb; padding:2px 6px; border-radius:4px;">{target['Size']}</b></div>
-                        <div style="margin-top:8px; font-weight:bold; color:#059669;">售價: NT${target['Price']}</div>
-                        <div style="color:#d32f2f; font-weight:bold;">現貨: {target['Qty']}</div>
+                        <div style="font-weight:bold; font-size:16px;">{target['Name']}</div>
+                        <div style="color:#666; font-size:12px;">{target['SKU']} ({target['Size']})</div>
+                        <div style="margin-top:5px; font-weight:bold; color:#059669;">${target['Price']}</div>
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
-
-        with c2:
-            st.subheader("2. 交易結算")
-            if target is not None:
-                qty = st.number_input("數量", 1)
-                t1, t2 = st.tabs(["📤 銷售 (Sell)", "📥 進貨 (Restock)"])
                 
-                # --- V57.0 商業定價引擎 (POS) ---
-                with t1:
-                    st.markdown("###### 💰 智慧改價中心 (Pricing Engine)")
-                    
-                    base_price = int(target['Price'])
-                    discount_mode = st.radio("折扣模式", ["原價", "員工價 (7折)", "員工價 (8折)", "員工價 (9折)", "自訂折扣 (%)", "直接改價 (組合/贈品)"], horizontal=False)
-                    
-                    final_unit_price = base_price
-                    discount_note = ""
-                    
-                    if "7折" in discount_mode:
-                        final_unit_price = int(base_price * 0.7)
-                        discount_note = "(7折)"
-                    elif "8折" in discount_mode:
-                        final_unit_price = int(base_price * 0.8)
-                        discount_note = "(8折)"
-                    elif "9折" in discount_mode:
-                        final_unit_price = int(base_price * 0.9)
-                        discount_note = "(9折)"
-                    elif "自訂折扣" in discount_mode:
-                        cust_off = st.number_input("輸入折數 (例如 85 代表 85折)", min_value=1, max_value=100, value=95)
-                        final_unit_price = int(base_price * (cust_off / 100))
-                        discount_note = f"({cust_off}折)"
-                    elif "直接改價" in discount_mode:
-                        final_unit_price = st.number_input("輸入最終單價 (NTD)", value=base_price)
-                        discount_note = "(改價)"
-                    
-                    total_sale_amt = final_unit_price * qty
-                    
-                    # 顯示計算結果
+                c_add1, c_add2 = st.columns([1, 2])
+                add_qty = c_add1.number_input("數量", min_value=1, value=1, key="add_q")
+                
+                if c_add2.button("➕ 加入購物車", type="primary", use_container_width=True):
+                    # Add to session state cart
+                    cart_item = {
+                        "sku": target['SKU'],
+                        "name": target['Name'],
+                        "size": target['Size'],
+                        "price": int(target['Price']),
+                        "qty": add_qty,
+                        "subtotal": int(target['Price']) * add_qty
+                    }
+                    st.session_state['pos_cart'].append(cart_item)
+                    st.success(f"已加入 {target['Name']} x{add_qty}")
+                    time.sleep(0.5); st.rerun()
+
+        # --- 右側：購物車結算 ---
+        with c2:
+            st.subheader("2. 購物車結算 (Cart & Checkout)")
+            
+            if len(st.session_state['pos_cart']) > 0:
+                # 顯示購物車內容
+                cart_total_origin = 0
+                st.markdown("<div class='cart-box'>", unsafe_allow_html=True)
+                
+                for i, item in enumerate(st.session_state['pos_cart']):
+                    cart_total_origin += item['subtotal']
                     st.markdown(f"""
-                    <div class="pricing-box">
-                        <div style="display:flex; justify-content:space-between; align-items:center;">
-                            <span style="color:#666;">原價單價: ${base_price}</span>
-                            <span style="font-weight:bold;">折扣後單價: ${final_unit_price}</span>
-                        </div>
-                        <hr style="margin:8px 0;">
-                        <span class="final-price-tag">總金額: ${total_sale_amt}</span>
+                    <div class="cart-item">
+                        <span><b>{item['name']}</b> ({item['size']}) x {item['qty']}</span>
+                        <span>${item['subtotal']}</span>
                     </div>
                     """, unsafe_allow_html=True)
+                
+                if st.button("🗑️ 清空購物車", key="clear_cart"):
+                    st.session_state['pos_cart'] = []
+                    st.rerun()
+                
+                st.markdown(f"<div class='cart-total'>原價總計: ${cart_total_origin}</div>", unsafe_allow_html=True)
+                st.markdown("</div>", unsafe_allow_html=True)
+                
+                # --- V58 堆疊折扣引擎 ---
+                st.markdown("###### 💰 堆疊折扣設定 (Pricing Stack)")
+                
+                # Layer 1: 組合改價 (Bundle Override)
+                use_bundle = st.checkbox("啟用組合改價 (例如: 套裝價 $2880)")
+                if use_bundle:
+                    bundle_price = st.number_input("輸入組合總價", value=cart_total_origin)
+                    current_base = bundle_price
+                else:
+                    current_base = cart_total_origin
+                
+                # Layer 2: 員工/身分折扣 (Identity Discount)
+                disc_mode = st.radio("額外折扣", ["無", "員工7折", "員工8折", "員工9折", "自訂折數"], horizontal=True)
+                
+                final_total = current_base
+                disc_note = ""
+                
+                if disc_mode == "員工7折":
+                    final_total = int(current_base * 0.7)
+                    disc_note = "(7折)"
+                elif disc_mode == "員工8折":
+                    final_total = int(current_base * 0.8)
+                    disc_note = "(8折)"
+                elif disc_mode == "員工9折":
+                    final_total = int(current_base * 0.9)
+                    disc_note = "(9折)"
+                elif disc_mode == "自訂折數":
+                    off_val = st.number_input("輸入折數 (例: 85)", min_value=1, max_value=100, value=95)
+                    final_total = int(current_base * (off_val / 100))
+                    disc_note = f"({off_val}折)"
+                
+                # 最終金額顯示
+                st.markdown(f"<div class='final-price-display'>實收金額: ${final_total}</div>", unsafe_allow_html=True)
+                
+                checkout_note = st.text_input("結帳備註 (客戶/原因)")
+                
+                if st.button("✅ 確認結帳 (Checkout)", type="primary", use_container_width=True):
+                    # 執行扣庫存與記錄
+                    # 計算分攤係數 (若有改價)
+                    ratio = final_total / cart_total_origin if cart_total_origin > 0 else 1
                     
-                    note_out = st.text_input("銷售備註 (客戶/原因)")
+                    sale_log_details = []
                     
-                    if st.button("確認銷售 (結帳)", type="primary", use_container_width=True):
-                        if int(target['Qty']) >= qty:
-                            r = ws_items.find(target['SKU']).row
-                            ws_items.update_cell(r, 5, int(target['Qty']) - qty)
-                            ws_items.update_cell(r, 8, get_taiwan_time_str()) # V57 Time
-                            
-                            # Log 包含詳細金額資訊
-                            log_detail = f"{target['SKU']} -{qty} | 售:${final_unit_price} {discount_note} | 總:${total_sale_amt} | {note_out}"
-                            log_event(ws_logs, st.session_state['user_name'], "Sale", log_detail)
-                            st.success(f"✅ 銷售成功！實收 ${total_sale_amt}"); time.sleep(2); st.rerun()
-                        else: st.error("庫存不足！")
-
-                with t2:
-                    st.markdown("###### 💰 進貨成本")
-                    cost_currency = st.radio("幣別", ["NTD", "CNY"], horizontal=True)
-                    input_unit_cost = st.number_input("單價", value=0.0)
-                    final_cost_twd = int(input_unit_cost * st.session_state['exchange_rate']) if cost_currency == "CNY" else int(input_unit_cost)
-                    if cost_currency == "CNY": st.info(f"換算: ¥{input_unit_cost} = NT${final_cost_twd}")
-                    note_in = st.text_input("進貨備註")
-                    
-                    if st.button("確認進貨", type="secondary", use_container_width=True):
-                        cur_qty = int(target['Qty']); cur_cost = int(target['Cost'])
-                        tot_qty = cur_qty + qty
-                        new_avg = int(((cur_qty * cur_cost) + (qty * (final_cost_twd if final_cost_twd>0 else cur_cost))) / tot_qty) if tot_qty > 0 else final_cost_twd
+                    for item in st.session_state['pos_cart']:
+                        # 扣庫存
+                        target_sku = item['sku']
+                        qty_sell = item['qty']
                         
-                        r = ws_items.find(target['SKU']).row
-                        ws_items.update_cell(r, 5, tot_qty)
-                        ws_items.update_cell(r, 7, new_avg)
-                        ws_items.update_cell(r, 8, get_taiwan_time_str()) # V57 Time
-                        if cost_currency == "CNY":
-                            ws_items.update_cell(r, 11, "CNY"); ws_items.update_cell(r, 12, int(input_unit_cost))
-                        
-                        log_event(ws_logs, st.session_state['user_name'], "Restock", f"{target['SKU']} +{qty}")
-                        st.success("成功！數據已同步。"); time.sleep(1); st.rerun()
+                        r_cell = ws_items.find(target_sku)
+                        if r_cell:
+                            r = r_cell.row
+                            curr_q = int(ws_items.cell(r, 5).value)
+                            if curr_q >= qty_sell:
+                                ws_items.update_cell(r, 5, curr_q - qty_sell)
+                                ws_items.update_cell(r, 8, get_taiwan_time_str())
+                                
+                                # 紀錄分攤後的金額
+                                allocated_price = int(item['subtotal'] * ratio)
+                                sale_log_details.append(f"{target_sku} x{qty_sell} (${allocated_price})")
+                            else:
+                                st.error(f"{target_sku} 庫存不足！")
+                                st.stop()
+                    
+                    # 寫入 Log (合併一筆)
+                    full_log = f"Cart Sale | Total:${final_total} | Items: {', '.join(sale_log_details)} | {checkout_note} {disc_note}"
+                    log_event(ws_logs, st.session_state['user_name'], "Sale", full_log)
+                    
+                    st.session_state['pos_cart'] = [] # 清空
+                    st.success(f"結帳完成！實收 ${final_total}")
+                    time.sleep(2); st.rerun()
+            else:
+                st.info("購物車是空的，請先從左側加入商品。")
 
     # Tab 3: Internal (V56.0+V57.0)
     with tabs[2]:
