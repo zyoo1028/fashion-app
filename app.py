@@ -14,14 +14,14 @@ import calendar
 
 # --- 1. 系統全域設定 ---
 st.set_page_config(
-    page_title="IFUKUK V104.4 Fusion", 
+    page_title="IFUKUK V105.0 REBORN", 
     layout="wide", 
     page_icon="🌏",
     initial_sidebar_state="collapsed"
 )
 
 # ==========================================
-# 🛑 【OMEGA V104.4 視覺核心】
+# 🛑 【視覺核心 (V104 Skin)】
 # ==========================================
 st.markdown("""
     <style>
@@ -38,18 +38,21 @@ st.markdown("""
         .prod-meta { font-size: 0.8rem; color: #666; }
         .prod-price { font-weight: 900; color: #059669; font-size: 1rem; margin-top: auto; }
         
-        /* 按鈕與輸入優化 */
-        .stButton>button { border-radius: 12px; height: 3.5rem; font-weight: 700; border: none; box-shadow: 0 4px 6px rgba(0,0,0,0.1); width: 100%; }
+        /* 購物車與輸入優化 */
+        .cart-box { background: #fff; border: 1px solid #e2e8f0; padding: 10px; border-radius: 12px; margin-bottom: 10px; }
+        .cart-item { display: flex; justify-content: space-between; border-bottom: 1px dashed #eee; padding: 8px 0; font-size: 0.9rem; }
+        .final-price { font-size: 1.5rem; font-weight: 900; color: #16a34a; text-align: center; background: #dcfce7; padding: 10px; border-radius: 8px; margin-top: 10px; }
+        
+        /* 按鈕與輸入 */
+        .stButton>button { border-radius: 12px; height: 3.2rem; font-weight: 700; border: none; box-shadow: 0 2px 5px rgba(0,0,0,0.1); width: 100%; }
         div[data-baseweb="select"] > div { border-radius: 12px !important; min-height: 3rem; }
         
-        /* 戰情儀表板 (V103 復刻樣式) */
-        .metric-card { background: linear-gradient(145deg, #ffffff, #f5f7fa); border-radius: 16px; padding: 15px; border: 1px solid #e1e4e8; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.02); margin-bottom: 10px; height: 100%; }
-        .metric-value { font-size: 1.5rem; font-weight: 800; margin: 5px 0; color:#111 !important; }
-        .metric-label { font-size: 0.8rem; letter-spacing: 1px; color:#666 !important; font-weight: 600; text-transform: uppercase;}
-        .profit-card { border-bottom: 4px solid #f59e0b; }
-        .realized-card { border-bottom: 4px solid #10b981; }
-
-        /* 排班表樣式 */
+        /* 戰情儀表板 (V103 復刻) */
+        .metric-card { background: #fff; border-radius: 12px; padding: 10px; border: 1px solid #eee; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.02); height: 100%; }
+        .metric-val { font-size: 1.4rem; font-weight: 800; color:#111; margin: 5px 0; }
+        .metric-lbl { font-size: 0.7rem; color:#666; font-weight: 600; text-transform: uppercase;}
+        
+        /* 排班表 */
         .shift-badge { font-size: 0.75rem; padding: 2px 6px; border-radius: 4px; margin-top: 4px; display: block; text-align: center; color: white; font-weight: bold; }
         .note-indicator { position: absolute; top: 5px; right: 5px; width: 8px; height: 8px; background-color: #EF4444; border-radius: 50%; }
 
@@ -63,7 +66,7 @@ IMGBB_API_KEY = "c2f93d2a1a62bd3a6da15f477d2bb88a"
 SHEET_HEADERS = ["SKU", "Name", "Category", "Size", "Qty", "Price", "Cost", "Last_Updated", "Image_URL", "Safety_Stock", "Orig_Currency", "Orig_Cost", "Qty_CN"]
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
 
-# --- 核心邏輯 (V103 + V104.3 Fix) ---
+# --- 核心邏輯 (V103 Logic + V104.3 Fix) ---
 @st.cache_resource(ttl=600)
 def get_connection():
     if "gcp_service_account" not in st.secrets:
@@ -84,6 +87,7 @@ def get_data_safe(ws, ensure_qty_cn=False):
             if h in seen: seen[h] += 1; new_headers.append(f"{h}_{seen[h]}")
             else: seen[h] = 0; new_headers.append(h)
         rows = raw_data[1:]
+        # V104.3 Fix: 只有 Items 表才允許自動修復欄位
         if ensure_qty_cn and "Qty_CN" not in new_headers:
             try:
                 ws.update_cell(1, len(new_headers)+1, "Qty_CN")
@@ -113,7 +117,7 @@ def get_worksheet_safe(sh, title, headers):
         except: return None
     except: return None
 
-# --- 工具模組 (V103 + V104) ---
+# --- 工具模組 (V103 功能回歸) ---
 def get_taiwan_time_str(): return (datetime.utcnow() + timedelta(hours=8)).strftime("%Y-%m-%d %H:%M:%S")
 def render_image_url(url_input):
     if not url_input or (isinstance(url_input, float) and math.isnan(url_input)): return "https://i.ibb.co/W31w56W/placeholder.png"
@@ -133,7 +137,6 @@ def upload_image_to_imgbb(image_file):
     except: pass; return None
 def get_style_code(sku): return str(sku).strip().rsplit('-', 1)[0] if '-' in str(sku) else str(sku).strip()
 SIZE_ORDER = ["F", "XXS", "XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL"]
-def get_size_sort_key(size_str): return SIZE_ORDER.index(size_str) if size_str in SIZE_ORDER else 99
 def generate_smart_style_code(category, existing_skus):
     prefix_map = {"上衣(Top)": "TOP", "褲子(Btm)": "BTM", "外套(Out)": "OUT", "套裝(Suit)": "SET", "鞋類(Shoe)": "SHOE", "包款(Bag)": "BAG", "帽子(Hat)": "HAT", "飾品(Acc)": "ACC", "其他(Misc)": "MSC"}
     prefix = f"{prefix_map.get(category, 'GEN')}-{(datetime.utcnow() + timedelta(hours=8)).strftime('%y%m')}"
@@ -152,7 +155,7 @@ def calculate_realized_revenue(logs_df):
         except: pass
     return total
 
-# --- 班表渲染 (V104) ---
+# --- 班表渲染 (V104 Feature) ---
 def get_staff_color(name):
     colors = ["#3B82F6", "#10B981", "#F59E0B", "#8B5CF6", "#EC4899", "#6366F1"]
     return colors[sum(ord(c) for c in str(name)) % len(colors)]
@@ -161,7 +164,9 @@ def render_shift_calendar(sh, users_list):
     ws_shifts = get_worksheet_safe(sh, "Shifts", ["Date", "Staff", "Shift_Type", "Note", "Updated_By"])
     shifts_df = get_data_safe(ws_shifts, False)
     
-    st.subheader("🗓️ 排班戰情室")
+    col_h1, col_h2 = st.columns([2, 1])
+    with col_h1: st.subheader("🗓️ 排班戰情室")
+    
     now = datetime.utcnow() + timedelta(hours=8)
     c_y, c_m = st.columns(2)
     sel_year = c_y.number_input("年份", 2024, 2030, now.year)
@@ -197,7 +202,6 @@ def render_shift_calendar(sh, users_list):
                 c1, c2 = st.columns([3, 1])
                 c1.info(f"{r['Staff']} | {r['Note']}")
                 if c2.button("移除", key=f"rm_{target_date}_{r['Staff']}"):
-                     # 簡易刪除
                      all_v = ws_shifts.get_all_values()
                      for idx, v in enumerate(all_v):
                          if len(v)>1 and v[0]==target_date and v[1]==r['Staff']: ws_shifts.delete_rows(idx+1); break
@@ -212,15 +216,16 @@ def main():
     sh = init_db()
     if not sh: st.error("❌ 連線失敗"); st.stop()
     
+    # 讀取資料表
     ws_items = get_worksheet_safe(sh, "Items", SHEET_HEADERS)
     ws_logs = get_worksheet_safe(sh, "Logs", ["Timestamp", "User", "Action", "Details"])
     ws_users = get_worksheet_safe(sh, "Users", ["Name", "Password", "Role", "Status", "Created_At"])
 
-    # 登入頁面
+    # 登入 (保持 V104.3 的穩定性)
     if not st.session_state['logged_in']:
         c1, c2, c3 = st.columns([1, 2, 1])
         with c2:
-            st.markdown("<br><br><h1 style='text-align:center'>IFUKUK</h1><p style='text-align:center'>OMEGA V104.4 (Grand Fusion)</p>", unsafe_allow_html=True)
+            st.markdown("<br><br><h1 style='text-align:center'>IFUKUK</h1><p style='text-align:center'>OMEGA V105.0 REBORN</p>", unsafe_allow_html=True)
             with st.form("login"):
                 u = st.text_input("ID"); p = st.text_input("PASSWORD", type="password")
                 if st.form_submit_button("ENTER SYSTEM", type="primary"):
@@ -235,16 +240,16 @@ def main():
                         st.error("❌ 登入失敗")
         return
 
-    # 導航
-    st.markdown(f"<div style='display:flex;justify-content:space-between;padding:10px;border-bottom:1px solid #eee;'><b>IFUKUK | {st.session_state['user_name']}</b><span>V104.4</span></div>", unsafe_allow_html=True)
+    # 頂部導航
+    st.markdown(f"<div style='display:flex;justify-content:space-between;padding:10px;border-bottom:1px solid #eee;'><b>IFUKUK | {st.session_state['user_name']}</b><span>V105.0</span></div>", unsafe_allow_html=True)
     
     df = get_data_safe(ws_items, True)
     for c in ["Qty","Price","Qty_CN","Cost","Orig_Cost","Safety_Stock"]: df[c] = pd.to_numeric(df[c], errors='coerce').fillna(0).astype(int)
     
-    # 導航列 (V104 樣式)
-    nav = st.radio("", ["🛒 POS", "📊 庫存", "🗓️ 班表", "📈 戰情", "🛠️ 管理", "🚪 登出"], horizontal=True, label_visibility="collapsed")
+    # 手機導航 (加入領用、管理)
+    nav = st.radio("", ["🛒 POS", "📊 庫存", "🗓️ 班表", "📈 戰情", "🎁 領用", "👔 管理", "🚪 登出"], horizontal=True, label_visibility="collapsed")
     
-    # --- 1. POS (V104 畫廊) ---
+    # --- 1. POS (V104 畫廊 + V103 完整結帳邏輯) ---
     if nav == "🛒 POS":
         c_l, c_r = st.columns([3, 2])
         with c_l:
@@ -266,81 +271,136 @@ def main():
                             if st.button("➕", key=f"add_{item['SKU']}", use_container_width=True):
                                 st.session_state['pos_cart'].append({"sku":item['SKU'],"name":item['Name'],"size":item['Size'],"price":item['Price'],"qty":1,"subtotal":item['Price']})
                                 st.toast(f"已加入 {item['Name']}")
+        
         with c_r:
-            st.markdown("#### 🧾 購物車")
+            st.markdown("#### 🧾 購物車 (完整功能版)")
             if st.session_state['pos_cart']:
-                total = sum(i['subtotal'] for i in st.session_state['pos_cart'])
-                for i in st.session_state['pos_cart']: st.markdown(f"<div style='border-bottom:1px dashed #ddd;padding:5px;display:flex;justify-content:space-between'><span>{i['name']} ({i['size']})</span><b>${i['subtotal']}</b></div>", unsafe_allow_html=True)
-                st.markdown(f"<h2 style='text-align:right'>${total}</h2>", unsafe_allow_html=True)
-                if st.button("🗑️ 清空"): st.session_state['pos_cart']=[]; st.rerun()
-                if st.button("✅ 結帳", type="primary"):
-                    sales = []
-                    for i in st.session_state['pos_cart']:
-                        cell = ws_items.find(i['sku'])
-                        curr = int(ws_items.cell(cell.row, 5).value)
-                        if curr >= i['qty']: ws_items.update_cell(cell.row, 5, curr-i['qty']); sales.append(f"{i['sku']} x1")
-                    log_event(ws_logs, st.session_state['user_name'], "Sale", f"Total:${total} | {','.join(sales)}")
-                    st.session_state['pos_cart']=[]; st.balloons(); st.success("完成"); time.sleep(1); st.rerun()
+                base_total = sum(i['subtotal'] for i in st.session_state['pos_cart'])
+                for i in st.session_state['pos_cart']: st.markdown(f"<div class='cart-item'><span>{i['name']} ({i['size']})</span><b>${i['subtotal']}</b></div>", unsafe_allow_html=True)
+                st.markdown(f"<div style='text-align:right;font-size:1.2rem;font-weight:bold;margin:10px 0'>原價: ${base_total}</div>", unsafe_allow_html=True)
+                
+                if st.button("🗑️ 清空購物車"): st.session_state['pos_cart']=[]; st.rerun()
+                
+                # V103 完整結帳邏輯回歸
+                with st.form("checkout_v105"):
+                    c1, c2 = st.columns(2)
+                    sale_ch = c1.selectbox("通路", ["門市", "官網", "直播", "其他"])
+                    sale_who = c2.selectbox("銷售員", [st.session_state['user_name']] + list(ws_users.col_values(1)[1:]))
+                    
+                    disc_mode = st.radio("折扣", ["無", "員工7折", "員工8折", "自訂折數"], horizontal=True)
+                    cust_off = st.number_input("自訂折數(%)", 1, 100, 95) if disc_mode=="自訂折數" else 0
+                    
+                    # 計算
+                    final = base_total
+                    note_d = ""
+                    if disc_mode == "員工7折": final = int(base_total*0.7); note_d="(7折)"
+                    elif disc_mode == "員工8折": final = int(base_total*0.8); note_d="(8折)"
+                    elif disc_mode == "自訂折數": final = int(base_total*(cust_off/100)); note_d=f"({cust_off}折)"
+                    
+                    # 組合價覆寫
+                    use_bundle = st.checkbox("啟用組合總價覆寫")
+                    if use_bundle: final = st.number_input("最終總價", value=final)
+                    
+                    st.markdown(f"<div class='final-price'>實收: ${final}</div>", unsafe_allow_html=True)
+                    checkout_note = st.text_input("備註")
+                    pay_method = st.selectbox("付款方式", ["現金", "刷卡", "轉帳"])
+                    
+                    if st.form_submit_button("✅ 確認結帳", type="primary"):
+                        sales = []
+                        for i in st.session_state['pos_cart']:
+                            cell = ws_items.find(i['sku'])
+                            curr = int(ws_items.cell(cell.row, 5).value)
+                            if curr >= i['qty']: ws_items.update_cell(cell.row, 5, curr-i['qty']); sales.append(f"{i['sku']} x1")
+                            else: st.error(f"{i['sku']} 庫存不足"); st.stop()
+                        
+                        log_content = f"Sale | Total:${final} | Items:{','.join(sales)} | {checkout_note} {note_d} | {pay_method} | Ch:{sale_ch} | By:{sale_who}"
+                        log_event(ws_logs, st.session_state['user_name'], "Sale", log_content)
+                        st.session_state['pos_cart']=[]; st.balloons(); st.success("結帳完成"); time.sleep(1); st.rerun()
 
-    # --- 2. 庫存 (V104 卡片 + V103 表格) ---
+    # --- 2. 庫存 (V104 Metric + V103 Table) ---
     elif nav == "📊 庫存":
         st.subheader("📦 庫存總覽")
         m1, m2, m3 = st.columns(3)
-        m1.metric("台灣總庫存", df['Qty'].sum())
-        m2.metric("中國總庫存", df['Qty_CN'].sum())
-        m3.metric("庫存總成本", f"${(df['Qty']*df['Cost']).sum()+(df['Qty_CN']*df['Cost']).sum():,}")
-        
-        with st.expander("📄 詳細庫存表 (V103 經典模式)", expanded=True):
-            st.dataframe(df, use_container_width=True)
+        m1.markdown(f"<div class='metric-card'><div class='metric-val'>{df['Qty'].sum()}</div><div class='metric-lbl'>台灣庫存</div></div>", unsafe_allow_html=True)
+        m2.markdown(f"<div class='metric-card'><div class='metric-val'>{df['Qty_CN'].sum()}</div><div class='metric-lbl'>中國庫存</div></div>", unsafe_allow_html=True)
+        m3.markdown(f"<div class='metric-card'><div class='metric-val'>${(df['Qty']*df['Cost']).sum():,}</div><div class='metric-lbl'>庫存成本</div></div>", unsafe_allow_html=True)
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.dataframe(df, use_container_width=True)
 
-    # --- 3. 班表 (V104) ---
+    # --- 3. 班表 (V104 Feature) ---
     elif nav == "🗓️ 班表":
         render_shift_calendar(sh, ws_users.col_values(1)[1:])
 
-    # --- 4. 戰情 (V103 完整復刻) ---
+    # --- 4. 戰情 (V103 Charts Restored) ---
     elif nav == "📈 戰情":
-        st.subheader("📈 營運戰情室 (V103 Full Dashboard)")
-        # 數據計算
+        st.subheader("📈 營運戰情室")
         total_rev = (df['Qty'] * df['Price']).sum()
         total_cost = ((df['Qty'] + df['Qty_CN']) * df['Cost']).sum()
         profit = total_rev - (df['Qty'] * df['Cost']).sum()
         realized = calculate_realized_revenue(get_data_safe(ws_logs, False))
         
-        m1, m2, m3, m4, m5 = st.columns(5)
-        m1.markdown(f"<div class='metric-card'><div class='metric-label'>預估營收</div><div class='metric-value'>${total_rev:,}</div></div>", unsafe_allow_html=True)
-        m2.markdown(f"<div class='metric-card'><div class='metric-label'>總資產成本</div><div class='metric-value'>${total_cost:,}</div></div>", unsafe_allow_html=True)
-        m3.markdown(f"<div class='metric-card profit-card'><div class='metric-label'>潛在毛利</div><div class='metric-value'>${profit:,}</div></div>", unsafe_allow_html=True)
-        m4.markdown(f"<div class='metric-card realized-card'><div class='metric-label'>實際營收 (已售)</div><div class='metric-value'>${realized:,}</div></div>", unsafe_allow_html=True)
-        m5.markdown(f"<div class='metric-card'><div class='metric-label'>庫存總量</div><div class='metric-value'>{df['Qty'].sum()+df['Qty_CN'].sum():,}</div></div>", unsafe_allow_html=True)
+        m1, m2, m3, m4 = st.columns(4)
+        m1.markdown(f"<div class='metric-card'><div class='metric-lbl'>預估營收</div><div class='metric-val'>${total_rev:,}</div></div>", unsafe_allow_html=True)
+        m2.markdown(f"<div class='metric-card'><div class='metric-lbl'>總資產成本</div><div class='metric-val'>${total_cost:,}</div></div>", unsafe_allow_html=True)
+        m3.markdown(f"<div class='metric-card' style='border-bottom:4px solid #f59e0b'><div class='metric-lbl'>潛在毛利</div><div class='metric-val'>${profit:,}</div></div>", unsafe_allow_html=True)
+        m4.markdown(f"<div class='metric-card' style='border-bottom:4px solid #10b981'><div class='metric-lbl'>實際營收</div><div class='metric-val'>${realized:,}</div></div>", unsafe_allow_html=True)
         
+        st.markdown("---")
         c1, c2 = st.columns(2)
         with c1:
-            st.caption("庫存分類佔比")
-            fig = px.pie(df, names='Category', values='Qty', hole=0.5)
+            st.markdown("##### 📦 庫存分類佔比")
+            fig = px.pie(df, names='Category', values='Qty', hole=0.4)
             st.plotly_chart(fig, use_container_width=True)
         with c2:
-            st.caption("Top 10 重點商品")
+            st.markdown("##### 🔥 熱銷 Top 10 (庫存量)")
             top = df.groupby('Name')['Qty'].sum().sort_values(ascending=False).head(10).reset_index()
             fig2 = px.bar(top, x='Qty', y='Name', orientation='h')
             st.plotly_chart(fig2, use_container_width=True)
-            
-    # --- 5. 管理 (V103 矩陣管理 + 匯率設定) ---
-    elif nav == "🛠️ 管理":
-        st.subheader("🛠️ 後台管理中心")
-        t1, t2, t3, t4 = st.tabs(["➕ 矩陣新增 (Matrix)", "⚡ 雙向調撥", "⚙️ 匯率/重鑄", "🗑️ 刪除"])
+
+    # --- 5. 內部領用 (V103 FEATURE RESTORED) ---
+    elif nav == "🎁 領用":
+        st.subheader("🎁 內部領用/稽核中心")
+        t1, t2 = st.tabs(["➕ 新增領用", "🕵️ 領用紀錄/回溯"])
         
-        # Tab 1: 矩陣新增 (V103 Logic)
         with t1:
-            st.info("💡 這裡是 V103 的矩陣新增功能，已完整恢復。")
+            sku_opt = [f"{r['SKU']} | {r['Name']}" for _, r in df.iterrows()]
+            sel_sku = st.selectbox("選擇商品", ["..."]+sku_opt)
+            if sel_sku != "...":
+                r_sku = sel_sku.split(" | ")[0]
+                row = df[df['SKU']==r_sku].iloc[0]
+                st.info(f"當前庫存: {row['Qty']}")
+                with st.form("int_use"):
+                    iq = st.number_input("數量", 1, max_value=int(row['Qty']) if int(row['Qty'])>0 else 1)
+                    iwho = st.selectbox("領用人", [st.session_state['user_name']]+list(ws_users.col_values(1)[1:]))
+                    irsn = st.selectbox("原因", ["公務", "福利", "樣品", "報廢"])
+                    inote = st.text_input("備註")
+                    if st.form_submit_button("確認扣除"):
+                        c_row = ws_items.find(r_sku).row
+                        ws_items.update_cell(c_row, 5, int(row['Qty'])-iq)
+                        log_event(ws_logs, st.session_state['user_name'], "Internal_Use", f"{r_sku} -{iq} | {iwho} | {irsn} | {inote}")
+                        st.success("已領用"); st.rerun()
+        
+        with t2:
+            logs = get_data_safe(ws_logs, False)
+            int_logs = logs[logs['Action']=="Internal_Use"] if not logs.empty else pd.DataFrame()
+            st.dataframe(int_logs, use_container_width=True)
+            st.warning("如需回溯庫存，請至 [日誌] 頁面查詢詳細時間點並手動調整庫存。")
+
+    # --- 6. 管理 (V103 FEATURE RESTORED) ---
+    elif nav == "👔 管理":
+        st.subheader("👔 後台管理矩陣")
+        t1, t2, t3, t4 = st.tabs(["➕ 矩陣新增", "⚡ 雙向調撥", "⚙️ 貨號重鑄", "🗑️ 刪除商品"])
+        
+        # V103 矩陣新增邏輯完整回歸
+        with t1:
             mode = st.radio("模式", ["新系列", "衍生/補貨"], horizontal=True)
             auto_sku, auto_name, auto_img = "", "", ""
-            
             if mode == "新系列":
                 cat = st.selectbox("分類", ["上衣(Top)", "褲子(Btm)", "外套(Out)", "其他(Misc)"])
                 if st.button("生成貨號"): st.session_state['base'] = generate_smart_style_code(cat, df['SKU'].tolist())
                 if 'base' in st.session_state: auto_sku = st.session_state['base']
             else:
-                p = st.selectbox("選擇母商品", ["..."] + df['SKU'].tolist())
+                p = st.selectbox("母商品", ["..."] + df['SKU'].tolist())
                 if p != "...": 
                     row = df[df['SKU']==p].iloc[0]
                     auto_sku = get_style_code(p) + "-NEW"
@@ -354,51 +414,4 @@ def main():
                 price = c3.number_input("售價", value=0)
                 cost = c4.number_input("成本", value=0)
                 img_file = c5.file_uploader("圖片")
-                
-                st.write("尺寸數量矩陣:")
-                sizes = {}
-                cols = st.columns(5)
-                for i, s in enumerate(SIZE_ORDER): sizes[s] = cols[i%5].number_input(s, min_value=0)
-                
-                if st.form_submit_button("🚀 執行寫入"):
-                    img_url = upload_image_to_imgbb(img_file) if img_file else auto_img
-                    for s, q in sizes.items():
-                        if q > 0:
-                            full_sku = f"{base_sku}-{s}"
-                            ws_items.append_row([full_sku, name, "New", s, q, price, cost, get_taiwan_time_str(), img_url, 5, "TWD", cost, 0])
-                    st.success("新增完成"); st.rerun()
-
-        # Tab 2: 調撥
-        with t2:
-            st.write("雙向調撥樞紐")
-            sku = st.selectbox("選擇商品", ["..."] + df['SKU'].tolist())
-            if sku != "...":
-                row = df[df['SKU']==sku].iloc[0]
-                st.write(f"TW: {row['Qty']} | CN: {row['Qty_CN']}")
-                c1, c2 = st.columns(2)
-                q = c1.number_input("數量", 1)
-                if c2.button("TW -> CN"):
-                    r = ws_items.find(sku).row
-                    ws_items.update_cell(r, 5, int(row['Qty'])-q); ws_items.update_cell(r, 13, int(row['Qty_CN'])+q)
-                    st.success("調撥完成"); st.rerun()
-
-        # Tab 3: 匯率與重鑄
-        with t3:
-            st.write("匯率設定")
-            st.session_state['exchange_rate'] = st.number_input("RMB 匯率", value=st.session_state['exchange_rate'])
-            st.write("---")
-            st.write("貨號重鑄 (Refactor) - 此功能風險較高，請謹慎使用")
-
-        # Tab 4: 刪除
-        with t4:
-            d_sku = st.selectbox("刪除商品", ["..."] + df['SKU'].tolist())
-            if d_sku != "..." and st.button("確認刪除"):
-                cell = ws_items.find(d_sku)
-                ws_items.delete_rows(cell.row)
-                st.success("已刪除"); st.rerun()
-
-    elif nav == "🚪 登出":
-        st.session_state['logged_in'] = False; st.rerun()
-
-if __name__ == "__main__":
-    main()
+                st.write("尺寸矩陣:")
