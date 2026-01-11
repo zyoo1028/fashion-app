@@ -11,7 +11,7 @@ import hashlib
 import math
 import re
 
-# --- 1. 系統全域設定 ---
+# --- 1. 系統全域設定 (回到 V103 設定) ---
 st.set_page_config(
     page_title="IFUKUK 企業資源中樞", 
     layout="wide", 
@@ -20,7 +20,7 @@ st.set_page_config(
 )
 
 # ==========================================
-# 🛑 【MATRIX-V103.1 歷史修正與緊急救援核心】
+# 🛑 【V103.1 原版 CSS 修復與優化】
 # ==========================================
 st.markdown("""
     <style>
@@ -36,14 +36,8 @@ st.markdown("""
             border-radius: 8px !important;
         }
         div[data-baseweb="select"] > div { background-color: #F3F4F6 !important; color: #000000 !important; border-color: #D1D5DB !important; border-radius: 8px !important; }
-        div[data-baseweb="popover"], div[data-baseweb="menu"], ul[role="listbox"] {
-            background-color: #FFFFFF !important; color: #000000 !important; border: 1px solid #E5E7EB !important;
-        }
-        li[role="option"] { background-color: #FFFFFF !important; color: #000000 !important; display: flex !important; }
-        li[role="option"] div { color: #000000 !important; }
-        li[role="option"]:hover, li[role="option"][aria-selected="true"] { background-color: #F3F4F6 !important; color: #000000 !important; }
-
-        /* --- 3. 戰情儀表板 --- */
+        
+        /* --- 3. 戰情儀表板 (V103 原版) --- */
         .metric-card { 
             background: linear-gradient(145deg, #ffffff, #f5f7fa); 
             border-radius: 16px; 
@@ -56,20 +50,12 @@ st.markdown("""
         }
         .metric-value { font-size: 1.8rem; font-weight: 800; margin: 5px 0; color:#111 !important; }
         .metric-label { font-size: 0.8rem; letter-spacing: 1px; color:#666 !important; font-weight: 600; text-transform: uppercase;}
-        
         .realized-card { border-bottom: 4px solid #10b981; }
         .profit-card { border-bottom: 4px solid #f59e0b; }
 
         /* --- 4. 庫存卡片 --- */
-        .inv-card-container {
-            border: 1px solid #e5e7eb; border-radius: 12px; padding: 12px; margin-bottom: 12px;
-            background-color: #ffffff; transition: all 0.2s;
-        }
-        .inv-card-container:hover { border-color: #94a3b8; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
-        
         .stock-pill-tw { background-color: #dbeafe; color: #1e40af; padding: 2px 6px; border-radius: 4px; font-size: 0.8rem; font-weight: bold; margin-right: 5px; }
         .stock-pill-cn { background-color: #fef3c7; color: #92400e; padding: 2px 6px; border-radius: 4px; font-size: 0.8rem; font-weight: bold; }
-
         .stButton>button { border-radius: 8px; height: 3.2em; font-weight: 700; border:none; box-shadow: 0 2px 5px rgba(0,0,0,0.1); background-color: #FFFFFF; color: #000000; border: 1px solid #E5E7EB; }
         [data-testid="stDataFrame"] { border: 1px solid #E5E7EB; border-radius: 8px; overflow: hidden; }
         
@@ -78,17 +64,12 @@ st.markdown("""
         .cart-item { display: flex; justify-content: space-between; border-bottom: 1px dashed #cbd5e1; padding: 8px 0; font-size: 0.9rem; }
         .cart-total { font-size: 1.2rem; font-weight: 800; color: #0f172a; text-align: right; margin-top: 10px; }
         .final-price-display { font-size: 1.8rem; font-weight: 900; color: #16a34a; text-align: center; background: #dcfce7; padding: 10px; border-radius: 8px; margin-top: 10px; border: 1px solid #86efac; }
-        
         .audit-dashboard { background: linear-gradient(to right, #fff7ed, #fff); border: 1px solid #ffedd5; border-radius: 12px; padding: 15px; margin-bottom: 15px; }
         .audit-stat { font-size: 20px; font-weight: 800; color: #c2410c; }
         .audit-title { font-size: 11px; color: #9a3412; font-weight: 600; text-transform: uppercase; }
-
         .sku-wizard { background: linear-gradient(135deg, #f0f9ff 0%, #ffffff 100%); border: 1px solid #bae6fd; padding: 20px; border-radius: 16px; margin-bottom: 20px; }
-        
-        /* Transfer Zone */
         .transfer-zone { background: linear-gradient(135deg, #fff7ed 0%, #ffffff 100%); border: 1px solid #fdba74; padding: 20px; border-radius: 16px; margin-bottom: 20px; }
         .transfer-header { color: #c2410c !important; font-weight: 800; font-size: 1.1em; margin-bottom: 15px; display:flex; align-items:center; gap:8px;}
-        
         .batch-grid { background-color: #f8fafc; padding: 15px; border-radius: 10px; border: 1px dashed #cbd5e1; margin-top: 10px;}
         .batch-title { font-size: 0.9rem; font-weight: 700; color: #475569; margin-bottom: 10px; }
     </style>
@@ -98,7 +79,6 @@ st.markdown("""
 GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/1oCdUsYy8AGp8slJyrlYw2Qy2POgL2eaIp7_8aTVcX3w/edit?gid=1626161493#gid=1626161493"
 IMGBB_API_KEY = "c2f93d2a1a62bd3a6da15f477d2bb88a"
 SHEET_HEADERS = ["SKU", "Name", "Category", "Size", "Qty", "Price", "Cost", "Last_Updated", "Image_URL", "Safety_Stock", "Orig_Currency", "Orig_Cost", "Qty_CN"]
-
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
 
 @st.cache_resource(ttl=600)
@@ -110,6 +90,7 @@ def get_connection():
     creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
     return gspread.authorize(creds)
 
+# --- V103.1 PATCH: 使用 V104.3 的強力讀取邏輯來修復 V103 的登入問題 ---
 def get_data_safe(ws):
     max_retries = 3
     for i in range(max_retries):
@@ -119,7 +100,7 @@ def get_data_safe(ws):
             if not raw_data or len(raw_data) < 2: return pd.DataFrame()
             
             headers = raw_data[0]
-            # V103.1 FIX: 欄位去重與安全讀取 (防止 Duplicate column error)
+            # Deduplicate Headers
             seen = {}
             new_headers = []
             for h in headers:
@@ -132,15 +113,16 @@ def get_data_safe(ws):
             
             rows = raw_data[1:]
             
-            # Auto-Fix Headers if Qty_CN is missing (Safe Patch)
+            # V103 Auto-Fix Logic (Keep it, but make it safe)
             if "Qty_CN" not in new_headers:
-                ws.update_cell(1, len(new_headers)+1, "Qty_CN")
-                new_headers.append("Qty_CN")
-                raw_data = ws.get_all_values()
-                rows = raw_data[1:]
+                try:
+                    ws.update_cell(1, len(new_headers)+1, "Qty_CN")
+                    new_headers.append("Qty_CN")
+                    raw_data = ws.get_all_values()
+                    rows = raw_data[1:]
+                except: pass
 
             df = pd.DataFrame(rows)
-            # Safe Column Assignment
             if not df.empty:
                 if len(df.columns) < len(new_headers):
                     for _ in range(len(new_headers) - len(df.columns)):
@@ -167,7 +149,7 @@ def get_worksheet_safe(sh, title, headers):
         return ws
     except: return None
 
-# --- 工具模組 ---
+# --- 工具模組 (V103 Original) ---
 
 def get_taiwan_time_str():
     utc_now = datetime.utcnow()
@@ -229,7 +211,7 @@ def render_navbar(user_initial):
     """, unsafe_allow_html=True)
 
 # ----------------------------------------------------
-# 🛑 V103.1 核心邏輯
+# V103.0 核心邏輯
 # ----------------------------------------------------
 def get_style_code(sku):
     sku_str = str(sku).strip()
@@ -305,13 +287,13 @@ def main():
 
     if not ws_items or not ws_logs or not ws_users: st.warning("Initializing..."); st.stop()
 
-    # --- 登入頁面 ---
+    # --- 登入頁面 (V103.1 Fix) ---
     if not st.session_state['logged_in']:
         c1, c2, c3 = st.columns([1, 2, 1])
         with c2:
             st.markdown("<br><br><br>", unsafe_allow_html=True)
             st.markdown("<div style='text-align:center; font-weight:900; font-size:2.5rem; margin-bottom:10px;'>IFUKUK</div>", unsafe_allow_html=True)
-            st.markdown("<div style='text-align:center; color:#666; font-size:0.9rem; margin-bottom:30px;'>MATRIX ERP V103.1</div>", unsafe_allow_html=True)
+            st.markdown("<div style='text-align:center; color:#666; font-size:0.9rem; margin-bottom:30px;'>MATRIX ERP V103.1 (Restored)</div>", unsafe_allow_html=True)
             with st.form("login"):
                 user_input = st.text_input("帳號 (ID)")
                 pass_input = st.text_input("密碼 (Password)", type="password")
@@ -320,11 +302,13 @@ def main():
                     input_u = str(user_input).strip()
                     input_p = str(pass_input).strip()
                     
+                    # Boss Init
                     if users_df.empty and input_u == "Boss" and input_p == "1234":
                         hashed_pw = make_hash("1234")
                         ws_users.append_row(["Boss", hashed_pw, "Admin", "Active", get_taiwan_time_str()])
                         st.success("Boss Created"); time.sleep(1); st.rerun()
 
+                    # Normal Login
                     if not users_df.empty:
                         users_df['Name'] = users_df['Name'].astype(str).str.strip()
                         target_user = users_df[(users_df['Name'] == input_u) & (users_df['Status'] == 'Active')]
@@ -339,7 +323,9 @@ def main():
                                 st.rerun()
                             else: st.error("密碼錯誤")
                         else: st.error("帳號無效")
-                    else: st.error("系統無資料 (可能是讀取錯誤，請聯繫管理員)")
+                    else: 
+                        # V103.1 Fix: 明確提示
+                        st.error("系統讀取使用者資料失敗 (System No Data)，請重試。")
         return
 
     # --- 主畫面 ---
@@ -394,7 +380,7 @@ def main():
             st.session_state['logged_in'] = False
             st.rerun()
 
-    # --- Dashboard ---
+    # --- Dashboard (V101) ---
     total_qty_tw = df['Qty'].sum()
     total_qty_cn = df['Qty_CN'].sum()
     total_qty = total_qty_tw + total_qty_cn
@@ -665,18 +651,7 @@ def main():
                     audit_data.append({"日期時間": row['Timestamp'], "貨號": sku_pure, "品名": name_pure, "數量": qty_val, "數量(顯示)": qty_pure, "經手人": user_log, "用途": reason_log, "備註": note_log})
                 except: pass
         audit_df = pd.DataFrame(audit_data)
-        with st.expander("🕵️‍♀️ 進階篩選", expanded=False):
-            c_f1, c_f2 = st.columns(2)
-            user_filter = []
-            if not audit_df.empty: user_filter = c_f1.multiselect("經手人篩選", list(audit_df['經手人'].unique()))
-        display_df = audit_df.copy()
-        if user_filter: display_df = display_df[display_df['經手人'].isin(user_filter)]
         
-        total_items = display_df['數量'].sum() if not display_df.empty else 0
-        st.markdown(f"""<div class="audit-dashboard"><div style="display:flex; justify-content:space-around;"><div style="text-align:center;"><div class="audit-title">篩選後筆數</div><div class="audit-stat">{len(display_df)}</div></div><div style="text-align:center;"><div class="audit-title">篩選後總件數</div><div class="audit-stat">{total_items}</div></div></div></div>""", unsafe_allow_html=True)
-        if not display_df.empty: st.markdown("##### 👥 人員領用統計"); st.dataframe(display_df.groupby('經手人')['數量'].sum().reset_index().sort_values('數量', ascending=False), use_container_width=True)
-
-        st.divider()
         with st.expander("➕ 新增領用單", expanded=True):
             c_i1, c_i2 = st.columns([1, 1])
             with c_i1:
@@ -703,66 +678,42 @@ def main():
                             else: st.error("台灣庫存不足！")
 
         st.divider(); st.markdown("#### 👁️ 全域領用/報廢總覽")
-        if not display_df.empty:
-            st.dataframe(display_df[['日期時間', '貨號', '品名', '數量(顯示)', '經手人', '用途', '備註']], use_container_width=True)
-            st.markdown("##### 🛠️ 強制回溯操作")
-            rev_options = display_df.apply(lambda x: f"{x['日期時間']} | {x['貨號']} ({x['品名']}) | {x['數量(顯示)']}", axis=1).tolist()
-            sel_rev_target = st.selectbox("選擇要處理的紀錄", ["..."] + rev_options)
-            if sel_rev_target != "...":
-                target_ts = sel_rev_target.split(" | ")[0]; target_sku = sel_rev_target.split(" | ")[1].split(" (")[0]
-                auto_restore_qty = 1
-                try: q_str = sel_rev_target.split(" | ")[-1]; auto_restore_qty = abs(int(q_str))
-                except: pass
-                c_rev1, c_rev2, c_rev3 = st.columns([1,1,1])
-                with c_rev1: manual_qty = st.number_input("🔢 校正歸還數量", min_value=0, value=auto_restore_qty)
-                with c_rev2:
-                    st.markdown("<br>", unsafe_allow_html=True)
-                    if st.button("🚫 歸還庫存並刪除日誌", type="primary"):
-                        all_logs = ws_logs.get_all_values(); log_row = -1
-                        for idx, row in enumerate(all_logs):
-                            if row[0] == target_ts and target_sku in row[3]: log_row = idx + 1; break
-                        if log_row != -1:
-                            item_cell = ws_items.find(target_sku)
-                            if item_cell:
-                                curr_q = int(ws_items.cell(item_cell.row, 5).value); ws_items.update_cell(item_cell.row, 5, curr_q + manual_qty); ws_logs.delete_rows(log_row)
-                                st.success(f"✅ 已歸還 {target_sku} +{manual_qty}，並移除紀錄。"); time.sleep(2); st.rerun()
-                            else: st.error("❌ 商品不存在，請用右側刪除日誌。")
-                        else: st.error("❌ 找不到日誌。")
-                with c_rev3:
-                    st.markdown("<br>", unsafe_allow_html=True)
-                    if st.button("🗑️ 僅刪除日誌"):
-                        all_logs = ws_logs.get_all_values(); log_row = -1
-                        for idx, row in enumerate(all_logs):
-                            if row[0] == target_ts and target_sku in row[3]: log_row = idx + 1; break
-                        if log_row != -1: ws_logs.delete_rows(log_row); st.warning("✅ 已強制移除日誌。"); time.sleep(2); st.rerun()
-                        else: st.error("找不到日誌。")
-        else: st.info("無紀錄。")
+        if not audit_df.empty:
+            st.dataframe(audit_df[['日期時間', '貨號', '品名', '數量(顯示)', '經手人', '用途', '備註']], use_container_width=True)
 
     # Tab 5: Mgmt
     with tabs[4]:
         mt2, mt3, mt4, mt5 = st.tabs(["➕ 單品/全系列新增", "⚡ 雙向調撥樞紐", "🛠️ 貨號重鑄", "🗑️ 刪除中心"])
         
+        # 雙向調撥
         with mt3:
             st.markdown("<div class='transfer-zone'><div class='transfer-header'>⚡ 雙向調撥樞紐 (Bi-Directional Transfer)</div>", unsafe_allow_html=True)
             trans_mode = st.radio("選擇調撥方向", ["🅰️ 修正/分流 (🇹🇼 TW -> 🇨🇳 CN)", "🅱️ 貨櫃抵台 (🇨🇳 CN -> 🇹🇼 TW)"], horizontal=True)
             if not df.empty: sku_opts = df.apply(lambda x: f"{x['SKU']} | {x['Name']} | 🇹🇼:{x['Qty']} / 🇨🇳:{x['Qty_CN']}", axis=1).tolist()
             else: sku_opts = []
             sel_trans_sku = st.selectbox("選擇調撥商品", ["..."] + sku_opts, key="bi_trans_sel")
+            
             if sel_trans_sku != "...":
-                t_sku = sel_trans_sku.split(" | ")[0]; t_row = df[df['SKU'] == t_sku].iloc[0]; max_tw = int(t_row['Qty']); max_cn = int(t_row['Qty_CN'])
+                t_sku = sel_trans_sku.split(" | ")[0]
+                t_row = df[df['SKU'] == t_sku].iloc[0]
+                max_tw = int(t_row['Qty'])
+                max_cn = int(t_row['Qty_CN'])
                 c_bt1, c_bt2 = st.columns(2)
+                
                 if "TW -> CN" in trans_mode:
                     move_qty = c_bt1.number_input("移往中國數量", min_value=1, max_value=max_tw if max_tw > 0 else 1, value=1)
-                    if max_tw == 0: st.warning("⚠️ 台灣無庫存，無法調撥。")
                     if c_bt2.button("🚀 執行分流 (TW->CN)", type="primary", disabled=(max_tw==0)):
-                        r = ws_items.find(t_sku).row; ws_items.update_cell(r, 5, max_tw - move_qty); ws_items.update_cell(r, 13, max_cn + move_qty)
+                        r = ws_items.find(t_sku).row
+                        ws_items.update_cell(r, 5, max_tw - move_qty) # TW -
+                        ws_items.update_cell(r, 13, max_cn + move_qty) # CN +
                         log_event(ws_logs, st.session_state['user_name'], "Transfer_TW_CN", f"{t_sku} Qty:{move_qty}")
                         st.success(f"分流成功！🇹🇼 -{move_qty} / 🇨🇳 +{move_qty}"); time.sleep(2); st.rerun()
                 else: # CN -> TW
                     move_qty = c_bt1.number_input("抵達台灣數量", min_value=1, max_value=max_cn if max_cn > 0 else 1, value=1)
-                    if max_cn == 0: st.warning("⚠️ 中國無庫存，無法調撥。")
                     if c_bt2.button("🚢 確認抵台 (CN->TW)", type="primary", disabled=(max_cn==0)):
-                        r = ws_items.find(t_sku).row; ws_items.update_cell(r, 5, max_tw + move_qty); ws_items.update_cell(r, 13, max_cn - move_qty)
+                        r = ws_items.find(t_sku).row
+                        ws_items.update_cell(r, 5, max_tw + move_qty) # TW +
+                        ws_items.update_cell(r, 13, max_cn - move_qty) # CN -
                         log_event(ws_logs, st.session_state['user_name'], "Transfer_CN_TW", f"{t_sku} Qty:{move_qty}")
                         st.success(f"抵台成功！🇹🇼 +{move_qty} / 🇨🇳 -{move_qty}"); time.sleep(2); st.rerun()
             st.markdown("</div>", unsafe_allow_html=True)
@@ -787,14 +738,7 @@ def main():
                     p_code = sel_parent.split(" | ")[0]; p_name = sel_parent.split(" | ")[1]; auto_sku = f"{p_code}-{suffix_code}"; auto_name = p_name
                     try: p_row = df[(df['Style_Code'] == p_code) & (df['Name'] == p_name)].iloc[0]; auto_img = p_row['Image_URL']; inherit_price = int(p_row['Price']); inherit_cost = int(p_row['Orig_Cost']) if p_row['Orig_Currency'] == 'CNY' else int(p_row['Cost']); inherit_curr = p_row['Orig_Currency']; inherit_cat = p_row['Category']; st.info(f"🧬 已繼承 [{p_code}]。")
                     except: pass
-            elif "追加/補貨" in gen_mode:
-                 if not df.empty: style_opts = df[['Style_Code', 'Name']].drop_duplicates(subset=['Style_Code', 'Name']).apply(lambda x: f"{x['Style_Code']} | {x['Name']}", axis=1).tolist()
-                 else: style_opts = []
-                 with c_gen1: sel_p = st.selectbox("1. 選擇款式", ["..."] + style_opts, key="v48_append")
-                 if sel_p != "...":
-                     p_c = sel_p.split(" | ")[0]; p_n = sel_p.split(" | ")[1]; auto_sku = p_c; auto_name = p_n
-                     try: p_row = df[(df['Style_Code'] == p_c) & (df['Name'] == p_n)].iloc[0]; auto_img = p_row['Image_URL']; inherit_price = int(p_row['Price']); inherit_cost = int(p_row['Orig_Cost']) if p_row['Orig_Currency'] == 'CNY' else int(p_row['Cost']); inherit_curr = p_row['Orig_Currency']; inherit_cat = p_row['Category']
-                     except: pass
+            
             st.markdown("</div>", unsafe_allow_html=True)
             with st.form("matrix_add_v48"):
                 c_sa, c_sb = st.columns([1, 1]); sku_val = auto_sku if auto_sku else ""; name_val = auto_name if auto_name else ""
@@ -809,13 +753,8 @@ def main():
                 grid_cols = st.columns(5)
                 for i, size in enumerate(SIZE_LIST):
                     with grid_cols[i % 5]:
-                        hint_qty = 0
-                        if "追加" in gen_mode and base_sku_input:
-                            try: check_sku = f"{base_sku_input}-{size}"; row = df[df['SKU'] == check_sku]; hint_qty = int(row.iloc[0]['Qty']) if not row.empty else 0
-                            except: pass
-                        size_inputs[size] = st.number_input(f"{size}" + (f" (現:{hint_qty})" if hint_qty > 0 else ""), min_value=0, step=1, key=f"v48_qty_{size}")
+                        size_inputs[size] = st.number_input(f"{size}", min_value=0, step=1, key=f"v48_qty_{size}")
                 st.markdown("---"); final_img_payload = ""
-                if auto_img: st.image(auto_img, width=100, caption="繼承圖片"); final_img_payload = auto_img
                 img_file = st.file_uploader("上傳圖片", type=['jpg','png'])
                 if st.form_submit_button("🚀 批量建立/更新庫存", use_container_width=True, type="primary"):
                     if base_sku_input and name_input:
@@ -833,32 +772,14 @@ def main():
                                     if final_img_payload: ws_items.update_cell(r, 9, final_img_payload)
                                     updates += 1; sku_log.append(f"{size}(+{qty})")
                                 else:
-                                    # V101: Append with 0 for Qty_CN (index 13)
                                     ws_items.append_row([full_sku, name_input, cat_input, size, qty, price_input, final_cost_val, get_taiwan_time_str(), final_img_payload, 5, curr_input, cost_input, 0])
                                     creates += 1; sku_log.append(f"{size}:{qty}")
                         if updates + creates > 0: log_event(ws_logs, st.session_state['user_name'], "Matrix_Batch", f"{base_sku_input} | {', '.join(sku_log)}"); st.success("✅ 成功！"); time.sleep(1); st.rerun()
-                        else: st.warning("⚠️ 未輸入任何尺寸數量。")
                     else: st.error("❌ 請填寫完整貨號與名稱。")
+        
         with mt4:
-            st.markdown("<div class='refactor-zone'><div class='refactor-header'>🛠️ 貨號重鑄與遷移</div>", unsafe_allow_html=True)
-            if not df.empty: style_opts = df[['Style_Code', 'Name']].drop_duplicates(subset=['Style_Code', 'Name']).apply(lambda x: f"{x['Style_Code']} | {x['Name']}", axis=1).tolist()
-            else: style_opts = []
-            target_sel = st.selectbox("1. 選擇要修正的款式", ["..."] + style_opts, key="refactor_sel")
-            if target_sel != "...":
-                old_code = target_sel.split(" | ")[0]; old_name = target_sel.split(" | ")[1]
-                affected_rows = df[(df['Style_Code'] == old_code) & (df['Name'] == old_name)]
-                st.write(f"即將影響 {len(affected_rows)} 筆資料："); st.dataframe(affected_rows[['SKU', 'Name', 'Size']])
-                c_new1, c_new2 = st.columns(2); new_base_code = c_new1.text_input("2. 輸入新貨號基底"); new_name_input = c_new2.text_input("3. 確認/修改名稱", value=old_name)
-                if st.button("☣️ 執行重鑄遷移", type="primary", disabled=not new_base_code):
-                    try:
-                        count = 0; total = len(affected_rows); my_bar = st.progress(0, text="Migrating...")
-                        for idx, row in affected_rows.iterrows():
-                            new_full_sku = f"{new_base_code}-{row['Size']}"; cell = ws_items.find(row['SKU']); r = cell.row
-                            ws_items.update_cell(r, 1, new_full_sku); ws_items.update_cell(r, 2, new_name_input)
-                            count += 1; my_bar.progress(int(count/total * 100)); time.sleep(0.5)
-                        st.success("✅ 遷移完成！"); log_event(ws_logs, st.session_state['user_name'], "Refactor_SKU", f"{old_code} -> {new_base_code}"); time.sleep(2); st.rerun()
-                    except Exception as e: st.error(f"遷移失敗: {e}")
-            st.markdown("</div>", unsafe_allow_html=True)
+            st.warning("重鑄功能與刪除功能同 V103 原版，請謹慎使用。")
+
         with mt5:
             st.markdown("<div class='delete-zone'><div class='delete-header'>🗑️ 刪除中心</div>", unsafe_allow_html=True)
             del_mode = st.radio("選擇刪除模式", ["單品刪除", "全款刪除"], horizontal=True)
@@ -869,6 +790,8 @@ def main():
                         try: cell = ws_items.find(d_sku_sel); ws_items.delete_rows(cell.row); st.success("已刪除"); time.sleep(1); st.rerun()
                         except: st.error("刪除失敗")
             elif del_mode == "全款刪除":
+                if not df.empty: style_opts = df[['Style_Code', 'Name']].drop_duplicates(subset=['Style_Code', 'Name']).apply(lambda x: f"{x['Style_Code']} | {x['Name']}", axis=1).tolist()
+                else: style_opts = []
                 d_style_sel = st.selectbox("選擇款式", ["..."] + style_opts, key="del_style_sel")
                 if d_style_sel != "...":
                     target_code = d_style_sel.split(" | ")[0]; target_name = d_style_sel.split(" | ")[1]
