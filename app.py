@@ -20,7 +20,7 @@ st.set_page_config(
 )
 
 # ==========================================
-# 🛑 【MATRIX-V58.0 購物車與堆疊折扣核心】
+# 🛑 【MATRIX-V59.0 財務精算與浮點數修復核心】
 # ==========================================
 st.markdown("""
     <style>
@@ -64,7 +64,7 @@ st.markdown("""
         .audit-stat { font-size: 24px; font-weight: 800; color: #c2410c; }
         .audit-title { font-size: 12px; color: #9a3412; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; }
         
-        /* POS Cart V58 */
+        /* POS Cart */
         .cart-box { background: #f8fafc; border: 1px solid #e2e8f0; padding: 15px; border-radius: 12px; margin-bottom: 15px; }
         .cart-item { display: flex; justify-content: space-between; border-bottom: 1px dashed #cbd5e1; padding: 8px 0; font-size: 0.9rem; }
         .cart-total { font-size: 1.2rem; font-weight: 800; color: #0f172a; text-align: right; margin-top: 10px; }
@@ -190,7 +190,7 @@ def render_navbar(user_initial):
     """, unsafe_allow_html=True)
 
 # ----------------------------------------------------
-# 🛑 V58.0 核心邏輯
+# 🛑 V59.0 核心邏輯
 # ----------------------------------------------------
 def get_style_code(sku):
     sku_str = str(sku).strip()
@@ -242,7 +242,6 @@ def main():
         st.session_state['exchange_rate'] = live_rate
         st.session_state['rate_source'] = "Live API" if is_success else "Manual/Default"
         
-    # V58: 初始化購物車
     if 'pos_cart' not in st.session_state:
         st.session_state['pos_cart'] = []
 
@@ -261,7 +260,7 @@ def main():
         with c2:
             st.markdown("<br><br><br>", unsafe_allow_html=True)
             st.markdown("<div style='text-align:center; font-weight:900; font-size:2.5rem; margin-bottom:10px;'>IFUKUK</div>", unsafe_allow_html=True)
-            st.markdown("<div style='text-align:center; color:#666; font-size:0.9rem; margin-bottom:30px;'>MATRIX ERP V58.0</div>", unsafe_allow_html=True)
+            st.markdown("<div style='text-align:center; color:#666; font-size:0.9rem; margin-bottom:30px;'>MATRIX ERP V59.0</div>", unsafe_allow_html=True)
             with st.form("login"):
                 user_input = st.text_input("帳號 (ID)")
                 pass_input = st.text_input("密碼 (Password)", type="password")
@@ -460,7 +459,7 @@ def main():
             show_cols = ["款號(Style)", "商品名稱", "分類", "庫存分佈", "總庫存", "售價(NTD)", "平均成本(NTD)", "參考原幣(CNY)", "最後更新"]
             st.dataframe(agg_df[show_cols], use_container_width=True)
 
-    # Tab 2: POS (V58.0 購物車與堆疊折扣版)
+    # Tab 2: POS (V59.0 浮點數修復版)
     with tabs[1]:
         c1, c2 = st.columns([1, 1])
         
@@ -494,7 +493,6 @@ def main():
                 add_qty = c_add1.number_input("數量", min_value=1, value=1, key="add_q")
                 
                 if c_add2.button("➕ 加入購物車", type="primary", use_container_width=True):
-                    # Add to session state cart
                     cart_item = {
                         "sku": target['SKU'],
                         "name": target['Name'],
@@ -507,15 +505,13 @@ def main():
                     st.success(f"已加入 {target['Name']} x{add_qty}")
                     time.sleep(0.5); st.rerun()
 
-        # --- 右側：購物車結算 ---
+        # --- 右側：購物車結算 (V59.0 Math Fix) ---
         with c2:
             st.subheader("2. 購物車結算 (Cart & Checkout)")
             
             if len(st.session_state['pos_cart']) > 0:
-                # 顯示購物車內容
                 cart_total_origin = 0
                 st.markdown("<div class='cart-box'>", unsafe_allow_html=True)
-                
                 for i, item in enumerate(st.session_state['pos_cart']):
                     cart_total_origin += item['subtotal']
                     st.markdown(f"""
@@ -524,18 +520,13 @@ def main():
                         <span>${item['subtotal']}</span>
                     </div>
                     """, unsafe_allow_html=True)
-                
                 if st.button("🗑️ 清空購物車", key="clear_cart"):
                     st.session_state['pos_cart'] = []
                     st.rerun()
-                
                 st.markdown(f"<div class='cart-total'>原價總計: ${cart_total_origin}</div>", unsafe_allow_html=True)
                 st.markdown("</div>", unsafe_allow_html=True)
                 
-                # --- V58 堆疊折扣引擎 ---
                 st.markdown("###### 💰 堆疊折扣設定 (Pricing Stack)")
-                
-                # Layer 1: 組合改價 (Bundle Override)
                 use_bundle = st.checkbox("啟用組合改價 (例如: 套裝價 $2880)")
                 if use_bundle:
                     bundle_price = st.number_input("輸入組合總價", value=cart_total_origin)
@@ -543,67 +534,49 @@ def main():
                 else:
                     current_base = cart_total_origin
                 
-                # Layer 2: 員工/身分折扣 (Identity Discount)
                 disc_mode = st.radio("額外折扣", ["無", "員工7折", "員工8折", "員工9折", "自訂折數"], horizontal=True)
                 
+                # 🛑 V59 FIX: Use round() before int()
                 final_total = current_base
                 disc_note = ""
                 
                 if disc_mode == "員工7折":
-                    final_total = int(current_base * 0.7)
+                    final_total = int(round(current_base * 0.7))
                     disc_note = "(7折)"
                 elif disc_mode == "員工8折":
-                    final_total = int(current_base * 0.8)
+                    final_total = int(round(current_base * 0.8))
                     disc_note = "(8折)"
                 elif disc_mode == "員工9折":
-                    final_total = int(current_base * 0.9)
+                    final_total = int(round(current_base * 0.9))
                     disc_note = "(9折)"
                 elif disc_mode == "自訂折數":
                     off_val = st.number_input("輸入折數 (例: 85)", min_value=1, max_value=100, value=95)
-                    final_total = int(current_base * (off_val / 100))
+                    final_total = int(round(current_base * (off_val / 100)))
                     disc_note = f"({off_val}折)"
                 
-                # 最終金額顯示
                 st.markdown(f"<div class='final-price-display'>實收金額: ${final_total}</div>", unsafe_allow_html=True)
-                
                 checkout_note = st.text_input("結帳備註 (客戶/原因)")
                 
                 if st.button("✅ 確認結帳 (Checkout)", type="primary", use_container_width=True):
-                    # 執行扣庫存與記錄
-                    # 計算分攤係數 (若有改價)
                     ratio = final_total / cart_total_origin if cart_total_origin > 0 else 1
-                    
                     sale_log_details = []
-                    
                     for item in st.session_state['pos_cart']:
-                        # 扣庫存
-                        target_sku = item['sku']
-                        qty_sell = item['qty']
-                        
+                        target_sku = item['sku']; qty_sell = item['qty']
                         r_cell = ws_items.find(target_sku)
                         if r_cell:
-                            r = r_cell.row
-                            curr_q = int(ws_items.cell(r, 5).value)
+                            r = r_cell.row; curr_q = int(ws_items.cell(r, 5).value)
                             if curr_q >= qty_sell:
                                 ws_items.update_cell(r, 5, curr_q - qty_sell)
                                 ws_items.update_cell(r, 8, get_taiwan_time_str())
-                                
-                                # 紀錄分攤後的金額
-                                allocated_price = int(item['subtotal'] * ratio)
+                                # V59 FIX: Individual Item Price also rounded
+                                allocated_price = int(round(item['subtotal'] * ratio))
                                 sale_log_details.append(f"{target_sku} x{qty_sell} (${allocated_price})")
-                            else:
-                                st.error(f"{target_sku} 庫存不足！")
-                                st.stop()
-                    
-                    # 寫入 Log (合併一筆)
+                            else: st.error(f"{target_sku} 庫存不足！"); st.stop()
                     full_log = f"Cart Sale | Total:${final_total} | Items: {', '.join(sale_log_details)} | {checkout_note} {disc_note}"
                     log_event(ws_logs, st.session_state['user_name'], "Sale", full_log)
-                    
-                    st.session_state['pos_cart'] = [] # 清空
-                    st.success(f"結帳完成！實收 ${final_total}")
-                    time.sleep(2); st.rerun()
-            else:
-                st.info("購物車是空的，請先從左側加入商品。")
+                    st.session_state['pos_cart'] = []
+                    st.success(f"結帳完成！實收 ${final_total}"); time.sleep(2); st.rerun()
+            else: st.info("購物車是空的，請先從左側加入商品。")
 
     # Tab 3: Internal (V56.0+V57.0)
     with tabs[2]:
