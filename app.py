@@ -98,17 +98,21 @@ def get_connection():
     creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
     return gspread.authorize(creds)
 
-# 🛑 關鍵修復：加入 cache_data 防止頻繁讀取導致封鎖
-@st.cache_data(ttl=10, show_spinner=False)
-def get_data_safe(_ws):
+# 🛑 [修復] 強力讀取器：解決 KeyError 與 系統無資料
+# 如果讀取失敗或讀到空值，強制回傳一個帶有正確標頭的空 DataFrame，防止系統崩潰
+def get_data_safe(ws, expected_headers=None):
     max_retries = 3
     for i in range(max_retries):
         try:
-            if _ws is None: return pd.DataFrame()
-            raw_data = _ws.get_all_values()
-            if not raw_data or len(raw_data) < 2: return pd.DataFrame()
+            if ws is None: return pd.DataFrame(columns=expected_headers) if expected_headers else pd.DataFrame()
+            raw_data = ws.get_all_values()
+            
+            # 如果讀不到資料，但我們知道應該要有什麼標頭，就回傳空表
+            if not raw_data or len(raw_data) < 2: 
+                return pd.DataFrame(columns=expected_headers) if expected_headers else pd.DataFrame()
             
             headers = raw_data[0]
+            # V103: Deduplicate Headers
             seen = {}
             new_headers = []
             for h in headers:
@@ -121,12 +125,12 @@ def get_data_safe(_ws):
             
             rows = raw_data[1:]
             
-            # V103 Auto-Fix
-            if "Qty_CN" not in new_headers:
+            # V103: Auto-Fix Headers
+            if "Qty_CN" not in new_headers and expected_headers and "Qty_CN" in expected_headers:
                 try:
-                    _ws.update_cell(1, len(new_headers)+1, "Qty_CN")
+                    ws.update_cell(1, len(new_headers)+1, "Qty_CN")
                     new_headers.append("Qty_CN")
-                    raw_data = _ws.get_all_values()
+                    raw_data = ws.get_all_values()
                     rows = raw_data[1:]
                 except: pass
 
@@ -139,9 +143,18 @@ def get_data_safe(_ws):
                 
             return df
         except Exception:
-            time.sleep(1)
+            time.sleep(1) # 等待 1 秒重試
             continue
-    return pd.DataFrame()
+            
+    # 如果重試 3 次都失敗，回傳安全的空表，避免 KeyError
+    return pd.DataFrame(columns=expected_headers) if expected_headers else pd.DataFrame()
+
+# [強力寫入] 解決 Quota Exceeded
+def update_cell_retry(ws, row, col, value, retries=3):
+    for i in range(retries):
+        try: ws.update_cell(row, col, value); return True
+        except: time.sleep(1 + i); continue
+    return False
 
 @st.cache_resource(ttl=600)
 def init_db():
@@ -152,11 +165,9 @@ def init_db():
 def get_worksheet_safe(sh, title, headers):
     try: return sh.worksheet(title)
     except gspread.WorksheetNotFound:
-        try:
-            ws = sh.add_worksheet(title, rows=100, cols=20)
-            ws.append_row(headers)
-            return ws
-        except: return None
+        ws = sh.add_worksheet(title, rows=100, cols=20)
+        ws.append_row(headers)
+        return ws
     except: return None
 
 # --- 工具模組 (V103 Original) ---
@@ -261,9 +272,11 @@ COLUMN_MAPPING = {
     "Total_Qty": "總庫存 (TW+CN)", "Price": "售價(NTD)", "Avg_Cost": "平均成本(NTD)", "Ref_Orig_Cost": "參考原幣(CNY)", "Last_Updated": "最後更新"
 }
 
+# 🛑 [修復] KeyError 防止機制：先檢查欄位是否存在
 def calculate_realized_revenue(logs_df):
     total_revenue = 0
-    if logs_df.empty: return 0
+    if logs_df.empty or 'Action' not in logs_df.columns: return 0 # 安全返回
+    
     sales_logs = logs_df[logs_df['Action'] == 'Sale']
     for _, row in sales_logs.iterrows():
         try:
@@ -303,47 +316,46 @@ def main():
         with c2:
             st.markdown("<br><br><br>", unsafe_allow_html=True)
             st.markdown("<div style='text-align:center; font-weight:900; font-size:2.5rem; margin-bottom:10px;'>IFUKUK</div>", unsafe_allow_html=True)
-            st.markdown("<div style='text-align:center; color:#666; font-size:0.9rem; margin-bottom:30px;'>MATRIX ERP V103.0 (Restore)</div>", unsafe_allow_html=True)
+            st.markdown("<div style='text-align:center; color:#666; font-size:0.9rem; margin-bottom:30px;'>MATRIX ERP V103.0 (Fixed)</div>", unsafe_allow_html=True)
             with st.form("login"):
                 user_input = st.text_input("帳號 (ID)")
                 pass_input = st.text_input("密碼 (Password)", type="password")
                 if st.form_submit_button("登入 (LOGIN)", type="primary"):
-                    with st.spinner("Verifying..."):
-                        users_df = get_data_safe(ws_users)
-                        input_u = str(user_input).strip()
-                        input_p = str(pass_input).strip()
-                        
-                        if users_df.empty and input_u == "Boss" and input_p == "1234":
-                            hashed_pw = make_hash("1234")
-                            ws_users.append_row(["Boss", hashed_pw, "Admin", "Active", get_taiwan_time_str()])
-                            st.success("Boss Created"); time.sleep(1); st.rerun()
+                    # 傳入預期標頭，防止讀到空表時報錯
+                    users_df = get_data_safe(ws_users, ["Name", "Password", "Role", "Status", "Created_At"])
+                    input_u = str(user_input).strip()
+                    input_p = str(pass_input).strip()
+                    
+                    if users_df.empty and input_u == "Boss" and input_p == "1234":
+                        hashed_pw = make_hash("1234")
+                        ws_users.append_row(["Boss", hashed_pw, "Admin", "Active", get_taiwan_time_str()])
+                        st.success("Boss Created"); time.sleep(1); st.rerun()
 
-                        if not users_df.empty:
-                            users_df['Name'] = users_df['Name'].astype(str).str.strip()
-                            target_user = users_df[(users_df['Name'] == input_u) & (users_df['Status'] == 'Active')]
-                            if not target_user.empty:
-                                stored_hash = target_user.iloc[0]['Password']
-                                is_valid = check_hash(input_p, stored_hash) if len(stored_hash)==64 else (input_p == stored_hash)
-                                if is_valid:
-                                    st.session_state['logged_in'] = True
-                                    st.session_state['user_name'] = input_u
-                                    st.session_state['user_role'] = target_user.iloc[0]['Role']
-                                    log_event(ws_logs, input_u, "Login", "登入成功")
-                                    st.rerun()
-                                else: st.error("密碼錯誤")
-                            else: st.error("帳號無效")
-                        else: st.error("系統無資料 (請稍後重試)")
+                    if not users_df.empty and 'Name' in users_df.columns:
+                        users_df['Name'] = users_df['Name'].astype(str).str.strip()
+                        target_user = users_df[(users_df['Name'] == input_u) & (users_df['Status'] == 'Active')]
+                        if not target_user.empty:
+                            stored_hash = target_user.iloc[0]['Password']
+                            is_valid = check_hash(input_p, stored_hash) if len(stored_hash)==64 else (input_p == stored_hash)
+                            if is_valid:
+                                st.session_state['logged_in'] = True
+                                st.session_state['user_name'] = input_u
+                                st.session_state['user_role'] = target_user.iloc[0]['Role']
+                                log_event(ws_logs, input_u, "Login", "登入成功")
+                                st.rerun()
+                            else: st.error("密碼錯誤")
+                        else: st.error("帳號無效")
+                    else: st.error("系統連線忙碌，請等待 30 秒後再試 (Quota Exceeded Protect)")
         return
 
     # --- 主畫面 ---
     user_initial = st.session_state['user_name'][0].upper()
     render_navbar(user_initial)
 
-    # V103.0 Logic: Load ALL data
-    df = get_data_safe(ws_items)
-    logs_df = get_data_safe(ws_logs) 
-    users_df = get_data_safe(ws_users)
-    staff_list = users_df['Name'].tolist() if not users_df.empty else []
+    df = get_data_safe(ws_items, SHEET_HEADERS)
+    logs_df = get_data_safe(ws_logs, ["Timestamp", "User", "Action", "Details"]) 
+    users_df = get_data_safe(ws_users, ["Name", "Password", "Role", "Status", "Created_At"])
+    staff_list = users_df['Name'].tolist() if not users_df.empty and 'Name' in users_df.columns else []
 
     cols = ["SKU", "Name", "Category", "Size", "Qty", "Price", "Cost", "Last_Updated", "Image_URL", "Safety_Stock", "Orig_Currency", "Orig_Cost", "Qty_CN"]
     for c in cols: 
@@ -493,9 +505,9 @@ def main():
                                     if t_sku in df['SKU'].tolist():
                                         new_q_cn = inputs_cn[t_sku]
                                         r = ws_items.find(t_sku).row
-                                        ws_items.update_cell(r, 5, new_q_tw)
-                                        ws_items.update_cell(r, 13, new_q_cn)
-                                        ws_items.update_cell(r, 8, get_taiwan_time_str())
+                                        update_cell_retry(ws_items, r, 5, new_q_tw)
+                                        update_cell_retry(ws_items, r, 13, new_q_cn)
+                                        update_cell_retry(ws_items, r, 8, get_taiwan_time_str())
                                         changes.append(f"{t_sku.split('-')[-1]}: TW{new_q_tw}/CN{new_q_cn}")
                                 log_event(ws_logs, st.session_state['user_name'], "Quick_Update", f"{style_code} | {', '.join(changes)}")
                                 st.success("更新完成！"); time.sleep(1); st.rerun()
@@ -595,8 +607,8 @@ def main():
                         if r_cell:
                             r = r_cell.row; curr_q = int(ws_items.cell(r, 5).value)
                             if curr_q >= qty_sell:
-                                ws_items.update_cell(r, 5, curr_q - qty_sell)
-                                ws_items.update_cell(r, 8, get_taiwan_time_str())
+                                update_cell_retry(ws_items, r, 5, curr_q - qty_sell)
+                                update_cell_retry(ws_items, r, 8, get_taiwan_time_str())
                                 allocated_price = int(round(item['subtotal'] * ratio))
                                 sale_log_details.append(f"{target_sku} x{qty_sell} (${allocated_price})")
                             else: st.error(f"{target_sku} 台灣現貨不足！(現貨:{curr_q})"); st.stop()
@@ -690,7 +702,8 @@ def main():
                         int_note = st.text_input("備註 (選填)")
                         if st.form_submit_button("確認領用 (扣除台灣庫存)", type="primary"):
                             if int(t_int['Qty']) >= iq:
-                                r = ws_items.find(t_int['SKU']).row; ws_items.update_cell(r, 5, int(t_int['Qty']) - iq)
+                                r = ws_items.find(t_int['SKU']).row
+                                update_cell_retry(ws_items, r, 5, int(t_int['Qty']) - iq)
                                 log_detail = f"{t_int['SKU']} -{iq} | {who} | {rsn} | {int_note}"
                                 log_event(ws_logs, st.session_state['user_name'], "Internal_Use", log_detail)
                                 st.success(f"✅ 成功！"); time.sleep(1); st.rerun()
@@ -718,7 +731,9 @@ def main():
                         if log_row != -1:
                             item_cell = ws_items.find(target_sku)
                             if item_cell:
-                                curr_q = int(ws_items.cell(item_cell.row, 5).value); ws_items.update_cell(item_cell.row, 5, curr_q + manual_qty); ws_logs.delete_rows(log_row)
+                                curr_q = int(ws_items.cell(item_cell.row, 5).value)
+                                update_cell_retry(ws_items, item_cell.row, 5, curr_q + manual_qty)
+                                ws_logs.delete_rows(log_row)
                                 st.success(f"✅ 已歸還 {target_sku} +{manual_qty}，並移除紀錄。"); time.sleep(2); st.rerun()
                             else: st.error("❌ 商品不存在，請用右側刪除日誌。")
                         else: st.error("❌ 找不到日誌。")
@@ -739,14 +754,10 @@ def main():
         # V102: Bi-Directional Transfer Hub
         with mt3:
             st.markdown("<div class='transfer-zone'><div class='transfer-header'>⚡ 雙向調撥樞紐 (Bi-Directional Transfer)</div>", unsafe_allow_html=True)
-            
-            # Direction Selection
             trans_mode = st.radio("選擇調撥方向", ["🅰️ 修正/分流 (🇹🇼 TW -> 🇨🇳 CN)", "🅱️ 貨櫃抵台 (🇨🇳 CN -> 🇹🇼 TW)"], horizontal=True)
-            
             if not df.empty:
                 sku_opts = df.apply(lambda x: f"{x['SKU']} | {x['Name']} | 🇹🇼:{x['Qty']} / 🇨🇳:{x['Qty_CN']}", axis=1).tolist()
             else: sku_opts = []
-            
             sel_trans_sku = st.selectbox("選擇調撥商品", ["..."] + sku_opts, key="bi_trans_sel")
             
             if sel_trans_sku != "...":
@@ -754,7 +765,6 @@ def main():
                 t_row = df[df['SKU'] == t_sku].iloc[0]
                 max_tw = int(t_row['Qty'])
                 max_cn = int(t_row['Qty_CN'])
-                
                 c_bt1, c_bt2 = st.columns(2)
                 
                 if "TW -> CN" in trans_mode:
@@ -762,21 +772,19 @@ def main():
                     if max_tw == 0: st.warning("⚠️ 台灣無庫存，無法調撥。")
                     if c_bt2.button("🚀 執行分流 (TW->CN)", type="primary", disabled=(max_tw==0)):
                         r = ws_items.find(t_sku).row
-                        ws_items.update_cell(r, 5, max_tw - move_qty) # TW -
-                        ws_items.update_cell(r, 13, max_cn + move_qty) # CN +
+                        update_cell_retry(ws_items, r, 5, max_tw - move_qty) # TW -
+                        update_cell_retry(ws_items, r, 13, max_cn + move_qty) # CN +
                         log_event(ws_logs, st.session_state['user_name'], "Transfer_TW_CN", f"{t_sku} Qty:{move_qty}")
                         st.success(f"分流成功！🇹🇼 -{move_qty} / 🇨🇳 +{move_qty}"); time.sleep(2); st.rerun()
-                        
                 else: # CN -> TW
                     move_qty = c_bt1.number_input("抵達台灣數量", min_value=1, max_value=max_cn if max_cn > 0 else 1, value=1)
                     if max_cn == 0: st.warning("⚠️ 中國無庫存，無法調撥。")
                     if c_bt2.button("🚢 確認抵台 (CN->TW)", type="primary", disabled=(max_cn==0)):
                         r = ws_items.find(t_sku).row
-                        ws_items.update_cell(r, 5, max_tw + move_qty) # TW +
-                        ws_items.update_cell(r, 13, max_cn - move_qty) # CN -
+                        update_cell_retry(ws_items, r, 5, max_tw + move_qty) # TW +
+                        update_cell_retry(ws_items, r, 13, max_cn - move_qty) # CN -
                         log_event(ws_logs, st.session_state['user_name'], "Transfer_CN_TW", f"{t_sku} Qty:{move_qty}")
                         st.success(f"抵台成功！🇹🇼 +{move_qty} / 🇨🇳 -{move_qty}"); time.sleep(2); st.rerun()
-            
             st.markdown("</div>", unsafe_allow_html=True)
 
         with mt2:
@@ -839,10 +847,8 @@ def main():
                                 full_sku = f"{base_sku_input}-{size}"
                                 if full_sku in df['SKU'].tolist():
                                     r = ws_items.find(full_sku).row
-                                    current_q_val = int(df[df['SKU'] == full_sku].iloc[0]['Qty'])
-                                    ws_items.update_cell(r, 5, current_q_val + qty); ws_items.update_cell(r, 8, get_taiwan_time_str())
-                                    ws_items.update_cell(r, 2, name_input); ws_items.update_cell(r, 6, price_input)
-                                    if final_img_payload: ws_items.update_cell(r, 9, final_img_payload)
+                                    update_cell_retry(ws_items, r, 5, int(df[df['SKU'] == full_sku].iloc[0]['Qty']) + qty)
+                                    update_cell_retry(ws_items, r, 8, get_taiwan_time_str())
                                     updates += 1; sku_log.append(f"{size}(+{qty})")
                                 else:
                                     ws_items.append_row([full_sku, name_input, cat_input, size, qty, price_input, final_cost_val, get_taiwan_time_str(), final_img_payload, 5, curr_input, cost_input, 0])
@@ -880,8 +886,6 @@ def main():
                         try: cell = ws_items.find(d_sku_sel); ws_items.delete_rows(cell.row); st.success("已刪除"); time.sleep(1); st.rerun()
                         except: st.error("刪除失敗")
             elif del_mode == "全款刪除":
-                if not df.empty: style_opts = df[['Style_Code', 'Name']].drop_duplicates(subset=['Style_Code', 'Name']).apply(lambda x: f"{x['Style_Code']} | {x['Name']}", axis=1).tolist()
-                else: style_opts = []
                 d_style_sel = st.selectbox("選擇款式", ["..."] + style_opts, key="del_style_sel")
                 if d_style_sel != "...":
                     target_code = d_style_sel.split(" | ")[0]; target_name = d_style_sel.split(" | ")[1]
