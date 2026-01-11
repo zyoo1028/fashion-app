@@ -11,7 +11,7 @@ import hashlib
 import math
 import re
 
-# --- 1. 系統全域設定 ---
+# --- 1. 系統全域設定 (V103.0) ---
 st.set_page_config(
     page_title="IFUKUK 企業資源中樞", 
     layout="wide", 
@@ -20,7 +20,7 @@ st.set_page_config(
 )
 
 # ==========================================
-# 🛑 【V103.0 原始視覺核心 (完整找回)】
+# 🛑 【V103.0 原始視覺核心】
 # ==========================================
 st.markdown("""
     <style>
@@ -36,13 +36,7 @@ st.markdown("""
             border-radius: 8px !important;
         }
         div[data-baseweb="select"] > div { background-color: #F3F4F6 !important; color: #000000 !important; border-color: #D1D5DB !important; border-radius: 8px !important; }
-        div[data-baseweb="popover"], div[data-baseweb="menu"], ul[role="listbox"] {
-            background-color: #FFFFFF !important; color: #000000 !important; border: 1px solid #E5E7EB !important;
-        }
-        li[role="option"] { background-color: #FFFFFF !important; color: #000000 !important; display: flex !important; }
-        li[role="option"] div { color: #000000 !important; }
-        li[role="option"]:hover, li[role="option"][aria-selected="true"] { background-color: #F3F4F6 !important; color: #000000 !important; }
-
+        
         /* --- 3. 戰情儀表板 --- */
         .metric-card { 
             background: linear-gradient(145deg, #ffffff, #f5f7fa); 
@@ -56,7 +50,6 @@ st.markdown("""
         }
         .metric-value { font-size: 1.8rem; font-weight: 800; margin: 5px 0; color:#111 !important; }
         .metric-label { font-size: 0.8rem; letter-spacing: 1px; color:#666 !important; font-weight: 600; text-transform: uppercase;}
-        
         .realized-card { border-bottom: 4px solid #10b981; }
         .profit-card { border-bottom: 4px solid #f59e0b; }
 
@@ -66,7 +59,6 @@ st.markdown("""
             background-color: #ffffff; transition: all 0.2s;
         }
         .inv-card-container:hover { border-color: #94a3b8; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
-        
         .stock-pill-tw { background-color: #dbeafe; color: #1e40af; padding: 2px 6px; border-radius: 4px; font-size: 0.8rem; font-weight: bold; margin-right: 5px; }
         .stock-pill-cn { background-color: #fef3c7; color: #92400e; padding: 2px 6px; border-radius: 4px; font-size: 0.8rem; font-weight: bold; }
 
@@ -84,11 +76,8 @@ st.markdown("""
         .audit-title { font-size: 11px; color: #9a3412; font-weight: 600; text-transform: uppercase; }
 
         .sku-wizard { background: linear-gradient(135deg, #f0f9ff 0%, #ffffff 100%); border: 1px solid #bae6fd; padding: 20px; border-radius: 16px; margin-bottom: 20px; }
-        
-        /* Transfer Zone */
         .transfer-zone { background: linear-gradient(135deg, #fff7ed 0%, #ffffff 100%); border: 1px solid #fdba74; padding: 20px; border-radius: 16px; margin-bottom: 20px; }
         .transfer-header { color: #c2410c !important; font-weight: 800; font-size: 1.1em; margin-bottom: 15px; display:flex; align-items:center; gap:8px;}
-        
         .batch-grid { background-color: #f8fafc; padding: 15px; border-radius: 10px; border: 1px dashed #cbd5e1; margin-top: 10px;}
         .batch-title { font-size: 0.9rem; font-weight: 700; color: #475569; margin-bottom: 10px; }
     </style>
@@ -98,7 +87,6 @@ st.markdown("""
 GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/1oCdUsYy8AGp8slJyrlYw2Qy2POgL2eaIp7_8aTVcX3w/edit?gid=1626161493#gid=1626161493"
 IMGBB_API_KEY = "c2f93d2a1a62bd3a6da15f477d2bb88a"
 SHEET_HEADERS = ["SKU", "Name", "Category", "Size", "Qty", "Price", "Cost", "Last_Updated", "Image_URL", "Safety_Stock", "Orig_Currency", "Orig_Cost", "Qty_CN"]
-
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
 
 @st.cache_resource(ttl=600)
@@ -110,17 +98,17 @@ def get_connection():
     creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
     return gspread.authorize(creds)
 
-# [修復版] V103 原版讀取邏輯 (加上重試機制，防止"系統無資料")
-def get_data_safe(ws):
+# 🛑 關鍵修復：加入 cache_data 防止頻繁讀取導致封鎖
+@st.cache_data(ttl=10, show_spinner=False)
+def get_data_safe(_ws):
     max_retries = 3
     for i in range(max_retries):
         try:
-            if ws is None: return pd.DataFrame()
-            raw_data = ws.get_all_values()
+            if _ws is None: return pd.DataFrame()
+            raw_data = _ws.get_all_values()
             if not raw_data or len(raw_data) < 2: return pd.DataFrame()
             
             headers = raw_data[0]
-            # V103: Deduplicate Headers Logic
             seen = {}
             new_headers = []
             for h in headers:
@@ -133,20 +121,18 @@ def get_data_safe(ws):
             
             rows = raw_data[1:]
             
-            # V103: Auto-Fix Headers if Qty_CN is missing
+            # V103 Auto-Fix
             if "Qty_CN" not in new_headers:
-                ws.update_cell(1, len(new_headers)+1, "Qty_CN")
-                new_headers.append("Qty_CN")
-                # Reload data after update
-                raw_data = ws.get_all_values()
-                rows = raw_data[1:]
+                try:
+                    _ws.update_cell(1, len(new_headers)+1, "Qty_CN")
+                    new_headers.append("Qty_CN")
+                    raw_data = _ws.get_all_values()
+                    rows = raw_data[1:]
+                except: pass
 
-            # Safe Create DF
             df = pd.DataFrame(rows)
-            # Ensure columns match length (padding if needed)
             if not df.empty:
                 if len(df.columns) < len(new_headers):
-                    # Pad with empty strings
                     for _ in range(len(new_headers) - len(df.columns)):
                         df[len(df.columns)] = ""
                 df.columns = new_headers[:len(df.columns)]
@@ -166,12 +152,14 @@ def init_db():
 def get_worksheet_safe(sh, title, headers):
     try: return sh.worksheet(title)
     except gspread.WorksheetNotFound:
-        ws = sh.add_worksheet(title, rows=100, cols=20)
-        ws.append_row(headers)
-        return ws
+        try:
+            ws = sh.add_worksheet(title, rows=100, cols=20)
+            ws.append_row(headers)
+            return ws
+        except: return None
     except: return None
 
-# --- 工具模組 ---
+# --- 工具模組 (V103 Original) ---
 
 def get_taiwan_time_str():
     utc_now = datetime.utcnow()
@@ -233,7 +221,7 @@ def render_navbar(user_initial):
     """, unsafe_allow_html=True)
 
 # ----------------------------------------------------
-# 🛑 V103.0 核心邏輯
+# V103.0 核心邏輯
 # ----------------------------------------------------
 def get_style_code(sku):
     sku_str = str(sku).strip()
@@ -315,41 +303,43 @@ def main():
         with c2:
             st.markdown("<br><br><br>", unsafe_allow_html=True)
             st.markdown("<div style='text-align:center; font-weight:900; font-size:2.5rem; margin-bottom:10px;'>IFUKUK</div>", unsafe_allow_html=True)
-            st.markdown("<div style='text-align:center; color:#666; font-size:0.9rem; margin-bottom:30px;'>MATRIX ERP V103.0</div>", unsafe_allow_html=True)
+            st.markdown("<div style='text-align:center; color:#666; font-size:0.9rem; margin-bottom:30px;'>MATRIX ERP V103.0 (Restore)</div>", unsafe_allow_html=True)
             with st.form("login"):
                 user_input = st.text_input("帳號 (ID)")
                 pass_input = st.text_input("密碼 (Password)", type="password")
                 if st.form_submit_button("登入 (LOGIN)", type="primary"):
-                    users_df = get_data_safe(ws_users)
-                    input_u = str(user_input).strip()
-                    input_p = str(pass_input).strip()
-                    
-                    if users_df.empty and input_u == "Boss" and input_p == "1234":
-                        hashed_pw = make_hash("1234")
-                        ws_users.append_row(["Boss", hashed_pw, "Admin", "Active", get_taiwan_time_str()])
-                        st.success("Boss Created"); time.sleep(1); st.rerun()
+                    with st.spinner("Verifying..."):
+                        users_df = get_data_safe(ws_users)
+                        input_u = str(user_input).strip()
+                        input_p = str(pass_input).strip()
+                        
+                        if users_df.empty and input_u == "Boss" and input_p == "1234":
+                            hashed_pw = make_hash("1234")
+                            ws_users.append_row(["Boss", hashed_pw, "Admin", "Active", get_taiwan_time_str()])
+                            st.success("Boss Created"); time.sleep(1); st.rerun()
 
-                    if not users_df.empty:
-                        users_df['Name'] = users_df['Name'].astype(str).str.strip()
-                        target_user = users_df[(users_df['Name'] == input_u) & (users_df['Status'] == 'Active')]
-                        if not target_user.empty:
-                            stored_hash = target_user.iloc[0]['Password']
-                            is_valid = check_hash(input_p, stored_hash) if len(stored_hash)==64 else (input_p == stored_hash)
-                            if is_valid:
-                                st.session_state['logged_in'] = True
-                                st.session_state['user_name'] = input_u
-                                st.session_state['user_role'] = target_user.iloc[0]['Role']
-                                log_event(ws_logs, input_u, "Login", "登入成功")
-                                st.rerun()
-                            else: st.error("密碼錯誤")
-                        else: st.error("帳號無效")
-                    else: st.error("系統無資料")
+                        if not users_df.empty:
+                            users_df['Name'] = users_df['Name'].astype(str).str.strip()
+                            target_user = users_df[(users_df['Name'] == input_u) & (users_df['Status'] == 'Active')]
+                            if not target_user.empty:
+                                stored_hash = target_user.iloc[0]['Password']
+                                is_valid = check_hash(input_p, stored_hash) if len(stored_hash)==64 else (input_p == stored_hash)
+                                if is_valid:
+                                    st.session_state['logged_in'] = True
+                                    st.session_state['user_name'] = input_u
+                                    st.session_state['user_role'] = target_user.iloc[0]['Role']
+                                    log_event(ws_logs, input_u, "Login", "登入成功")
+                                    st.rerun()
+                                else: st.error("密碼錯誤")
+                            else: st.error("帳號無效")
+                        else: st.error("系統無資料 (請稍後重試)")
         return
 
     # --- 主畫面 ---
     user_initial = st.session_state['user_name'][0].upper()
     render_navbar(user_initial)
 
+    # V103.0 Logic: Load ALL data
     df = get_data_safe(ws_items)
     logs_df = get_data_safe(ws_logs) 
     users_df = get_data_safe(ws_users)
@@ -749,10 +739,14 @@ def main():
         # V102: Bi-Directional Transfer Hub
         with mt3:
             st.markdown("<div class='transfer-zone'><div class='transfer-header'>⚡ 雙向調撥樞紐 (Bi-Directional Transfer)</div>", unsafe_allow_html=True)
+            
+            # Direction Selection
             trans_mode = st.radio("選擇調撥方向", ["🅰️ 修正/分流 (🇹🇼 TW -> 🇨🇳 CN)", "🅱️ 貨櫃抵台 (🇨🇳 CN -> 🇹🇼 TW)"], horizontal=True)
+            
             if not df.empty:
                 sku_opts = df.apply(lambda x: f"{x['SKU']} | {x['Name']} | 🇹🇼:{x['Qty']} / 🇨🇳:{x['Qty_CN']}", axis=1).tolist()
             else: sku_opts = []
+            
             sel_trans_sku = st.selectbox("選擇調撥商品", ["..."] + sku_opts, key="bi_trans_sel")
             
             if sel_trans_sku != "...":
@@ -760,6 +754,7 @@ def main():
                 t_row = df[df['SKU'] == t_sku].iloc[0]
                 max_tw = int(t_row['Qty'])
                 max_cn = int(t_row['Qty_CN'])
+                
                 c_bt1, c_bt2 = st.columns(2)
                 
                 if "TW -> CN" in trans_mode:
@@ -771,6 +766,7 @@ def main():
                         ws_items.update_cell(r, 13, max_cn + move_qty) # CN +
                         log_event(ws_logs, st.session_state['user_name'], "Transfer_TW_CN", f"{t_sku} Qty:{move_qty}")
                         st.success(f"分流成功！🇹🇼 -{move_qty} / 🇨🇳 +{move_qty}"); time.sleep(2); st.rerun()
+                        
                 else: # CN -> TW
                     move_qty = c_bt1.number_input("抵達台灣數量", min_value=1, max_value=max_cn if max_cn > 0 else 1, value=1)
                     if max_cn == 0: st.warning("⚠️ 中國無庫存，無法調撥。")
@@ -780,6 +776,7 @@ def main():
                         ws_items.update_cell(r, 13, max_cn - move_qty) # CN -
                         log_event(ws_logs, st.session_state['user_name'], "Transfer_CN_TW", f"{t_sku} Qty:{move_qty}")
                         st.success(f"抵台成功！🇹🇼 +{move_qty} / 🇨🇳 -{move_qty}"); time.sleep(2); st.rerun()
+            
             st.markdown("</div>", unsafe_allow_html=True)
 
         with mt2:
@@ -883,6 +880,8 @@ def main():
                         try: cell = ws_items.find(d_sku_sel); ws_items.delete_rows(cell.row); st.success("已刪除"); time.sleep(1); st.rerun()
                         except: st.error("刪除失敗")
             elif del_mode == "全款刪除":
+                if not df.empty: style_opts = df[['Style_Code', 'Name']].drop_duplicates(subset=['Style_Code', 'Name']).apply(lambda x: f"{x['Style_Code']} | {x['Name']}", axis=1).tolist()
+                else: style_opts = []
                 d_style_sel = st.selectbox("選擇款式", ["..."] + style_opts, key="del_style_sel")
                 if d_style_sel != "...":
                     target_code = d_style_sel.split(" | ")[0]; target_name = d_style_sel.split(" | ")[1]
