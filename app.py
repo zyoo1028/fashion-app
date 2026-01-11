@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import gspread
 from google.oauth2.service_account import Credentials
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import time
 import requests
 import plotly.express as px
@@ -20,7 +20,7 @@ st.set_page_config(
 )
 
 # ==========================================
-# 🛑 【MATRIX-V56.0 資產戰情與細節顯影核心】
+# 🛑 【MATRIX-V57.0 商業定價引擎與時空校正核心】
 # ==========================================
 st.markdown("""
     <style>
@@ -68,10 +68,13 @@ st.markdown("""
         .refactor-zone { background: linear-gradient(135deg, #fffbeb 0%, #ffffff 100%); border: 1px solid #fcd34d; padding: 20px; border-radius: 16px; margin-bottom: 20px; }
         .delete-zone { background: linear-gradient(135deg, #fef2f2 0%, #fff1f2 100%); border: 1px solid #fecaca; padding: 20px; border-radius: 16px; margin-bottom: 20px; }
         
-        /* V56 商業級戰情室 */
         .audit-dashboard { background: linear-gradient(to right, #fff7ed, #fff); border: 1px solid #ffedd5; border-radius: 12px; padding: 20px; margin-bottom: 20px; }
         .audit-stat { font-size: 24px; font-weight: 800; color: #c2410c; }
         .audit-title { font-size: 12px; color: #9a3412; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; }
+        
+        /* POS Pricing Engine */
+        .pricing-box { background: #f0fdf4; border: 1px solid #bbf7d0; padding: 15px; border-radius: 10px; margin-bottom: 10px; }
+        .final-price-tag { font-size: 1.5rem; font-weight: 900; color: #16a34a; text-align: center; display: block; }
         
         .wizard-header { color: #0369a1 !important; font-weight: 800; font-size: 1.1em; margin-bottom: 15px; display:flex; align-items:center; gap:8px;}
         .refactor-header { color: #b45309 !important; font-weight: 800; font-size: 1.1em; margin-bottom: 15px; display:flex; align-items:center; gap:8px;}
@@ -131,7 +134,16 @@ def get_worksheet_safe(sh, title, headers):
         return ws
     except: return None
 
-# --- 工具模組 ---
+# --- 工具模組 (V57: Timezone Fix) ---
+
+def get_taiwan_time_str():
+    """
+    獲取台灣時間 (UTC+8) 的字串格式。
+    解決伺服器位於 UTC 導致的時間誤差。
+    """
+    utc_now = datetime.utcnow()
+    tw_time = utc_now + timedelta(hours=8)
+    return tw_time.strftime("%Y-%m-%d %H:%M:%S")
 
 @st.cache_data(ttl=3600)
 def get_live_rate():
@@ -167,18 +179,20 @@ def upload_image_to_imgbb(image_file):
         return None
     except: return None
 
+# V57: Log uses Taiwan Time
 def log_event(ws_logs, user, action, detail):
-    try: ws_logs.append_row([datetime.now().strftime("%Y-%m-%d %H:%M:%S"), user, action, detail])
+    try: ws_logs.append_row([get_taiwan_time_str(), user, action, detail])
     except: pass
 
 def render_navbar(user_initial):
-    current_date = datetime.now().strftime("%Y/%m/%d")
+    current_date = datetime.utcnow() + timedelta(hours=8) # Display Taiwan Date
+    date_str = current_date.strftime("%Y/%m/%d")
     rate = st.session_state.get('exchange_rate', 4.5)
     st.markdown(f"""
         <div class="navbar-container">
             <div style="display:flex; flex-direction:column;">
                 <span style="font-size:18px; font-weight:900; color:#111;">IFUKUK GLOBAL</span>
-                <span style="font-size:11px; color:#666; font-family:monospace;">{current_date} • Live: {rate}</span>
+                <span style="font-size:11px; color:#666; font-family:monospace;">{date_str} • Live: {rate}</span>
             </div>
             <div style="width:36px; height:36px; background:#111; color:#fff; border-radius:8px; display:flex; align-items:center; justify-content:center; font-weight:bold;">
                 {user_initial}
@@ -187,7 +201,7 @@ def render_navbar(user_initial):
     """, unsafe_allow_html=True)
 
 # ----------------------------------------------------
-# 🛑 V56.0 核心邏輯
+# 🛑 V57.0 核心邏輯
 # ----------------------------------------------------
 def get_style_code(sku):
     sku_str = str(sku).strip()
@@ -207,7 +221,7 @@ def generate_smart_style_code(category, existing_skus):
         "鞋類(Shoe)": "SHOE", "包款(Bag)": "BAG", "帽子(Hat)": "HAT", "飾品(Acc)": "ACC", "其他(Misc)": "MSC"
     }
     prefix = prefix_map.get(category, "GEN")
-    date_code = datetime.now().strftime("%y%m")
+    date_code = (datetime.utcnow() + timedelta(hours=8)).strftime("%y%m") # Taiwan Time
     prefix = f"{prefix}-{date_code}"
     
     current_prefix = f"{prefix}-"
@@ -256,7 +270,7 @@ def main():
         with c2:
             st.markdown("<br><br><br>", unsafe_allow_html=True)
             st.markdown("<div style='text-align:center; font-weight:900; font-size:2.5rem; margin-bottom:10px;'>IFUKUK</div>", unsafe_allow_html=True)
-            st.markdown("<div style='text-align:center; color:#666; font-size:0.9rem; margin-bottom:30px;'>MATRIX ERP V56.0</div>", unsafe_allow_html=True)
+            st.markdown("<div style='text-align:center; color:#666; font-size:0.9rem; margin-bottom:30px;'>MATRIX ERP V57.0</div>", unsafe_allow_html=True)
             with st.form("login"):
                 user_input = st.text_input("帳號 (ID)")
                 pass_input = st.text_input("密碼 (Password)", type="password")
@@ -267,7 +281,7 @@ def main():
                     
                     if users_df.empty and input_u == "Boss" and input_p == "1234":
                         hashed_pw = make_hash("1234")
-                        ws_users.append_row(["Boss", hashed_pw, "Admin", "Active", str(datetime.now())])
+                        ws_users.append_row(["Boss", hashed_pw, "Admin", "Active", get_taiwan_time_str()])
                         st.success("Boss Created"); time.sleep(1); st.rerun()
 
                     if not users_df.empty:
@@ -336,8 +350,7 @@ def main():
             st.session_state['logged_in'] = False
             st.rerun()
 
-    # --- Dashboard (財務連動核心) ---
-    # V56: 此處計算基於 df (最新數據)，故內部領用扣除 Qty 後，這裡會自動連動減少。
+    # --- Dashboard ---
     total_qty = df['Qty'].sum()
     total_cost = (df['Qty'] * df['Cost']).sum()
     total_rev = (df['Qty'] * df['Price']).sum()
@@ -358,7 +371,7 @@ def main():
     # --- Tabs ---
     tabs = st.tabs(["📊 視覺庫存", "⚡ POS (精準版)", "🎁 內部領用/稽核", "👔 矩陣管理", "📝 日誌", "👥 Admin"])
 
-    # Tab 1: 視覺庫存 (V50)
+    # Tab 1: 視覺總覽 (V50)
     with tabs[0]:
         if not df.empty:
             c_chart1, c_chart2 = st.columns([1, 1])
@@ -431,7 +444,7 @@ def main():
                                     if t_sku in df['SKU'].tolist():
                                         r = ws_items.find(t_sku).row
                                         ws_items.update_cell(r, 5, new_q)
-                                        ws_items.update_cell(r, 8, str(datetime.now()))
+                                        ws_items.update_cell(r, 8, get_taiwan_time_str())
                                         changes.append(f"{t_sku.split('-')[-1]}:{new_q}")
                                 log_event(ws_logs, st.session_state['user_name'], "Quick_Update", f"{style_code} | {', '.join(changes)}")
                                 st.success("更新完成！"); time.sleep(1); st.rerun()
@@ -456,7 +469,7 @@ def main():
             show_cols = ["款號(Style)", "商品名稱", "分類", "庫存分佈", "總庫存", "售價(NTD)", "平均成本(NTD)", "參考原幣(CNY)", "最後更新"]
             st.dataframe(agg_df[show_cols], use_container_width=True)
 
-    # Tab 2: POS
+    # Tab 2: POS (V57.0 商業定價引擎)
     with tabs[1]:
         c1, c2 = st.columns([1, 1])
         with c1:
@@ -464,7 +477,7 @@ def main():
             if not df.empty:
                 sku_opts = df.apply(lambda x: f"{x['SKU']} | {x['Name']} ({x['Size']}) | 現貨:{x['Qty']}", axis=1).tolist()
             else: sku_opts = []
-            sel_sku = st.selectbox("搜尋商品 (支援條碼/品名)", ["..."] + sku_opts, key="pos_sku_sel")
+            sel_sku = st.selectbox("搜尋商品", ["..."] + sku_opts, key="pos_sku_sel")
             target = None
             if sel_sku != "...":
                 target_sku = sel_sku.split(" | ")[0]
@@ -484,42 +497,93 @@ def main():
                 """, unsafe_allow_html=True)
 
         with c2:
-            st.subheader("2. 執行操作")
+            st.subheader("2. 交易結算")
             if target is not None:
                 qty = st.number_input("數量", 1)
-                t1, t2 = st.tabs(["📥 進貨 (Restock)", "📤 銷售 (Sell)"])
+                t1, t2 = st.tabs(["📤 銷售 (Sell)", "📥 進貨 (Restock)"])
+                
+                # --- V57.0 商業定價引擎 (POS) ---
                 with t1:
+                    st.markdown("###### 💰 智慧改價中心 (Pricing Engine)")
+                    
+                    base_price = int(target['Price'])
+                    discount_mode = st.radio("折扣模式", ["原價", "員工價 (7折)", "員工價 (8折)", "員工價 (9折)", "自訂折扣 (%)", "直接改價 (組合/贈品)"], horizontal=False)
+                    
+                    final_unit_price = base_price
+                    discount_note = ""
+                    
+                    if "7折" in discount_mode:
+                        final_unit_price = int(base_price * 0.7)
+                        discount_note = "(7折)"
+                    elif "8折" in discount_mode:
+                        final_unit_price = int(base_price * 0.8)
+                        discount_note = "(8折)"
+                    elif "9折" in discount_mode:
+                        final_unit_price = int(base_price * 0.9)
+                        discount_note = "(9折)"
+                    elif "自訂折扣" in discount_mode:
+                        cust_off = st.number_input("輸入折數 (例如 85 代表 85折)", min_value=1, max_value=100, value=95)
+                        final_unit_price = int(base_price * (cust_off / 100))
+                        discount_note = f"({cust_off}折)"
+                    elif "直接改價" in discount_mode:
+                        final_unit_price = st.number_input("輸入最終單價 (NTD)", value=base_price)
+                        discount_note = "(改價)"
+                    
+                    total_sale_amt = final_unit_price * qty
+                    
+                    # 顯示計算結果
+                    st.markdown(f"""
+                    <div class="pricing-box">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <span style="color:#666;">原價單價: ${base_price}</span>
+                            <span style="font-weight:bold;">折扣後單價: ${final_unit_price}</span>
+                        </div>
+                        <hr style="margin:8px 0;">
+                        <span class="final-price-tag">總金額: ${total_sale_amt}</span>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+                    note_out = st.text_input("銷售備註 (客戶/原因)")
+                    
+                    if st.button("確認銷售 (結帳)", type="primary", use_container_width=True):
+                        if int(target['Qty']) >= qty:
+                            r = ws_items.find(target['SKU']).row
+                            ws_items.update_cell(r, 5, int(target['Qty']) - qty)
+                            ws_items.update_cell(r, 8, get_taiwan_time_str()) # V57 Time
+                            
+                            # Log 包含詳細金額資訊
+                            log_detail = f"{target['SKU']} -{qty} | 售:${final_unit_price} {discount_note} | 總:${total_sale_amt} | {note_out}"
+                            log_event(ws_logs, st.session_state['user_name'], "Sale", log_detail)
+                            st.success(f"✅ 銷售成功！實收 ${total_sale_amt}"); time.sleep(2); st.rerun()
+                        else: st.error("庫存不足！")
+
+                with t2:
                     st.markdown("###### 💰 進貨成本")
                     cost_currency = st.radio("幣別", ["NTD", "CNY"], horizontal=True)
                     input_unit_cost = st.number_input("單價", value=0.0)
                     final_cost_twd = int(input_unit_cost * st.session_state['exchange_rate']) if cost_currency == "CNY" else int(input_unit_cost)
                     if cost_currency == "CNY": st.info(f"換算: ¥{input_unit_cost} = NT${final_cost_twd}")
-                    note_in = st.text_input("備註")
+                    note_in = st.text_input("進貨備註")
+                    
                     if st.button("確認進貨", type="secondary", use_container_width=True):
                         cur_qty = int(target['Qty']); cur_cost = int(target['Cost'])
                         tot_qty = cur_qty + qty
                         new_avg = int(((cur_qty * cur_cost) + (qty * (final_cost_twd if final_cost_twd>0 else cur_cost))) / tot_qty) if tot_qty > 0 else final_cost_twd
+                        
                         r = ws_items.find(target['SKU']).row
-                        ws_items.update_cell(r, 5, tot_qty); ws_items.update_cell(r, 7, new_avg); ws_items.update_cell(r, 8, str(datetime.now()))
-                        if cost_currency == "CNY": ws_items.update_cell(r, 11, "CNY"); ws_items.update_cell(r, 12, int(input_unit_cost))
+                        ws_items.update_cell(r, 5, tot_qty)
+                        ws_items.update_cell(r, 7, new_avg)
+                        ws_items.update_cell(r, 8, get_taiwan_time_str()) # V57 Time
+                        if cost_currency == "CNY":
+                            ws_items.update_cell(r, 11, "CNY"); ws_items.update_cell(r, 12, int(input_unit_cost))
+                        
                         log_event(ws_logs, st.session_state['user_name'], "Restock", f"{target['SKU']} +{qty}")
                         st.success("成功！數據已同步。"); time.sleep(1); st.rerun()
-                with t2:
-                    note_out = st.text_input("銷售備註")
-                    if st.button("確認銷售", type="primary", use_container_width=True):
-                        if int(target['Qty']) >= qty:
-                            r = ws_items.find(target['SKU']).row
-                            ws_items.update_cell(r, 5, int(target['Qty']) - qty); ws_items.update_cell(r, 8, str(datetime.now()))
-                            log_event(ws_logs, st.session_state['user_name'], "Sale", f"{target['SKU']} -{qty} | {note_out}")
-                            st.success("成功！數據已同步。"); time.sleep(1); st.rerun()
-                        else: st.error("庫存不足！")
 
-    # Tab 3: Internal (V56.0 商業級稽核版)
+    # Tab 3: Internal (V56.0+V57.0)
     with tabs[2]:
         st.subheader("🎁 內部領用/稽核中心")
         logs_df = get_data_safe(ws_logs)
-        
-        # 1. 建立稽核數據庫 (整合品名、備註)
         audit_data = []
         sku_to_name = dict(zip(df['SKU'], df['Name'])) if not df.empty else {}
         
@@ -527,98 +591,39 @@ def main():
             int_logs = logs_df[logs_df['Action'] == 'Internal_Use'].copy()
             for i, row in int_logs.iterrows():
                 try:
-                    # 格式: SKU -Qty | User | Reason | Note
-                    details = row['Details']
-                    parts = details.split(' | ')
-                    
-                    sku_qty = parts[0]
-                    user_log = parts[1] if len(parts) > 1 else row['User']
-                    reason_log = parts[2] if len(parts) > 2 else "-"
-                    # V56 修正：強制抓取備註 (第4段)
+                    details = row['Details']; parts = details.split(' | ')
+                    sku_qty = parts[0]; user_log = parts[1] if len(parts) > 1 else row['User']; reason_log = parts[2] if len(parts) > 2 else "-"
                     note_log = parts[3] if len(parts) > 3 else "-"
-                    
-                    sku_pure = sku_qty.split(' ')[0]
-                    name_pure = sku_to_name.get(sku_pure, "(商品已刪除/未知)")
-                    
-                    qty_matches = re.findall(r'-?\d+', sku_qty)
-                    qty_pure = "?"
-                    qty_val = 0
+                    sku_pure = sku_qty.split(' ')[0]; name_pure = sku_to_name.get(sku_pure, "(商品已刪除/未知)")
+                    qty_matches = re.findall(r'-?\d+', sku_qty); qty_pure = "?"; qty_val = 0
                     for n in qty_matches:
-                        if n.startswith('-'): 
-                            qty_pure = n
-                            qty_val = abs(int(n))
-                    
-                    audit_data.append({
-                        "日期時間": row['Timestamp'],
-                        "貨號": sku_pure,
-                        "品名": name_pure,
-                        "數量": qty_val, # 使用數字格式以便加總
-                        "數量(顯示)": qty_pure,
-                        "經手人": user_log,
-                        "用途": reason_log,
-                        "備註": note_log, # V56 新增
-                        "原始資料": row['Details']
-                    })
+                        if n.startswith('-'): qty_pure = n; qty_val = abs(int(n))
+                    audit_data.append({"日期時間": row['Timestamp'], "貨號": sku_pure, "品名": name_pure, "數量": qty_val, "數量(顯示)": qty_pure, "經手人": user_log, "用途": reason_log, "備註": note_log})
                 except: pass
         
         audit_df = pd.DataFrame(audit_data)
-        
-        # 2. V55 多維度篩選器
-        with st.expander("🕵️‍♀️ 進階篩選 (Advanced Filter)", expanded=False):
+        with st.expander("🕵️‍♀️ 進階篩選", expanded=False):
             c_f1, c_f2 = st.columns(2)
             user_filter = []
-            if not audit_df.empty:
-                users_list = list(audit_df['經手人'].unique())
-                user_filter = c_f1.multiselect("經手人篩選", users_list)
-
+            if not audit_df.empty: user_filter = c_f1.multiselect("經手人篩選", list(audit_df['經手人'].unique()))
         display_df = audit_df.copy()
         if user_filter: display_df = display_df[display_df['經手人'].isin(user_filter)]
         
-        # 3. 戰情看板
-        total_items = 0
-        if not display_df.empty:
-            total_items = display_df['數量'].sum()
-                
-        st.markdown(f"""
-        <div class="audit-dashboard">
-            <div style="display:flex; justify-content:space-around;">
-                <div style="text-align:center;"><div class="audit-title">篩選後筆數</div><div class="audit-stat">{len(display_df)}</div></div>
-                <div style="text-align:center;"><div class="audit-title">篩選後總件數</div><div class="audit-stat">{total_items}</div></div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-
-        # 4. V56 新增：人員領用統計榜
-        if not display_df.empty:
-            st.markdown("##### 👥 人員領用統計 (Personnel Stats)")
-            user_stats = display_df.groupby('經手人')['數量'].sum().reset_index().sort_values('數量', ascending=False)
-            st.dataframe(user_stats, use_container_width=True)
+        total_items = display_df['數量'].sum() if not display_df.empty else 0
+        st.markdown(f"""<div class="audit-dashboard"><div style="display:flex; justify-content:space-around;"><div style="text-align:center;"><div class="audit-title">篩選後筆數</div><div class="audit-stat">{len(display_df)}</div></div><div style="text-align:center;"><div class="audit-title">篩選後總件數</div><div class="audit-stat">{total_items}</div></div></div></div>""", unsafe_allow_html=True)
+        if not display_df.empty: st.markdown("##### 👥 人員領用統計"); st.dataframe(display_df.groupby('經手人')['數量'].sum().reset_index().sort_values('數量', ascending=False), use_container_width=True)
 
         st.divider()
-
-        # 5. 領用登記區
-        with st.expander("➕ 新增領用單 (Create New)", expanded=True):
+        with st.expander("➕ 新增領用單", expanded=True):
             c_i1, c_i2 = st.columns([1, 1])
             with c_i1:
-                if not df.empty:
-                    sku_opts = df.apply(lambda x: f"{x['SKU']} | {x['Name']} ({x['Size']}) | 現貨:{x['Qty']}", axis=1).tolist()
+                if not df.empty: sku_opts = df.apply(lambda x: f"{x['SKU']} | {x['Name']} ({x['Size']}) | 現貨:{x['Qty']}", axis=1).tolist()
                 else: sku_opts = []
                 sel_int_sku = st.selectbox("搜尋具體款式", ["..."] + sku_opts, key="int_sel_v55")
                 t_int = None
                 if sel_int_sku != "...":
-                    target_sku = sel_int_sku.split(" | ")[0]
-                    t_int = df[df['SKU'] == target_sku].iloc[0]
-                    img = render_image_url(t_int['Image_URL'])
-                    st.markdown(f"""
-                    <div style="border:1px solid #ddd; border-radius:8px; padding:10px; display:flex; align-items:center; background:#fff;">
-                        <img src="{img}" style="width:60px; height:60px; object-fit:cover; border-radius:4px; margin-right:10px;">
-                        <div>
-                            <div style="font-weight:bold;">{t_int['Name']}</div>
-                            <div style="font-family:monospace; color:#555;">{t_int['SKU']}</div>
-                            <div style="color:#d32f2f; font-weight:bold;">現貨: {t_int['Qty']}</div>
-                        </div>
-                    </div>
-                    """, unsafe_allow_html=True)
+                    target_sku = sel_int_sku.split(" | ")[0]; t_int = df[df['SKU'] == target_sku].iloc[0]; img = render_image_url(t_int['Image_URL'])
+                    st.markdown(f"""<div style="border:1px solid #ddd; border-radius:8px; padding:10px; display:flex; align-items:center; background:#fff;"><img src="{img}" style="width:60px; height:60px; object-fit:cover; border-radius:4px; margin-right:10px;"><div><div style="font-weight:bold;">{t_int['Name']}</div><div style="font-family:monospace; color:#555;">{t_int['SKU']}</div><div style="color:#d32f2f; font-weight:bold;">現貨: {t_int['Qty']}</div></div></div>""", unsafe_allow_html=True)
             with c_i2:
                 if t_int is not None:
                     with st.form("int_form_v55"):
@@ -627,77 +632,52 @@ def main():
                         rsn = st.selectbox("原因", ["公務制服", "福利", "樣品", "報廢", "其他"])
                         int_note = st.text_input("備註 (選填)")
                         if st.form_submit_button("確認領用 (扣除庫存)", type="primary"):
-                            current_q = int(t_int['Qty'])
-                            if current_q >= iq:
-                                r = ws_items.find(t_int['SKU']).row
-                                ws_items.update_cell(r, 5, current_q - iq)
-                                # 紀錄 Log，包含備註 (V56 關鍵修正)
+                            if int(t_int['Qty']) >= iq:
+                                r = ws_items.find(t_int['SKU']).row; ws_items.update_cell(r, 5, int(t_int['Qty']) - iq)
                                 log_detail = f"{t_int['SKU']} -{iq} | {who} | {rsn} | {int_note}"
                                 log_event(ws_logs, st.session_state['user_name'], "Internal_Use", log_detail)
-                                st.success(f"✅ 成功！庫存 {current_q} -> {current_q - iq}"); time.sleep(1); st.rerun()
+                                st.success(f"✅ 成功！"); time.sleep(1); st.rerun()
                             else: st.error("庫存不足！")
 
-        st.divider()
-        # 6. 全域報表
-        st.markdown("#### 👁️ 全域領用/報廢總覽 (Global Audit Table)")
-        
+        st.divider(); st.markdown("#### 👁️ 全域領用/報廢總覽")
         if not display_df.empty:
-            # V56: 顯示包含備註的完整表格
             st.dataframe(display_df[['日期時間', '貨號', '品名', '數量(顯示)', '經手人', '用途', '備註']], use_container_width=True)
-            
             st.markdown("##### 🛠️ 強制回溯操作")
             rev_options = display_df.apply(lambda x: f"{x['日期時間']} | {x['貨號']} ({x['品名']}) | {x['數量(顯示)']}", axis=1).tolist()
             sel_rev_target = st.selectbox("選擇要處理的紀錄", ["..."] + rev_options)
-            
             if sel_rev_target != "...":
-                target_ts = sel_rev_target.split(" | ")[0]
-                target_sku = sel_rev_target.split(" | ")[1].split(" (")[0]
-                
+                target_ts = sel_rev_target.split(" | ")[0]; target_sku = sel_rev_target.split(" | ")[1].split(" (")[0]
                 auto_restore_qty = 1
-                try:
-                    q_str = sel_rev_target.split(" | ")[-1]
-                    auto_restore_qty = abs(int(q_str))
+                try: q_str = sel_rev_target.split(" | ")[-1]; auto_restore_qty = abs(int(q_str))
                 except: pass
-
                 c_rev1, c_rev2, c_rev3 = st.columns([1,1,1])
-                with c_rev1:
-                    manual_qty = st.number_input("🔢 校正歸還數量", min_value=0, value=auto_restore_qty)
+                with c_rev1: manual_qty = st.number_input("🔢 校正歸還數量", min_value=0, value=auto_restore_qty)
                 with c_rev2:
                     st.markdown("<br>", unsafe_allow_html=True)
                     if st.button("🚫 歸還庫存並刪除日誌", type="primary"):
-                        all_logs = ws_logs.get_all_values()
-                        log_row = -1
+                        all_logs = ws_logs.get_all_values(); log_row = -1
                         for idx, row in enumerate(all_logs):
                             if row[0] == target_ts and target_sku in row[3]: log_row = idx + 1; break
                         if log_row != -1:
                             item_cell = ws_items.find(target_sku)
                             if item_cell:
-                                curr_q = int(ws_items.cell(item_cell.row, 5).value)
-                                ws_items.update_cell(item_cell.row, 5, curr_q + manual_qty)
-                                ws_logs.delete_rows(log_row)
-                                st.success(f"✅ 已歸還 {target_sku} +{manual_qty} 件，並移除紀錄。"); time.sleep(2); st.rerun()
-                            else: st.error("❌ 商品已不存在，無法歸還。")
-                        else: st.error("❌ 找不到原始日誌行。")
+                                curr_q = int(ws_items.cell(item_cell.row, 5).value); ws_items.update_cell(item_cell.row, 5, curr_q + manual_qty); ws_logs.delete_rows(log_row)
+                                st.success(f"✅ 已歸還 {target_sku} +{manual_qty}，並移除紀錄。"); time.sleep(2); st.rerun()
+                            else: st.error("❌ 商品不存在，請用右側刪除日誌。")
+                        else: st.error("❌ 找不到日誌。")
                 with c_rev3:
                     st.markdown("<br>", unsafe_allow_html=True)
                     if st.button("🗑️ 僅刪除日誌"):
-                        all_logs = ws_logs.get_all_values()
-                        log_row = -1
+                        all_logs = ws_logs.get_all_values(); log_row = -1
                         for idx, row in enumerate(all_logs):
                             if row[0] == target_ts and target_sku in row[3]: log_row = idx + 1; break
-                        if log_row != -1:
-                            ws_logs.delete_rows(log_row)
-                            st.warning("✅ 已強制移除日誌。"); time.sleep(2); st.rerun()
+                        if log_row != -1: ws_logs.delete_rows(log_row); st.warning("✅ 已強制移除日誌。"); time.sleep(2); st.rerun()
                         else: st.error("找不到日誌。")
-        else:
-            st.info("無符合條件的紀錄。")
+        else: st.info("無紀錄。")
 
-    # Tab 4, 5, 6 保持不變 (省略以節省空間，請沿用 V55)
+    # Tab 4: Mgmt (V49+V48)
     with tabs[3]:
         mt2, mt3, mt4 = st.tabs(["➕ 單品/全系列新增", "🛠️ 貨號重鑄", "🗑️ 刪除中心"])
-        # (此處代碼同 V55，為節省篇幅省略，請務必保留 V55 的 Tab 3 內容)
-        # 您可以直接使用 V55 的 Tab 3 代碼填入此處
-        # 為確保完整性，以下附上 Tab 3 關鍵部分：
         with mt2:
             st.markdown("<div class='sku-wizard'><div class='wizard-header'>🧠 智能矩陣生成</div>", unsafe_allow_html=True)
             gen_mode = st.radio("選擇模式", ["✨ 開闢新系列", "🧬 衍生/新色", "🔗 追加/補貨", "✍️ 手動輸入"], horizontal=True)
@@ -759,12 +739,12 @@ def main():
                                 if full_sku in df['SKU'].tolist():
                                     r = ws_items.find(full_sku).row
                                     current_q_val = int(df[df['SKU'] == full_sku].iloc[0]['Qty'])
-                                    ws_items.update_cell(r, 5, current_q_val + qty); ws_items.update_cell(r, 8, str(datetime.now()))
+                                    ws_items.update_cell(r, 5, current_q_val + qty); ws_items.update_cell(r, 8, get_taiwan_time_str())
                                     ws_items.update_cell(r, 2, name_input); ws_items.update_cell(r, 6, price_input)
                                     if final_img_payload: ws_items.update_cell(r, 9, final_img_payload)
                                     updates += 1; sku_log.append(f"{size}(+{qty})")
                                 else:
-                                    ws_items.append_row([full_sku, name_input, cat_input, size, qty, price_input, final_cost_val, str(datetime.now()), final_img_payload, 5, curr_input, cost_input])
+                                    ws_items.append_row([full_sku, name_input, cat_input, size, qty, price_input, final_cost_val, get_taiwan_time_str(), final_img_payload, 5, curr_input, cost_input])
                                     creates += 1; sku_log.append(f"{size}:{qty}")
                         if updates + creates > 0: log_event(ws_logs, st.session_state['user_name'], "Matrix_Batch", f"{base_sku_input} | {', '.join(sku_log)}"); st.success("✅ 成功！"); time.sleep(1); st.rerun()
                         else: st.warning("⚠️ 未輸入任何尺寸數量。")
