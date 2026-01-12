@@ -14,18 +14,17 @@ import calendar
 
 # --- 1. 系統全域設定 (V103.0 Base) ---
 st.set_page_config(
-    page_title="IFUKUK V103.7 CHRONOS", 
+    page_title="IFUKUK V103.8 FIXED", 
     layout="wide", 
     page_icon="🌏",
     initial_sidebar_state="expanded"
 )
 
 # ==========================================
-# 🛑 【V103.0 原始視覺 + V103.7 排班擴充】
+# 🛑 【V103.0 視覺 + V103.8 排班修復】
 # ==========================================
 st.markdown("""
     <style>
-        /* --- V103.0 原版樣式保留 --- */
         .stApp { background-color: #FFFFFF !important; }
         [data-testid="stAppViewContainer"] { background-color: #FFFFFF !important; }
         [data-testid="stSidebar"] { background-color: #F8F9FA !important; border-right: 1px solid #E5E7EB; }
@@ -64,7 +63,7 @@ st.markdown("""
         .cart-total { font-size: 1.2rem; font-weight: 800; color: #0f172a; text-align: right; margin-top: 10px; }
         .final-price-display { font-size: 1.8rem; font-weight: 900; color: #16a34a; text-align: center; background: #dcfce7; padding: 10px; border-radius: 8px; margin-top: 10px; border: 1px solid #86efac; }
         
-        /* --- V103.7 新增：專業排班樣式 --- */
+        /* 排班樣式 */
         .roster-header {
             background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
             color: white; padding: 15px; border-radius: 12px; margin-bottom: 20px;
@@ -75,7 +74,6 @@ st.markdown("""
             background: #fff; position: relative; margin-bottom: 10px; transition: all 0.2s;
         }
         .day-cell:hover { border-color: #3b82f6; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
-        .day-num { font-weight: 900; color: #333; font-size: 1.1rem; margin-bottom: 5px; }
         .shift-tag {
             font-size: 0.75rem; padding: 2px 6px; border-radius: 4px; margin-bottom: 2px;
             color: white; font-weight: bold; display: block; text-align: center;
@@ -85,12 +83,6 @@ st.markdown("""
             position: absolute; top: 5px; right: 5px; width: 8px; height: 8px;
             background-color: #ef4444; border-radius: 50%;
         }
-        .notify-bell { font-size: 0.8rem; color: #f59e0b; margin-left: 2px; }
-        
-        .overview-row {
-            padding: 8px; border-bottom: 1px dashed #eee; display: flex; align-items: center; justify-content: space-between;
-        }
-        .overview-row:hover { background-color: #f8fafc; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -100,7 +92,7 @@ IMGBB_API_KEY = "c2f93d2a1a62bd3a6da15f477d2bb88a"
 SHEET_HEADERS = ["SKU", "Name", "Category", "Size", "Qty", "Price", "Cost", "Last_Updated", "Image_URL", "Safety_Stock", "Orig_Currency", "Orig_Cost", "Qty_CN"]
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
 
-# --- 核心連線 (V103.0 Gold) ---
+# --- 核心連線 ---
 @st.cache_resource(ttl=600)
 def get_connection():
     if "gcp_service_account" not in st.secrets:
@@ -211,10 +203,10 @@ def render_navbar(user_initial):
     date_str = current_date.strftime("%Y/%m/%d")
     rate = st.session_state.get('exchange_rate', 4.5)
     st.markdown(f"""
-        <div style="display:flex; justify-content:space-between; align-items:center; background:#fff; padding:15px; border-bottom:1px solid #eee; margin-bottom:15px;">
-            <div>
-                <span style="font-size:18px; font-weight:900; color:#111;">IFUKUK GLOBAL</span><br>
-                <span style="font-size:11px; color:#666; font-family:monospace;">{date_str} • Rate: {rate}</span>
+        <div class="navbar-container">
+            <div style="display:flex; flex-direction:column;">
+                <span style="font-size:18px; font-weight:900; color:#111;">IFUKUK GLOBAL</span>
+                <span style="font-size:11px; color:#666; font-family:monospace;">{date_str} • Live: {rate}</span>
             </div>
             <div style="width:36px; height:36px; background:#111; color:#fff; border-radius:8px; display:flex; align-items:center; justify-content:center; font-weight:bold;">
                 {user_initial}
@@ -223,175 +215,133 @@ def render_navbar(user_initial):
     """, unsafe_allow_html=True)
 
 # ==========================================
-# 🗓️ V103.7 專業排班系統 (CHRONOS ROSTER)
+# 🗓️ V103.8 排班修復版 (相容舊欄位)
 # ==========================================
 def get_staff_color(name):
-    # 為每個人產生固定顏色
     colors = ["#3B82F6", "#10B981", "#F59E0B", "#8B5CF6", "#EC4899", "#6366F1", "#14B8A6", "#F97316"]
     return colors[sum(ord(c) for c in str(name)) % len(colors)]
 
 def render_roster_system(sh, users_list):
-    # 1. 確保 Shifts 表存在 (Date, Staff, Type, Note, Notify, By)
-    ws_shifts = get_worksheet_safe(sh, "Shifts", ["Date", "Staff", "Type", "Note", "Notify", "Updated_By"])
-    shifts_df = get_data_safe(ws_shifts, ["Date", "Staff", "Type", "Note", "Notify", "Updated_By"])
+    # 這裡將 'Type' 改回 'Shift_Type' 以兼容舊資料
+    ws_shifts = get_worksheet_safe(sh, "Shifts", ["Date", "Staff", "Shift_Type", "Note", "Notify", "Updated_By"])
+    shifts_df = get_data_safe(ws_shifts, ["Date", "Staff", "Shift_Type", "Note", "Notify", "Updated_By"])
     
     st.markdown("<div class='roster-header'><h3>🗓️ 員工排班與提醒中心</h3></div>", unsafe_allow_html=True)
     
-    # 2. 控制台 (年月選擇)
     now = datetime.utcnow() + timedelta(hours=8)
     col_ctrl1, col_ctrl2, col_ctrl3 = st.columns([1, 1, 2])
     sel_year = col_ctrl1.number_input("年份", 2024, 2030, now.year)
     sel_month = col_ctrl2.selectbox("月份", range(1, 13), now.month)
     
-    # 3. 月曆視圖 (The Grid)
     cal = calendar.monthcalendar(sel_year, sel_month)
-    month_name = calendar.month_name[sel_month]
     
-    # 星期標頭
     cols = st.columns(7)
     days_name = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"]
     for i, d in enumerate(days_name): cols[i].markdown(f"<div style='text-align:center;font-weight:bold;color:#666;'>{d}</div>", unsafe_allow_html=True)
     
-    # 日曆內容
     for week in cal:
         cols = st.columns(7)
         for i, day in enumerate(week):
             with cols[i]:
                 if day != 0:
                     date_str = f"{sel_year}-{str(sel_month).zfill(2)}-{str(day).zfill(2)}"
-                    
-                    # 篩選當日班表
                     day_shifts = pd.DataFrame()
                     has_note = False
                     if not shifts_df.empty:
                         day_shifts = shifts_df[shifts_df['Date'] == date_str]
-                        # 檢查是否有備註
                         if not day_shifts[day_shifts['Note'] != ""].empty: has_note = True
                     
-                    # 點擊按鈕 (更新 session state)
                     if st.button(f"{day}", key=f"cal_{date_str}", use_container_width=True):
                         st.session_state['roster_date'] = date_str
                         st.rerun()
                     
-                    # 視覺化 Badge (用 HTML 渲染在按鈕下方)
                     badges_html = ""
                     if not day_shifts.empty:
                         for _, r in day_shifts.iterrows():
-                            color = get_staff_color(r['Staff'])
-                            # 狀態顏色覆蓋
-                            if r['Type'] == "公休": color = "#9CA3AF" # Gray
-                            elif r['Type'] == "特休": color = "#EF4444" # Red
-                            elif r['Type'] == "空班": color = "#F59E0B" # Orange
+                            # V103.8 FIX: 安全讀取 Type 或 Shift_Type，若無則預設"上班"
+                            s_type = r.get('Shift_Type', r.get('Type', '上班'))
                             
-                            notify_icon = "🔔" if r['Notify'] == "TRUE" else ""
+                            color = get_staff_color(r['Staff'])
+                            if s_type == "公休": color = "#9CA3AF"
+                            elif s_type == "特休": color = "#EF4444"
+                            elif s_type == "空班": color = "#F59E0B"
+                            
+                            notify_icon = "🔔" if r.get('Notify') == "TRUE" else ""
                             badges_html += f"<span class='shift-tag' style='background-color:{color}'>{r['Staff']} {notify_icon}</span>"
                     
                     note_html = "<div class='note-dot'></div>" if has_note else ""
-                    st.markdown(f"""
-                        <div class='day-cell' style='margin-top:-10px; border:none; background:transparent;'>
-                            {note_html}
-                            {badges_html}
-                        </div>
-                    """, unsafe_allow_html=True)
+                    st.markdown(f"""<div class='day-cell' style='margin-top:-10px; border:none; background:transparent;'>{note_html}{badges_html}</div>""", unsafe_allow_html=True)
                 else:
                     st.markdown("<div style='min-height:80px;'></div>", unsafe_allow_html=True)
 
     st.markdown("---")
-    
-    # 4. 編輯與檢視區 (Split View)
     c_edit, c_view = st.columns([1, 1.5])
     
-    # [左側] 編輯區
     with c_edit:
         if 'roster_date' in st.session_state:
             target_date = st.session_state['roster_date']
             st.markdown(f"#### ✏️ 編輯: {target_date}")
-            
             with st.form("add_shift"):
                 c1, c2 = st.columns(2)
                 s_staff = c1.selectbox("人員", users_list)
                 s_type = c2.selectbox("班別/狀態", ["早班", "晚班", "全班", "公休", "特休", "空班", "代班"])
                 s_note = st.text_input("備註 (選填)")
                 s_notify = st.checkbox("🔔 需要通知 (明天上班提醒)")
-                
                 if st.form_submit_button("➕ 加入/更新排班", type="primary"):
-                    # 刪除舊紀錄 (避免同一人同一天重複)
                     all_vals = ws_shifts.get_all_values()
                     rows_to_del = []
                     for idx, row in enumerate(all_vals):
                         if len(row) > 1 and row[0] == target_date and row[1] == s_staff:
                             rows_to_del.append(idx + 1)
                     for r_idx in reversed(rows_to_del): ws_shifts.delete_rows(r_idx)
-                    
-                    # 新增
                     ws_shifts.append_row([target_date, s_staff, s_type, s_note, "TRUE" if s_notify else "FALSE", st.session_state['user_name']])
-                    st.cache_data.clear() # 強制刷新
-                    st.success(f"已排入: {s_staff}")
-                    time.sleep(0.5); st.rerun()
+                    st.cache_data.clear()
+                    st.success(f"已排入: {s_staff}"); time.sleep(0.5); st.rerun()
             
-            # 顯示當日名單 (可刪除)
             curr_day = shifts_df[shifts_df['Date'] == target_date] if not shifts_df.empty else pd.DataFrame()
             if not curr_day.empty:
                 st.caption("點擊按鈕移除:")
                 for _, r in curr_day.iterrows():
                     col_info, col_btn = st.columns([4, 1])
-                    notify_mk = "🔔" if r['Notify'] == "TRUE" else ""
-                    col_info.info(f"{r['Staff']} ({r['Type']}) {r['Note']} {notify_mk}")
+                    s_type = r.get('Shift_Type', r.get('Type', '上班')) # 安全讀取
+                    col_info.info(f"{r['Staff']} ({s_type}) {r['Note']}")
                     if col_btn.button("🗑️", key=f"del_{target_date}_{r['Staff']}"):
                         all_vals = ws_shifts.get_all_values()
                         for idx, row in enumerate(all_vals):
                             if len(row) > 1 and row[0] == target_date and row[1] == r['Staff']:
-                                ws_shifts.delete_rows(idx + 1)
-                                break
-                        st.cache_data.clear()
-                        st.rerun()
-        else:
-            st.info("👈 請點擊上方日曆日期開始排班")
+                                ws_shifts.delete_rows(idx + 1); break
+                        st.cache_data.clear(); st.rerun()
+        else: st.info("👈 請點擊上方日曆日期開始排班")
 
-    # [右側] 總覽與通知生成
     with c_view:
         st.markdown(f"#### 📅 {sel_month}月 排班總覽")
-        
-        # 篩選本月資料
         if not shifts_df.empty:
             m_prefix = f"{sel_year}-{str(sel_month).zfill(2)}"
             m_data = shifts_df[shifts_df['Date'].str.startswith(m_prefix)].copy()
-            
             if not m_data.empty:
                 m_data = m_data.sort_values(['Date', 'Staff'])
-                
-                # 顯示表格
+                # 標準化欄位名稱顯示
+                m_data = m_data.rename(columns={'Shift_Type': '班別', 'Type': '班別'})
                 st.dataframe(
-                    m_data[['Date', 'Staff', 'Type', 'Note', 'Notify']],
-                    column_config={
-                        "Date": "日期", "Staff": "人員", "Type": "班別", 
-                        "Note": "備註", "Notify": "提醒"
-                    },
-                    use_container_width=True,
-                    hide_index=True,
-                    height=300
+                    m_data[['Date', 'Staff', '班別', 'Note', 'Notify']],
+                    column_config={"Date": "日期", "Staff": "人員", "Note": "備註", "Notify": "提醒"},
+                    use_container_width=True, hide_index=True, height=300
                 )
                 
                 st.markdown("---")
                 st.markdown("#### 📢 通知文案生成器")
-                st.caption("由於系統無法直接發送 Line，請點擊下方按鈕複製文案，發送至群組。")
-                
-                # 生成明日通知
                 tmr = (datetime.utcnow() + timedelta(hours=8) + timedelta(days=1)).strftime("%Y-%m-%d")
                 tmr_shifts = shifts_df[(shifts_df['Date'] == tmr) & (shifts_df['Notify'] == "TRUE")]
-                
                 if not tmr_shifts.empty:
                     msg = f"【明日上班提醒 {tmr}】\n"
                     for _, r in tmr_shifts.iterrows():
-                        msg += f"- {r['Staff']} ({r['Type']}) {r['Note']}\n"
+                        s_type = r.get('Shift_Type', r.get('Type', '上班'))
+                        msg += f"- {r['Staff']} ({s_type}) {r['Note']}\n"
                     msg += "請準時打卡！"
                     st.text_area("複製內容:", value=msg, height=100)
-                else:
-                    st.info(f"明日 ({tmr}) 無設定需提醒的班表。")
-            else:
-                st.info("本月尚無排班資料。")
-        else:
-            st.info("尚無資料。")
+                else: st.info(f"明日 ({tmr}) 無需提醒。")
+            else: st.info("本月尚無排班資料。")
+        else: st.info("尚無資料。")
 
 # --- 主程式 ---
 def main():
@@ -417,13 +367,13 @@ def main():
 
     if not ws_items or not ws_logs or not ws_users: st.warning("Initializing..."); st.stop()
 
-    # --- 登入頁面 (V103.0 Original) ---
+    # --- 登入頁面 ---
     if not st.session_state['logged_in']:
         c1, c2, c3 = st.columns([1, 2, 1])
         with c2:
             st.markdown("<br><br><br>", unsafe_allow_html=True)
             st.markdown("<div style='text-align:center; font-weight:900; font-size:2.5rem; margin-bottom:10px;'>IFUKUK</div>", unsafe_allow_html=True)
-            st.markdown("<div style='text-align:center; color:#666; font-size:0.9rem; margin-bottom:30px;'>OMEGA V103.7 CHRONOS</div>", unsafe_allow_html=True)
+            st.markdown("<div style='text-align:center; color:#666; font-size:0.9rem; margin-bottom:30px;'>OMEGA V103.8 (ROSTER FIX)</div>", unsafe_allow_html=True)
             with st.form("login"):
                 user_input = st.text_input("帳號 (ID)")
                 pass_input = st.text_input("密碼 (Password)", type="password")
@@ -585,7 +535,7 @@ def main():
         with c1:
             st.subheader("1. 商品選擇")
             sku_opts = df.apply(lambda x: f"{x['SKU']} | {x['Name']} ({x['Size']}) | 🇹🇼:{x['Qty']}", axis=1).tolist() if not df.empty else []
-            sel_sku = st.selectbox("搜尋商品", ["..."] + sku_opts, key="pos_sel")
+            sel_sku = st.selectbox("搜尋商品 (SKU)", ["..."] + sku_opts, key="pos_sel")
             if sel_sku != "...":
                 target_sku = sel_sku.split(" | ")[0]; target = df[df['SKU'] == target_sku].iloc[0]; img = render_image_url(target['Image_URL'])
                 st.markdown(f"""<div style="border:1px solid #e5e7eb; border-radius:12px; padding:15px; display:flex; align-items:center; background:#f9fafb;"><img src="{img}" style="width:80px; height:80px; object-fit:cover; border-radius:8px; margin-right:15px;"><div><div style="font-weight:bold; font-size:16px;">{target['Name']}</div><div style="color:#666; font-size:12px;">{target['SKU']} ({target['Size']})</div><div style="margin-top:5px; font-weight:bold; color:#059669;">${target['Price']}</div><div style="color:#1e40af; font-weight:bold;">🇹🇼 現貨: {target['Qty']}</div></div></div>""", unsafe_allow_html=True)
@@ -617,7 +567,8 @@ def main():
                     for i in st.session_state['pos_cart']:
                         r = ws_items.find(i['sku']).row; curr = int(ws_items.cell(r, 5).value)
                         if curr >= i['qty']: update_cell_retry(ws_items, r, 5, curr - i['qty']); items.append(f"{i['sku']} x{i['qty']}")
-                    log_event(ws_logs, st.session_state['user_name'], "Sale", f"Total:${final} | {','.join(items)} | {note} | {pay} | {ch} | {who}")
+                        else: st.error("庫存不足"); st.stop()
+                    log_event(ws_logs, st.session_state['user_name'], "Sale", f"Total:${final} | Items: {', '.join(items)} | {note} | {pay} | {ch} | {who}")
                     st.session_state['pos_cart'] = []; st.cache_data.clear(); st.success("結帳完成"); time.sleep(2); st.rerun()
             else: st.info("空")
 
@@ -653,7 +604,7 @@ def main():
 
     with tabs[4]:
         st.subheader("矩陣管理")
-        mt1, mt2 = st.tabs(["新增", "調撥"])
+        mt1, mt2, mt3 = st.tabs(["新增", "調撥", "刪除"])
         with mt1:
             mode = st.radio("模式", ["新系列", "衍生"], horizontal=True)
             a_sku, a_name = "", ""
@@ -686,6 +637,9 @@ def main():
                     r = ws_items.find(sel).row; update_cell_retry(ws_items, r, 5, int(row['Qty'])-q); update_cell_retry(ws_items, r, 13, int(row['Qty_CN'])+q); st.cache_data.clear(); st.success("OK"); st.rerun()
                 if c2.button("CN->TW"):
                     r = ws_items.find(sel).row; update_cell_retry(ws_items, r, 5, int(row['Qty'])+q); update_cell_retry(ws_items, r, 13, int(row['Qty_CN'])-q); st.cache_data.clear(); st.success("OK"); st.rerun()
+        with mt3:
+            d = st.selectbox("刪除", ["..."] + df['SKU'].tolist())
+            if d != "..." and st.button("確認刪除"): ws_items.delete_rows(ws_items.find(d).row); st.cache_data.clear(); st.success("OK"); st.rerun()
 
     with tabs[5]:
         st.dataframe(logs_df, use_container_width=True)
