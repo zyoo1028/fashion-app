@@ -14,14 +14,14 @@ import calendar
 
 # --- 1. 系統全域設定 ---
 st.set_page_config(
-    page_title="IFUKUK V103.13 COMPLETE", 
+    page_title="IFUKUK V103.14 PERFECT", 
     layout="wide", 
     page_icon="🌏",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="collapsed"
 )
 
 # ==========================================
-# 🛑 CSS 樣式表 (V103 + V104 完美融合)
+# 🛑 CSS 視覺核心 (V104 Fluid Skin)
 # ==========================================
 st.markdown("""
     <style>
@@ -36,7 +36,7 @@ st.markdown("""
             overflow-x: auto; white-space: nowrap;
         }
         
-        /* 通用卡片 (POS/Inventory) */
+        /* 通用卡片 */
         .uni-card { 
             background: #fff; border-radius: 12px; overflow: hidden; 
             box-shadow: 0 2px 5px rgba(0,0,0,0.05); border: 1px solid #E5E7EB; 
@@ -51,24 +51,20 @@ st.markdown("""
         .bg-tw { background: #dbeafe; color: #1e40af; }
         .bg-cn { background: #fef3c7; color: #92400e; }
 
-        /* V103 戰情看板樣式 (復原) */
-        .metric-card { 
-            background: linear-gradient(145deg, #ffffff, #f5f7fa); 
-            border-radius: 16px; padding: 15px; border: 1px solid #e1e4e8; 
-            text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.02); 
-            margin-bottom: 10px; height: 100%;
-        }
-        .metric-value { font-size: 1.8rem; font-weight: 800; margin: 5px 0; color:#111 !important; }
-        .metric-label { font-size: 0.8rem; letter-spacing: 1px; color:#666 !important; font-weight: 600; text-transform: uppercase;}
-        .metric-sub { font-size: 0.75rem; color: #999; margin-top: -5px; }
-        .profit-card { border-bottom: 4px solid #f59e0b; }
-        .realized-card { border-bottom: 4px solid #10b981; }
-
+        /* 分頁 */
+        .pagination-container { display: flex; justify-content: center; align-items: center; gap: 20px; margin-top: 15px; padding: 10px; background: #fff; border-radius: 10px; }
+        
         /* 購物車 */
         .cart-box { background: #fff; border: 1px solid #e2e8f0; padding: 15px; border-radius: 12px; margin-bottom: 10px; }
         .cart-item { display: flex; justify-content: space-between; border-bottom: 1px dashed #ddd; padding: 8px 0; font-size: 0.9rem; }
         .final-price-box { font-size: 1.8rem; font-weight: 900; color: #16a34a; text-align: center; background: #dcfce7; padding: 10px; border-radius: 8px; margin-top: 10px; border: 1px solid #86efac; }
         
+        /* 戰情看板 */
+        .metric-card { background: #fff; border-radius: 12px; padding: 15px; border: 1px solid #eee; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.02); height: 100%; }
+        .metric-val { font-size: 1.6rem; font-weight: 800; color:#111; margin: 5px 0; }
+        .metric-lbl { font-size: 0.8rem; color:#666; font-weight: 600; text-transform: uppercase;}
+        .metric-sub { font-size: 0.75rem; color: #999; margin-top: -5px; }
+
         /* 排班表 */
         .roster-header { background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%); padding: 15px; border-radius: 12px; margin-bottom: 20px; border: 1px solid #bfdbfe; }
         .day-cell { border: 1px solid #eee; border-radius: 8px; padding: 5px; min-height: 80px; position: relative; margin-bottom: 5px; transition: 0.2s; background: #fff; }
@@ -76,11 +72,8 @@ st.markdown("""
         .shift-tag { font-size: 0.75rem; padding: 2px 5px; border-radius: 4px; margin: 2px; display: block; text-align: center; color: white; font-weight: bold; }
         .note-dot { position: absolute; top: 5px; right: 5px; width: 8px; height: 8px; background: #ef4444; border-radius: 50%; }
         
-        /* 基礎優化 */
         .stButton>button { border-radius: 10px; height: 3.2rem; font-weight: 700; border: none; box-shadow: 0 2px 4px rgba(0,0,0,0.1); width: 100%; }
         input, .stTextInput>div>div, div[data-baseweb="select"]>div { border-radius: 10px !important; min-height: 3rem; }
-        .pagination-container { display: flex; justify-content: center; align-items: center; gap: 20px; margin-top: 15px; padding: 10px; background: #fff; border-radius: 10px; }
-        
         #MainMenu {visibility: hidden;} footer {visibility: hidden;} header {visibility: hidden;}
     </style>
 """, unsafe_allow_html=True)
@@ -96,7 +89,7 @@ CAT_LIST = ["上衣(Top)", "褲子(Btm)", "外套(Out)", "套裝(Suit)", "鞋類
 SIZE_ORDER = ["F", "XXS", "XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL"]
 ITEMS_PER_PAGE = 15
 
-# --- 核心連線 (快取+重試+安全) ---
+# --- 核心連線 ---
 @st.cache_resource(ttl=600)
 def get_connection():
     if "gcp_service_account" not in st.secrets:
@@ -107,22 +100,34 @@ def get_connection():
     return gspread.authorize(creds)
 
 @st.cache_data(ttl=15, show_spinner=False)
-def get_data_cached(_ws_obj, ensure_qty_cn=False):
+def get_data_cached(_ws_obj, expected_headers=None):
     max_retries = 3
     for attempt in range(max_retries):
         try:
-            if _ws_obj is None: return pd.DataFrame()
+            if _ws_obj is None: return pd.DataFrame(columns=expected_headers) if expected_headers else pd.DataFrame()
             raw_data = _ws_obj.get_all_values()
-            if not raw_data or len(raw_data) < 2: return pd.DataFrame()
+            if not raw_data or len(raw_data) < 2: 
+                # 🛑 關鍵修復：如果表是空的，強制寫入標頭，防止 KeyError
+                if expected_headers:
+                    try:
+                        _ws_obj.clear()
+                        _ws_obj.append_row(expected_headers)
+                        return pd.DataFrame(columns=expected_headers)
+                    except: pass
+                return pd.DataFrame(columns=expected_headers) if expected_headers else pd.DataFrame()
+            
             headers = raw_data[0]
             seen = {}; new_headers = []
             for h in headers:
                 if h in seen: seen[h] += 1; new_headers.append(f"{h}_{seen[h]}")
                 else: seen[h] = 0; new_headers.append(h)
             rows = raw_data[1:]
-            if ensure_qty_cn and "Qty_CN" not in new_headers:
+            
+            # Auto-fix Qty_CN for Items
+            if expected_headers and "Qty_CN" in expected_headers and "Qty_CN" not in new_headers:
                 try: _ws_obj.update_cell(1, len(new_headers)+1, "Qty_CN"); new_headers.append("Qty_CN"); raw_data = _ws_obj.get_all_values(); rows = raw_data[1:]
                 except: pass
+            
             df = pd.DataFrame(rows)
             if not df.empty:
                 if len(df.columns) < len(new_headers):
@@ -131,8 +136,8 @@ def get_data_cached(_ws_obj, ensure_qty_cn=False):
             return df
         except Exception as e:
             if "429" in str(e): time.sleep(2 ** (attempt + 1)); continue
-            return pd.DataFrame()
-    return pd.DataFrame()
+            return pd.DataFrame(columns=expected_headers) if expected_headers else pd.DataFrame()
+    return pd.DataFrame(columns=expected_headers) if expected_headers else pd.DataFrame()
 
 def update_cell_retry(ws, row, col, value, retries=3):
     for i in range(retries):
@@ -221,7 +226,7 @@ def render_navbar(user_initial):
     """, unsafe_allow_html=True)
 
 # ==========================================
-# 🗓️ 排班模組 (V103.13 完整版)
+# 🗓️ 排班模組 (V103.14 Fix)
 # ==========================================
 def get_staff_color(name):
     colors = ["#3B82F6", "#10B981", "#F59E0B", "#8B5CF6", "#EC4899", "#6366F1", "#14B8A6", "#F97316"]
@@ -229,17 +234,19 @@ def get_staff_color(name):
 
 def render_roster_system(sh, users_list):
     ws_shifts = get_worksheet_safe(sh, "Shifts", ["Date", "Staff", "Type", "Note", "Notify", "Updated_By"])
-    shifts_df = get_data_cached(ws_shifts)
+    # 傳入 Expected Headers，如果表格為空自動修復，防止 KeyError
+    shifts_df = get_data_cached(ws_shifts, expected_headers=["Date", "Staff", "Type", "Note", "Notify", "Updated_By"])
     
     if not shifts_df.empty:
         if 'Shift_Type' in shifts_df.columns: shifts_df = shifts_df.rename(columns={'Shift_Type': 'Type'})
         if 'Type' not in shifts_df.columns: shifts_df['Type'] = '正常班'
+        # 確保 Date 存在
+        if 'Date' not in shifts_df.columns: shifts_df['Date'] = ""
 
     st.markdown("<div class='roster-header'><h3>🗓️ 專業排班與管理中心</h3></div>", unsafe_allow_html=True)
     
-    with st.expander("⚡ 智慧批次排班 (Date Range)", expanded=False):
+    with st.expander("⚡ 智慧批次排班 (多日連排)", expanded=False):
         with st.form("batch_roster"):
-            st.markdown("##### 選擇日期範圍與人員狀態")
             c1, c2, c3 = st.columns(3)
             b_staff = c1.selectbox("人員", users_list)
             b_type = c2.selectbox("班別", ["正常班", "早班", "晚班", "全班", "公休", "特休", "空班", "代班"])
@@ -275,14 +282,18 @@ def render_roster_system(sh, users_list):
             with cols[i]:
                 if day != 0:
                     date_str = f"{sel_year}-{str(sel_month).zfill(2)}-{str(day).zfill(2)}"
-                    day_shifts = shifts_df[shifts_df['Date'] == date_str] if not shifts_df.empty else pd.DataFrame()
+                    day_shifts = pd.DataFrame()
+                    if not shifts_df.empty and 'Date' in shifts_df.columns:
+                         day_shifts = shifts_df[shifts_df['Date'] == date_str]
+
                     badges = ""
-                    for _, r in day_shifts.iterrows():
-                        bg = get_staff_color(r['Staff'])
-                        s_type = r['Type']
-                        if s_type in ["公休", "空班"]: bg = "#9CA3AF"
-                        if s_type == "特休": bg = "#EF4444"
-                        badges += f"<span class='shift-tag' style='background:{bg}'>{r['Staff']}</span>"
+                    if not day_shifts.empty:
+                        for _, r in day_shifts.iterrows():
+                            bg = get_staff_color(r['Staff'])
+                            s_type = r.get('Type', '正常班')
+                            if s_type in ["公休", "空班"]: bg = "#9CA3AF"
+                            if s_type == "特休": bg = "#EF4444"
+                            badges += f"<span class='shift-tag' style='background:{bg}'>{r['Staff']}</span>"
                     if st.button(f"{day}", key=f"c_{date_str}", use_container_width=True):
                         st.session_state['roster_date'] = date_str; st.rerun()
                     st.markdown(f"<div style='min-height:30px;text-align:center;line-height:1.2;'>{badges}</div>", unsafe_allow_html=True)
@@ -306,7 +317,10 @@ def render_roster_system(sh, users_list):
                     ws_shifts.append_row([t_date, s_staff, s_type, s_note, "FALSE", st.session_state['user_name']])
                     st.cache_data.clear(); st.success("OK"); st.rerun()
             
-            curr = shifts_df[shifts_df['Date'] == t_date] if not shifts_df.empty else pd.DataFrame()
+            curr = pd.DataFrame()
+            if not shifts_df.empty and 'Date' in shifts_df.columns:
+                 curr = shifts_df[shifts_df['Date'] == t_date]
+            
             if not curr.empty:
                 st.caption("當日已排 (點擊刪除):")
                 for _, r in curr.iterrows():
@@ -319,7 +333,7 @@ def render_roster_system(sh, users_list):
 
     with c_stat:
         st.markdown(f"##### 📊 {sel_month}月 工時統計")
-        if not shifts_df.empty:
+        if not shifts_df.empty and 'Date' in shifts_df.columns:
             m_prefix = f"{sel_year}-{str(sel_month).zfill(2)}"
             m_data = shifts_df[shifts_df['Date'].str.startswith(m_prefix)]
             if not m_data.empty:
@@ -338,7 +352,6 @@ def main():
     if 'page_num_inv' not in st.session_state: st.session_state['page_num_inv'] = 0
     if 'page_num_int' not in st.session_state: st.session_state['page_num_int'] = 0
     
-    # 匯率初始化 (回復側邊欄監控)
     if 'exchange_rate' not in st.session_state:
         l_rate, succ = get_live_rate()
         st.session_state['exchange_rate'] = l_rate
@@ -354,12 +367,12 @@ def main():
     if not st.session_state['logged_in']:
         c1, c2, c3 = st.columns([1, 2, 1])
         with c2:
-            st.markdown("<br><br><br><h1 style='text-align:center'>IFUKUK</h1><p style='text-align:center'>OMEGA V103.13 COMPLETE</p>", unsafe_allow_html=True)
+            st.markdown("<br><br><br><h1 style='text-align:center'>IFUKUK</h1><p style='text-align:center'>OMEGA V103.14 PERFECT SYNC</p>", unsafe_allow_html=True)
             with st.form("login"):
                 u = st.text_input("帳號 (ID)"); p = st.text_input("密碼 (Password)", type="password")
                 if st.form_submit_button("登入 (LOGIN)", type="primary"):
                     with st.spinner("安全登入中..."):
-                        udf = get_data_cached(ws_users, False)
+                        udf = get_data_cached(ws_users, expected_headers=["Name", "Password", "Role", "Status", "Created_At"])
                         if udf.empty and u=="Boss" and p=="1234":
                             ws_users.append_row(["Boss", make_hash("1234"), "Admin", "Active", get_taiwan_time_str()])
                             st.cache_data.clear(); st.success("Boss 初始化成功"); time.sleep(1); st.rerun()
@@ -376,7 +389,7 @@ def main():
 
     # Main
     render_navbar(st.session_state['user_name'][0].upper())
-    df = get_data_cached(ws_items, True)
+    df = get_data_cached(ws_items, ensure_qty_cn=True, expected_headers=SHEET_HEADERS)
     for c in ["Qty","Price","Cost","Orig_Cost","Qty_CN"]: df[c] = pd.to_numeric(df[c], errors='coerce').fillna(0).astype(int)
     
     # 側邊欄 (V103.0 復原：匯率監控)
@@ -472,7 +485,11 @@ def main():
                     final = int(round(b_val * 0.7)) if disc=="7折" else (int(round(b_val * 0.8)) if disc=="8折" else (int(round(b_val * (cust/100))) if disc=="自訂" else b_val))
                     st.markdown(f"<div class='final-price-box'>實收: ${final}</div>", unsafe_allow_html=True)
                     
-                    who = st.selectbox("經手人", [st.session_state['user_name']]+(list(ws_users.col_values(1)[1:]) if ws_users else []))
+                    # 補回銷售通路
+                    c_ch, c_who = st.columns(2)
+                    sale_ch = c_ch.selectbox("銷售通路", ["門市", "官網", "直播", "其他"])
+                    who = c_who.selectbox("經手人", [st.session_state['user_name']]+(list(ws_users.col_values(1)[1:]) if ws_users else []))
+                    
                     pay = st.selectbox("付款方式", ["現金","刷卡","轉帳"])
                     note = st.text_input("備註")
                     if st.button("✅ 確認結帳", type="primary", use_container_width=True):
@@ -486,7 +503,7 @@ def main():
                                     items.append(f"{i['sku']} x{i['qty']}")
                                 else: st.error("庫存不足"); valid=False; break
                         if valid:
-                            log_event(ws_logs, st.session_state['user_name'], "Sale", f"Total:${final} | {','.join(items)} | {note} | {pay} | {who}")
+                            log_event(ws_logs, st.session_state['user_name'], "Sale", f"Total:${final} | {','.join(items)} | {note} | {pay} | {sale_ch} | {who}")
                             st.session_state['pos_cart']=[]; st.cache_data.clear(); st.success("結帳完成"); time.sleep(1); st.rerun()
                 else: st.info("購物車是空的")
                 st.markdown("</div>", unsafe_allow_html=True)
@@ -512,7 +529,7 @@ def main():
     elif nav == "🗓️ 員工排班":
         render_roster_system(sh, ws_users.col_values(1)[1:] if ws_users else [])
 
-    # --- 4. 戰情 (V103.0 完整復原) ---
+    # --- 4. 戰情 ---
     elif nav == "📈 營運戰情":
         st.subheader("📈 營運戰情室")
         rev = (df['Qty']*df['Price']).sum()
@@ -522,18 +539,17 @@ def main():
             rmb_df = df[df['Orig_Currency']=='CNY']
             if not rmb_df.empty: rmb = ((rmb_df['Qty']+rmb_df['Qty_CN'])*rmb_df['Orig_Cost']).sum()
         profit = rev - (df['Qty'] * df['Cost']).sum()
-        real = calculate_realized_revenue(get_data_cached(ws_logs))
         
-        # 5 Cards Restore
-        m1, m2, m3, m4, m5 = st.columns(5)
-        m1.markdown(f"<div class='metric-card'><div class='metric-lbl'>庫存總量</div><div class='metric-val'>{df['Qty'].sum()+df['Qty_CN'].sum()}</div></div>", unsafe_allow_html=True)
-        m2.markdown(f"<div class='metric-card'><div class='metric-lbl'>預估營收</div><div class='metric-val'>${rev:,}</div></div>", unsafe_allow_html=True)
-        m3.markdown(f"<div class='metric-card'><div class='metric-lbl'>總成本 (含原幣)</div><div class='metric-val'>${cost:,}</div><div class='metric-sub'>¥{rmb:,}</div></div>", unsafe_allow_html=True)
-        m4.markdown(f"<div class='metric-card profit-card'><div class='metric-lbl'>潛在毛利</div><div class='metric-val' style='color:#f59e0b'>${profit:,}</div></div>", unsafe_allow_html=True)
-        m5.markdown(f"<div class='metric-card realized-card'><div class='metric-lbl'>實際營收 (已售)</div><div class='metric-val' style='color:#10b981'>${real:,}</div></div>", unsafe_allow_html=True)
+        logs_df = get_data_cached(ws_logs, expected_headers=["Timestamp", "User", "Action", "Details"])
+        real = calculate_realized_revenue(logs_df)
+        
+        m1, m2, m3, m4 = st.columns(4)
+        m1.markdown(f"<div class='metric-card'><div class='metric-lbl'>預估營收</div><div class='metric-val'>${rev:,}</div></div>", unsafe_allow_html=True)
+        m2.markdown(f"<div class='metric-card'><div class='metric-lbl'>總成本 (含原幣)</div><div class='metric-val'>${cost:,}</div><div class='metric-sub'>¥{rmb:,}</div></div>", unsafe_allow_html=True)
+        m3.markdown(f"<div class='metric-card'><div class='metric-lbl'>潛在毛利</div><div class='metric-val' style='color:#f59e0b'>${profit:,}</div></div>", unsafe_allow_html=True)
+        m4.markdown(f"<div class='metric-card'><div class='metric-lbl'>實際營收</div><div class='metric-val' style='color:#10b981'>${real:,}</div></div>", unsafe_allow_html=True)
         
         st.markdown("---")
-        # Charts Restore
         c1, c2 = st.columns(2)
         with c1:
             st.markdown("##### 📦 庫存分類佔比")
@@ -545,7 +561,7 @@ def main():
             fig2 = px.bar(top, x='Qty', y='Name', orientation='h', text='Qty')
             st.plotly_chart(fig2, use_container_width=True)
 
-    # --- 5. 領用 (Visual + Pagination) ---
+    # --- 5. 領用 (Visual + Pagination + History) ---
     elif nav == "🎁 領用/稽核":
         st.subheader("🎁 視覺化領用")
         c_l, c_r = st.columns([3, 2])
@@ -595,12 +611,21 @@ def main():
                         st.cache_data.clear(); st.success("OK"); time.sleep(1); st.rerun()
             else: st.info("👈 請選擇商品")
 
-    # --- 6. 管理 (矩陣新增 / 調撥 / 刪除 - V103 Restore) ---
+        st.divider()
+        st.markdown("#### 📋 領用/報廢紀錄明細")
+        logs_df = get_data_cached(ws_logs, expected_headers=["Timestamp", "User", "Action", "Details"])
+        if not logs_df.empty and 'Action' in logs_df.columns:
+            int_history = logs_df[logs_df['Action'] == 'Internal_Use']
+            if not int_history.empty:
+                st.dataframe(int_history[['Timestamp', 'User', 'Details']].rename(columns={"Timestamp":"時間", "User":"經手人", "Details":"詳情"}), use_container_width=True)
+            else: st.caption("尚無領用紀錄")
+
+    # --- 6. 管理 ---
     elif nav == "👔 矩陣管理":
         st.subheader("👔 管理中樞")
-        t1, t2, t3 = st.tabs(["➕ 矩陣新增", "⚡ 視覺調撥", "🗑️ 刪除庫存"])
+        t1, t2, t3 = st.tabs(["矩陣新增", "視覺調撥", "刪除庫存"])
         
-        with t1: # Matrix Add (Full V103 Logic with Currency)
+        with t1: # Matrix Add
             st.markdown("#### 新增商品")
             mode = st.radio("模式", ["新系列", "衍生"], horizontal=True)
             a_sku, a_name = "", ""
@@ -656,7 +681,7 @@ def main():
                         st.cache_data.clear(); st.success("OK"); time.sleep(1); st.rerun()
                 else: st.info("👈 請選擇商品")
         
-        with t3: # Delete Center (RESTORED)
+        with t3: # Delete Center
             st.markdown("#### 🗑️ 刪除商品")
             d_sku = st.selectbox("選擇刪除對象", ["..."] + df['SKU'].tolist())
             if d_sku != "...":
@@ -680,10 +705,18 @@ def main():
             if st.button("確認刪除"):
                 cell = ws_users.find(d_u)
                 ws_users.delete_rows(cell.row); st.cache_data.clear(); st.success("Deleted"); st.rerun()
+        
         st.divider()
-        st.subheader("📝 系統日誌")
-        logs = get_data_cached(ws_logs)
-        st.dataframe(logs.sort_index(ascending=False), use_container_width=True)
+        st.subheader("📝 全域系統日誌")
+        # 增加搜尋功能
+        log_q = st.text_input("🔍 搜尋日誌 (輸入人名/動作/商品)", placeholder="Search logs...")
+        logs = get_data_cached(ws_logs, expected_headers=["Timestamp", "User", "Action", "Details"])
+        
+        if not logs.empty:
+            if log_q:
+                logs = logs[logs.apply(lambda x: log_q.lower() in str(x.values).lower(), axis=1)]
+            st.dataframe(logs.sort_index(ascending=False), use_container_width=True)
+        else: st.info("無日誌資料")
 
     elif nav == "🚪 登出":
         st.session_state['logged_in'] = False; st.rerun()
