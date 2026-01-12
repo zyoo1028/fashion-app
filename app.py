@@ -14,18 +14,20 @@ import calendar
 
 # --- 1. 系統全域設定 ---
 st.set_page_config(
-    page_title="IFUKUK V103.16 FINALITY", 
+    page_title="IFUKUK V103.17 REDEMPTION", 
     layout="wide", 
     page_icon="🌏",
     initial_sidebar_state="collapsed"
 )
 
 # ==========================================
-# 🛑 CSS 視覺核心
+# 🛑 CSS 視覺核心 (V104 + 中文優化)
 # ==========================================
 st.markdown("""
     <style>
         .stApp { background-color: #F8F9FA !important; }
+        
+        /* 導航列 */
         div[data-testid="stRadio"] > label { display:none; }
         div[data-testid="stRadio"] > div { 
             flex-direction: row; gap: 8px; justify-content: start; 
@@ -33,6 +35,8 @@ st.markdown("""
             border: 1px solid #ddd; box-shadow: 0 2px 5px rgba(0,0,0,0.05); 
             overflow-x: auto; white-space: nowrap;
         }
+        
+        /* 卡片與容器 */
         .uni-card { 
             background: #fff; border-radius: 12px; overflow: hidden; 
             box-shadow: 0 2px 5px rgba(0,0,0,0.05); border: 1px solid #E5E7EB; 
@@ -46,24 +50,34 @@ st.markdown("""
         .uni-badge { font-size: 0.75rem; padding: 2px 6px; border-radius: 4px; display: inline-block; margin-right: 4px; font-weight: bold;}
         .bg-tw { background: #dbeafe; color: #1e40af; }
         .bg-cn { background: #fef3c7; color: #92400e; }
+
+        /* 分頁 */
         .pagination-container { display: flex; justify-content: center; align-items: center; gap: 20px; margin-top: 15px; padding: 10px; background: #fff; border-radius: 10px; }
+        
+        /* 購物車 */
         .cart-box { background: #fff; border: 1px solid #e2e8f0; padding: 15px; border-radius: 12px; margin-bottom: 10px; }
         .cart-item { display: flex; justify-content: space-between; border-bottom: 1px dashed #ddd; padding: 8px 0; font-size: 0.9rem; }
         .final-price-box { font-size: 1.8rem; font-weight: 900; color: #16a34a; text-align: center; background: #dcfce7; padding: 10px; border-radius: 8px; margin-top: 10px; border: 1px solid #86efac; }
+        
+        /* 戰情看板 */
         .metric-card { background: #fff; border-radius: 12px; padding: 15px; border: 1px solid #eee; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.02); height: 100%; }
         .metric-val { font-size: 1.6rem; font-weight: 800; color:#111; margin: 5px 0; }
         .metric-lbl { font-size: 0.8rem; color:#666; font-weight: 600; text-transform: uppercase;}
         .metric-sub { font-size: 0.75rem; color: #999; margin-top: -5px; }
+
+        /* 排班表 */
         .roster-header { background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%); padding: 15px; border-radius: 12px; margin-bottom: 20px; border: 1px solid #bfdbfe; }
         .day-cell { border: 1px solid #eee; border-radius: 8px; padding: 5px; min-height: 80px; position: relative; margin-bottom: 5px; transition: 0.2s; background: #fff; }
         .day-cell:hover { border-color: #3b82f6; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
         .shift-tag { font-size: 0.75rem; padding: 2px 5px; border-radius: 4px; margin: 2px; display: block; text-align: center; color: white; font-weight: bold; }
         .note-dot { position: absolute; top: 5px; right: 5px; width: 8px; height: 8px; background: #ef4444; border-radius: 50%; }
+        
         .stButton>button { border-radius: 10px; height: 3.2rem; font-weight: 700; border: none; box-shadow: 0 2px 4px rgba(0,0,0,0.1); width: 100%; }
         input, .stTextInput>div>div, div[data-baseweb="select"]>div { border-radius: 10px !important; min-height: 3rem; }
         .audit-stat-box { background: #fff7ed; border: 1px solid #ffedd5; padding: 15px; border-radius: 12px; text-align: center; margin-bottom: 10px; }
         .audit-num { font-size: 1.5rem; font-weight: 800; color: #c2410c; }
         .audit-txt { font-size: 0.8rem; color: #9a3412; font-weight: bold; }
+        
         #MainMenu {visibility: hidden;} footer {visibility: hidden;} header {visibility: hidden;}
     </style>
 """, unsafe_allow_html=True)
@@ -78,7 +92,8 @@ CAT_LIST = ["上衣(Top)", "褲子(Btm)", "外套(Out)", "套裝(Suit)", "鞋類
 SIZE_ORDER = ["F", "XXS", "XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL"]
 ITEMS_PER_PAGE = 15
 
-# --- 核心連線 (V103.16 Pure Sync) ---
+# --- 核心連線 (V103.17 Unified) ---
+# [FIXED] 統一所有讀取函數名稱為 get_data_smart，避免 NameError
 @st.cache_resource(ttl=600)
 def get_connection():
     if "gcp_service_account" not in st.secrets:
@@ -89,21 +104,19 @@ def get_connection():
     return gspread.authorize(creds)
 
 @st.cache_data(ttl=10, show_spinner=False)
-def get_data_pure(_ws_obj, expected_headers=None):
+def get_data_smart(_ws_obj, expected_headers=None, ensure_qty_cn=False):
     max_retries = 3
     for attempt in range(max_retries):
         try:
             if _ws_obj is None: return pd.DataFrame(columns=expected_headers) if expected_headers else pd.DataFrame()
             raw_data = _ws_obj.get_all_values()
+            
             if not raw_data or len(raw_data) < 2: 
-                if expected_headers:
-                    try:
-                        _ws_obj.clear(); _ws_obj.append_row(expected_headers)
-                        return pd.DataFrame(columns=expected_headers)
-                    except: pass
+                # 空表處理：回傳帶有標頭的空 DataFrame
                 return pd.DataFrame(columns=expected_headers) if expected_headers else pd.DataFrame()
             
             headers = raw_data[0]
+            # 去重
             seen = {}; new_headers = []
             for h in headers:
                 if h in seen: seen[h] += 1; new_headers.append(f"{h}_{seen[h]}")
@@ -111,16 +124,27 @@ def get_data_pure(_ws_obj, expected_headers=None):
             
             rows = raw_data[1:]
             
-            # Auto-fix Qty_CN
-            if expected_headers and "Qty_CN" in expected_headers and "Qty_CN" not in new_headers:
+            # Auto-fix Qty_CN (僅在需要時)
+            if ensure_qty_cn and "Qty_CN" not in new_headers:
                 try: _ws_obj.update_cell(1, len(new_headers)+1, "Qty_CN"); new_headers.append("Qty_CN"); raw_data = _ws_obj.get_all_values(); rows = raw_data[1:]
                 except: pass
             
             df = pd.DataFrame(rows)
             if not df.empty:
-                if len(df.columns) < len(new_headers):
+                # [FIXED] 強制截斷多餘欄位，防止 ValueError
+                if len(df.columns) > len(new_headers):
+                    df = df.iloc[:, :len(new_headers)]
+                # 補齊缺失欄位
+                elif len(df.columns) < len(new_headers):
                     for _ in range(len(new_headers) - len(df.columns)): df[len(df.columns)] = ""
-                df.columns = new_headers[:len(df.columns)]
+                
+                df.columns = new_headers
+                
+                # [FIXED] 如果指定了 expected_headers，只保留這些欄位，防止改名錯誤
+                if expected_headers:
+                    valid_cols = [c for c in expected_headers if c in df.columns]
+                    df = df[valid_cols]
+                    
             return df
         except Exception as e:
             if "429" in str(e): time.sleep(2 ** (attempt + 1)); continue
@@ -181,7 +205,21 @@ def generate_smart_style_code(category, existing_skus):
             except: pass
     return f"{prefix}-{str(max_seq + 1).zfill(3)}"
 
-# 🛑 修正後的銷售計算：從 Details 中解析 "By:..." 
+# [FIXED] 銷售數據解析器：讓數據看得懂
+def parse_sales_details(detail_str):
+    # 格式: Total:$2016 | Items:... | Note | Pay | Channel | By:Who
+    try:
+        parts = detail_str.split('|')
+        total = parts[0].replace('Total:$', '').strip() if 'Total:$' in parts[0] else '0'
+        items = parts[1].replace('Items:', '').strip() if len(parts) > 1 else '-'
+        note = parts[2].strip() if len(parts) > 2 else '-'
+        pay = parts[3].strip() if len(parts) > 3 else '-'
+        channel = parts[4].replace('Ch:', '').strip() if len(parts) > 4 else '-'
+        who = parts[5].replace('By:', '').strip() if len(parts) > 5 else '-'
+        return total, items, note, pay, channel, who
+    except:
+        return '0', detail_str, '-', '-', '-', '-'
+
 def calculate_realized_revenue(logs_df):
     total = 0
     if logs_df.empty or 'Action' not in logs_df.columns: return 0
@@ -209,7 +247,7 @@ def render_navbar(user_initial):
             <div style="display:flex; justify-content:space-between; align-items:center; background:#fff; padding:15px; border-bottom:1px solid #eee; margin-bottom:15px;">
                 <div>
                     <span style="font-size:18px; font-weight:900; color:#111;">IFUKUK GLOBAL</span><br>
-                    <span style="font-size:11px; color:#666; font-family:monospace;">{date_str} • Rate: {rate}</span>
+                    <span style="font-size:11px; color:#666; font-family:monospace;">{date_str} • 匯率: {rate}</span>
                 </div>
                 <div style="width:36px; height:36px; background:#111; color:#fff; border-radius:8px; display:flex; align-items:center; justify-content:center; font-weight:bold;">
                     {user_initial}
@@ -219,7 +257,7 @@ def render_navbar(user_initial):
     """, unsafe_allow_html=True)
 
 # ==========================================
-# 🗓️ 排班模組 (V103.16 Fix)
+# 🗓️ 排班模組 (Robust)
 # ==========================================
 def get_staff_color(name):
     colors = ["#3B82F6", "#10B981", "#F59E0B", "#8B5CF6", "#EC4899", "#6366F1", "#14B8A6", "#F97316"]
@@ -227,15 +265,16 @@ def get_staff_color(name):
 
 def render_roster_system(sh, users_list):
     ws_shifts = get_worksheet_safe(sh, "Shifts", ["Date", "Staff", "Type", "Note", "Notify", "Updated_By"])
-    shifts_df = get_data_pure(ws_shifts, expected_headers=["Date", "Staff", "Type", "Note", "Notify", "Updated_By"])
+    shifts_df = get_data_smart(ws_shifts, expected_headers=["Date", "Staff", "Type", "Note", "Notify", "Updated_By"])
     
+    # 標頭自動修復
     if not shifts_df.empty:
         if 'Shift_Type' in shifts_df.columns: shifts_df = shifts_df.rename(columns={'Shift_Type': 'Type'})
         if 'Type' not in shifts_df.columns: shifts_df['Type'] = '正常班'
 
     st.markdown("<div class='roster-header'><h3>🗓️ 專業排班與管理中心</h3></div>", unsafe_allow_html=True)
     
-    with st.expander("⚡ 智慧批次排班 (Date Range)", expanded=False):
+    with st.expander("⚡ 智慧批次排班 (多日連排)", expanded=False):
         with st.form("batch_roster"):
             c1, c2, c3 = st.columns(3)
             b_staff = c1.selectbox("人員", users_list)
@@ -253,8 +292,9 @@ def render_roster_system(sh, users_list):
                         rows_to_del = [idx+1 for idx, v in enumerate(all_vals) if len(v)>1 and v[0]==curr_d and v[1]==b_staff]
                         for r_idx in reversed(rows_to_del): ws_shifts.delete_rows(r_idx)
                         ws_shifts.append_row([curr_d, b_staff, b_type, b_note, "FALSE", st.session_state['user_name']])
-                    st.cache_data.clear(); st.success(f"已排入 {delta.days+1} 天"); time.sleep(1); st.rerun()
-                else: st.error("請選擇完整日期")
+                    st.cache_data.clear()
+                    st.success(f"已成功排入 {delta.days+1} 天班表！"); time.sleep(1); st.rerun()
+                else: st.error("請選擇完整的起始與結束日期。")
 
     now = datetime.utcnow() + timedelta(hours=8)
     col1, col2 = st.columns([1, 1])
@@ -301,7 +341,10 @@ def render_roster_system(sh, users_list):
                     ws_shifts.append_row([t_date, s_staff, s_type, s_note, "FALSE", st.session_state['user_name']])
                     st.cache_data.clear(); st.success("OK"); st.rerun()
             
-            curr = shifts_df[shifts_df['Date'] == t_date] if not shifts_df.empty else pd.DataFrame()
+            curr = pd.DataFrame()
+            if not shifts_df.empty and 'Date' in shifts_df.columns:
+                 curr = shifts_df[shifts_df['Date'] == t_date]
+            
             if not curr.empty:
                 st.caption("當日已排 (點擊刪除):")
                 for _, r in curr.iterrows():
@@ -314,7 +357,7 @@ def render_roster_system(sh, users_list):
 
     with c_stat:
         st.markdown(f"##### 📊 {sel_month}月 工時統計")
-        if not shifts_df.empty:
+        if not shifts_df.empty and 'Date' in shifts_df.columns:
             m_prefix = f"{sel_year}-{str(sel_month).zfill(2)}"
             m_data = shifts_df[shifts_df['Date'].str.startswith(m_prefix)]
             if not m_data.empty:
@@ -327,11 +370,8 @@ def render_roster_system(sh, users_list):
 def main():
     if 'logged_in' not in st.session_state: st.session_state['logged_in'] = False; st.session_state['user_name'] = ""
     if 'pos_cart' not in st.session_state: st.session_state['pos_cart'] = []
-    
-    # 狀態初始化
     for k in ['page_num_pos', 'page_num_inv', 'page_num_int']:
         if k not in st.session_state: st.session_state[k] = 0
-    
     if 'exchange_rate' not in st.session_state:
         l_rate, succ = get_live_rate()
         st.session_state['exchange_rate'] = l_rate
@@ -344,18 +384,17 @@ def main():
     ws_logs = get_worksheet_safe(sh, "Logs", ["Timestamp", "User", "Action", "Details"])
     ws_users = get_worksheet_safe(sh, "Users", ["Name", "Password", "Role", "Status", "Created_At"])
 
-    # 確保 ws_users 不為 None (解決 NameError)
-    if ws_users is None: st.error("無法連接員工資料表"); return
+    if ws_users is None: st.error("Fatal Error: DB Init Failed"); return
 
     if not st.session_state['logged_in']:
         c1, c2, c3 = st.columns([1, 2, 1])
         with c2:
-            st.markdown("<br><br><br><h1 style='text-align:center'>IFUKUK</h1><p style='text-align:center'>OMEGA V103.16 FINALITY</p>", unsafe_allow_html=True)
+            st.markdown("<br><br><br><h1 style='text-align:center'>IFUKUK</h1><p style='text-align:center'>OMEGA V103.17 REDEMPTION</p>", unsafe_allow_html=True)
             with st.form("login"):
                 u = st.text_input("帳號 (ID)"); p = st.text_input("密碼 (Password)", type="password")
                 if st.form_submit_button("登入 (LOGIN)", type="primary"):
                     with st.spinner("安全登入中..."):
-                        udf = get_data_pure(ws_users, expected_headers=["Name", "Password", "Role", "Status", "Created_At"])
+                        udf = get_data_smart(ws_users, expected_headers=["Name", "Password", "Role", "Status", "Created_At"])
                         if udf.empty and u=="Boss" and p=="1234":
                             ws_users.append_row(["Boss", make_hash("1234"), "Admin", "Active", get_taiwan_time_str()])
                             st.cache_data.clear(); st.success("Boss 初始化成功"); time.sleep(1); st.rerun()
@@ -371,7 +410,7 @@ def main():
         return
 
     render_navbar(st.session_state['user_name'][0].upper())
-    df = get_data_pure(ws_items, expected_headers=SHEET_HEADERS)
+    df = get_data_smart(ws_items, expected_headers=SHEET_HEADERS, ensure_qty_cn=True)
     for c in ["Qty","Price","Cost","Orig_Cost","Qty_CN"]: df[c] = pd.to_numeric(df[c], errors='coerce').fillna(0).astype(int)
     
     with st.sidebar:
@@ -449,7 +488,6 @@ def main():
                     st.markdown(f"<div class='final-price-box'>實收: ${final}</div>", unsafe_allow_html=True)
                     c_ch, c_who = st.columns(2)
                     sale_ch = c_ch.selectbox("銷售通路", ["門市", "官網", "直播", "其他"])
-                    # [FIXED] 經手人預設為當前登入者
                     who = c_who.selectbox("經手人", [st.session_state['user_name']]+(list(ws_users.col_values(1)[1:]) if ws_users else []))
                     pay = st.selectbox("付款方式", ["現金","刷卡","轉帳"]); note = st.text_input("備註")
                     if st.button("✅ 確認結帳", type="primary", use_container_width=True):
@@ -463,60 +501,54 @@ def main():
                                     items.append(f"{i['sku']} x{i['qty']}")
                                 else: st.error("庫存不足"); valid=False; break
                         if valid:
-                            # [FIXED] Log 記錄 By: {who} 確保業績歸屬
-                            log_event(ws_logs, st.session_state['user_name'], "Sale", f"Total:${final} | {','.join(items)} | {note} | {pay} | {sale_ch} | By:{who}")
+                            # [FIXED] 記錄「經手人 (who)」到 User 欄位，而非登入者
+                            log_event(ws_logs, who, "Sale", f"Total:${final} | Items: {','.join(items)} | {note} | {pay} | Ch:{sale_ch} | By:{who}")
                             st.session_state['pos_cart']=[]; st.cache_data.clear(); st.success("結帳完成"); time.sleep(1); st.rerun()
                 else: st.info("購物車是空的")
                 st.markdown("</div>", unsafe_allow_html=True)
             
-            # [FIXED] 新增：銷售紀錄查詢與撤銷
             st.divider()
             st.markdown("##### 🧾 銷售與補貨紀錄 (可撤銷)")
-            logs_df = get_data_pure(ws_logs, expected_headers=["Timestamp", "User", "Action", "Details"])
+            logs_df = get_data_smart(ws_logs, expected_headers=["Timestamp", "User", "Action", "Details"])
             if not logs_df.empty:
-                # 篩選 Sales
-                sales_only = logs_df[logs_df['Action']=='Sale'].head(10).copy()
-                if not sales_only.empty:
-                    # 顯示簡化表
-                    st.dataframe(sales_only[['Timestamp', 'Details']], use_container_width=True)
+                # 解析並顯示
+                raw_sales = logs_df[logs_df['Action']=='Sale'].head(15).copy()
+                if not raw_sales.empty:
+                    parsed_data = []
+                    for idx, row in raw_sales.iterrows():
+                        t, i, n, p, c, w = parse_sales_details(row['Details'])
+                        parsed_data.append({"ID": idx, "時間": row['Timestamp'], "經手人": w, "通路": c, "付款": p, "內容": i, "金額": t})
+                    
+                    pdf = pd.DataFrame(parsed_data)
+                    st.dataframe(pdf, use_container_width=True)
                     
                     # 撤銷功能
-                    rev_target = st.selectbox("選擇要撤銷的交易", ["..."] + sales_only.apply(lambda x: f"{x['Timestamp']} | {x['Details']}", axis=1).tolist())
-                    if rev_target != "...":
+                    rev_idx = st.selectbox("選擇要撤銷的交易 ID", ["..."] + pdf['ID'].astype(str).tolist())
+                    if rev_idx != "...":
                         if st.button("❌ 撤銷此筆交易 (恢復庫存)"):
-                            # 解析 SKU 與數量
-                            t_str = rev_target.split(" | ")[0]
-                            target_row = logs_df[logs_df['Timestamp'] == t_str].iloc[0]
+                            target_row = logs_df.loc[int(rev_idx)]
                             details = target_row['Details']
-                            # Items: A x1, B x2
                             try:
-                                items_part = re.search(r'Items:(.*?) \|', details).group(1)
+                                items_part = re.search(r'Items: (.*?) \|', details).group(1)
                                 item_list = items_part.split(',')
                                 for it in item_list:
                                     sku_r = it.strip().split(' x')[0]
                                     qty_r = int(it.strip().split(' x')[1])
-                                    # 補回庫存
                                     r_cell = ws_items.find(sku_r)
                                     if r_cell:
                                         curr = int(ws_items.cell(r_cell.row, 5).value)
                                         update_cell_retry(ws_items, r_cell.row, 5, curr + qty_r)
-                                
-                                # 刪除 Log
-                                cell_log = ws_logs.find(t_str)
-                                ws_logs.delete_rows(cell_log.row)
-                                st.cache_data.clear()
-                                st.success("已撤銷並恢復庫存！")
-                                time.sleep(1); st.rerun()
-                            except: st.error("撤銷失敗，格式無法解析")
+                                ws_logs.delete_rows(int(rev_idx) + 2) # header + 1-based index
+                                st.cache_data.clear(); st.success("已撤銷並恢復庫存！"); time.sleep(1); st.rerun()
+                            except: st.error("撤銷失敗，格式異常")
 
-    # --- 2. 庫存 (補回 Cost) ---
+    # --- 2. 庫存 ---
     elif nav == "📊 庫存總覽":
         st.subheader("📦 庫存清單")
         m1, m2 = st.columns(2)
         m1.metric("TW 總庫存", df['Qty'].sum())
         m2.metric("CN 總庫存", df['Qty_CN'].sum())
         
-        # [FIXED] 補回成本顯示
         df_display = df.rename(columns={"SKU": "貨號", "Name": "品名", "Category": "分類", "Size": "尺寸", "Qty": "台灣庫存", "Qty_CN": "中國庫存", "Price": "售價", "Cost": "成本", "Orig_Cost": "原幣成本"})
         
         tot = len(df)
@@ -526,7 +558,6 @@ def main():
         col_p2.markdown(f"<div style='text-align:center'>第 {st.session_state['page_num_inv']+1} / {tot_p} 頁</div>", unsafe_allow_html=True)
         if col_p3.button("➡️", key="inv_next", disabled=st.session_state['page_num_inv']>=tot_p-1): st.session_state['page_num_inv'] += 1; st.rerun()
         p_start = st.session_state['page_num_inv'] * 20
-        # 顯示所有欄位
         st.dataframe(df_display.iloc[p_start : p_start+20], use_container_width=True)
 
     # --- 3. 排班 ---
@@ -543,7 +574,7 @@ def main():
             rmb_df = df[df['Orig_Currency']=='CNY']
             if not rmb_df.empty: rmb = ((rmb_df['Qty']+rmb_df['Qty_CN'])*rmb_df['Orig_Cost']).sum()
         profit = rev - (df['Qty'] * df['Cost']).sum()
-        logs_df = get_data_pure(ws_logs, expected_headers=["Timestamp", "User", "Action", "Details"])
+        logs_df = get_data_smart(ws_logs, expected_headers=["Timestamp", "User", "Action", "Details"])
         real = calculate_realized_revenue(logs_df)
         m1, m2, m3, m4 = st.columns(4)
         m1.markdown(f"<div class='metric-card'><div class='metric-lbl'>預估營收</div><div class='metric-val'>${rev:,}</div></div>", unsafe_allow_html=True)
@@ -562,26 +593,23 @@ def main():
             fig2 = px.bar(top, x='Qty', y='Name', orientation='h', text='Qty')
             st.plotly_chart(fig2, use_container_width=True)
 
-    # --- 5. 領用 (Corrected Stats Logic) ---
+    # --- 5. 領用 ---
     elif nav == "🎁 領用/稽核":
         st.subheader("🎁 領用管理中心")
-        logs_df = get_data_pure(ws_logs, expected_headers=["Timestamp", "User", "Action", "Details"])
+        logs_df = get_data_smart(ws_logs, expected_headers=["Timestamp", "User", "Action", "Details"])
         int_logs = pd.DataFrame()
         if not logs_df.empty and 'Action' in logs_df.columns:
             int_logs = logs_df[logs_df['Action'] == 'Internal_Use'].copy()
             
-            # [FIXED] 解析真實領用人 (Beneficiary)
-            # Format: SKU -Qty | Beneficiary | Reason | Note
+            # [FIXED] 解析真實領用人
             def extract_beneficiary(detail):
                 try: return detail.split('|')[1].strip()
                 except: return "未知"
             
             if not int_logs.empty:
                 int_logs['Real_User'] = int_logs['Details'].apply(extract_beneficiary)
-                
                 total_int = len(int_logs)
                 st.markdown(f"""<div style='display:flex; gap:10px; margin-bottom:10px;'><div class='audit-stat-box' style='flex:1;'><div class='audit-num'>{total_int}</div><div class='audit-txt'>總領用筆數</div></div></div>""", unsafe_allow_html=True)
-                
                 with st.expander("🏆 各人員領用統計 (真實領用人)", expanded=True):
                     rank = int_logs['Real_User'].value_counts().reset_index()
                     rank.columns = ['領用人', '筆數']
@@ -593,13 +621,11 @@ def main():
             q = st.text_input("搜尋領用品", placeholder="...", label_visibility="collapsed")
             idf = df.copy()
             if q: idf = idf[idf.apply(lambda x: q.lower() in str(x.values).lower(), axis=1)]
-            
             tot_i = len(idf)
             tot_pi = math.ceil(tot_i / 9)
             if st.session_state['page_num_int'] >= tot_pi: st.session_state['page_num_int'] = 0
             start = st.session_state['page_num_int'] * 9
             page_idf = idf.iloc[start : start+9]
-            
             if not page_idf.empty:
                 rows = [page_idf.iloc[i:i+3] for i in range(0, len(page_idf), 3)]
                 for r in rows:
@@ -624,7 +650,6 @@ def main():
                 with st.form("int_do"):
                     q = st.number_input("數量", 1)
                     who = st.selectbox("領用人", ws_users.col_values(1)[1:] if ws_users else [])
-                    # [FIXED] 補齊所有選項
                     rsn = st.selectbox("原因", ["公務制服", "福利", "樣品", "報廢", "其他"])
                     n = st.text_input("備註")
                     if st.form_submit_button("執行扣除"):
@@ -635,11 +660,33 @@ def main():
             else: st.info("👈 請選擇商品")
         
         st.divider()
-        st.markdown("#### 📋 領用紀錄明細 (即時更新)")
+        st.markdown("#### 📋 領用紀錄明細 (可刪除/撤銷)")
         if not int_logs.empty:
-            int_display = int_logs[['Timestamp', 'User', 'Details']].copy()
-            int_display.columns = ['時間', '系統操作人', '詳情 (含真實領用人)']
+            int_logs_reset = int_logs.reset_index() # Keep index for deletion
+            int_display = int_logs_reset[['index', 'Timestamp', 'User', 'Details', 'Real_User']].copy()
+            int_display.columns = ['ID', '時間', '系統操作人', '詳情', '真實領用人']
             st.dataframe(int_display.sort_values('時間', ascending=False), use_container_width=True)
+            
+            # [FIXED] 領用撤銷功能
+            rev_int_id = st.selectbox("選擇要撤銷的領用 ID", ["..."] + int_display['ID'].astype(str).tolist())
+            if rev_int_id != "...":
+                if st.button("❌ 撤銷此筆領用 (恢復庫存)"):
+                    try:
+                        target_row = logs_df.loc[int(rev_int_id)]
+                        details = target_row['Details']
+                        # SKU -Qty | ...
+                        sku_part = details.split('|')[0].strip()
+                        sku_r = sku_part.split(' -')[0].strip()
+                        qty_r = int(sku_part.split(' -')[1])
+                        
+                        r_cell = ws_items.find(sku_r)
+                        if r_cell:
+                            curr = int(ws_items.cell(r_cell.row, 5).value)
+                            update_cell_retry(ws_items, r_cell.row, 5, curr + qty_r)
+                        
+                        ws_logs.delete_rows(int(rev_int_id) + 2)
+                        st.cache_data.clear(); st.success("已撤銷並恢復庫存！"); time.sleep(1); st.rerun()
+                    except: st.error("撤銷失敗")
 
     # --- 6. 管理 ---
     elif nav == "👔 矩陣管理":
@@ -712,9 +759,9 @@ def main():
         st.subheader("📝 系統全域日誌與查詢")
         col_search, col_act = st.columns([3, 1])
         q = col_search.text_input("🔍 超級搜尋 (輸入日期/人名/商品/單號)", placeholder="例如: 2024-01-13 或 Admin 或 銷售")
-        logs = get_data_pure(ws_logs, expected_headers=["Timestamp", "User", "Action", "Details"])
+        logs = get_data_smart(ws_logs, expected_headers=["Timestamp", "User", "Action", "Details"])
         
-        # [FIXED] 修正 ValueError: 檢查是否為空
+        # [FIXED] 嚴格檢查欄位數，防止 ValueError
         if not logs.empty and len(logs.columns) == 4:
             filtered_logs = logs.copy()
             filtered_logs.columns = ['時間', '操作人', '動作類型', '詳細內容']
@@ -729,7 +776,8 @@ def main():
     elif nav == "👥 員工管理":
         if st.session_state['user_role'] == 'Admin':
             st.subheader("👥 員工帳號管理")
-            users_df = get_data_cached(ws_users)
+            # [FIXED] 使用 get_data_smart 防止 NameError
+            users_df = get_data_smart(ws_users, expected_headers=["Name", "Password", "Role", "Status", "Created_At"])
             st.dataframe(users_df, use_container_width=True)
             with st.expander("➕ 新增員工"):
                 with st.form("add_user"):
