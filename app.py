@@ -18,7 +18,7 @@ import matplotlib.font_manager as fm
 
 # --- 1. 系統全域設定 ---
 st.set_page_config(
-    page_title="IFUKUK ERP V109.1 ROSTER PRO", 
+    page_title="IFUKUK ERP V109.2 ROSTER ELITE", 
     layout="wide", 
     page_icon="🌏",
     initial_sidebar_state="expanded"
@@ -61,13 +61,13 @@ st.markdown("""
 
         /* V109 排班表 PRO CSS */
         .roster-header { background: #f8fafc; padding: 15px; border-radius: 12px; margin-bottom: 20px; border: 1px solid #e2e8f0; text-align: center; }
-        .day-cell { border: 1px solid #f1f5f9; border-radius: 8px; padding: 2px; min-height: 90px; position: relative; margin-bottom: 5px; background: #fff; }
+        .day-cell { border: 1px solid #f1f5f9; border-radius: 8px; padding: 4px; min-height: 100px; position: relative; margin-bottom: 5px; background: #fff; }
         .day-num { font-size: 0.8rem; font-weight: bold; color: #64748b; margin-bottom: 2px; padding-left: 4px; }
         
         /* 班別膠囊樣式 */
         .shift-pill { 
-            font-size: 0.7rem; padding: 3px 4px; border-radius: 6px; 
-            margin-bottom: 3px; color: white; display: block; 
+            font-size: 0.75rem; padding: 4px 6px; border-radius: 6px; 
+            margin-bottom: 4px; color: white; display: block; 
             text-align: center; font-weight: bold; 
             box-shadow: 0 1px 2px rgba(0,0,0,0.1);
             white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -78,7 +78,7 @@ st.markdown("""
             background-color: #EF4444; color: white;
             font-weight: 900; font-size: 0.9rem;
             display: flex; align-items: center; justify-content: center;
-            height: 100%; border-radius: 6px; min-height: 80px;
+            height: 100%; border-radius: 6px; min-height: 90px;
         }
         
         .note-dot { position: absolute; top: 4px; right: 4px; width: 6px; height: 6px; background: #ef4444; border-radius: 50%; }
@@ -246,31 +246,40 @@ def render_navbar(user_initial):
 CAT_LIST = ["上衣(Top)", "褲子(Btm)", "外套(Out)", "套裝(Suit)", "鞋類(Shoe)", "包款(Bag)", "帽子(Hat)", "飾品(Acc)", "其他(Misc)"]
 
 # ==========================================
-# 🗓️ 排班系統 PRO (Module Rewrite V109.1)
+# 🗓️ 排班系統 ELITE (Module Rewrite V109.2)
 # ==========================================
-# 1. 班別顏色定義 (Hotfix: 公休=紅)
-SHIFT_COLORS = {
-    "早班": "#3B82F6", # 藍色
-    "晚班": "#8B5CF6", # 紫色
-    "全班": "#10B981", # 綠色
-    "代班": "#F59E0B", # 橘色
-    "公休": "#EF4444", # 紅色 (全店公休/個人公休)
-    "特休": "#DB2777", # 粉紅 (個人假)
-    "空班": "#6B7280", # 深灰
-    "事假": "#EC4899", # 粉紫
-    "病假": "#14B8A6"  # 青色
-}
 
-def get_shift_color(shift_type):
-    return SHIFT_COLORS.get(shift_type, "#374151")
+# Point 1: 人員專屬色 + 強制公休紅
+def get_staff_color(name, shift_type):
+    # 1. 優先判斷：若是 "公休" (不論是全店還是個人)，強制紅色
+    if shift_type == "公休":
+        return "#EF4444" 
+    
+    # 2. 次要判斷：依據人名產生固定顏色 (Hash Logic)
+    # 定義一組好看的 Pastel/Vibrant 顏色池
+    PALETTE = [
+        "#3B82F6", "#10B981", "#8B5CF6", "#F59E0B", "#EC4899", 
+        "#6366F1", "#14B8A6", "#F97316", "#0EA5E9", "#84CC16"
+    ]
+    # 使用 hash 讓同一個名字永遠對應同一個顏色
+    idx = sum(ord(c) for c in name) % len(PALETTE)
+    return PALETTE[idx]
 
-# 2. 班表圖片生成 (Matplotlib)
+# Point 4: 班表圖片生成 (優化版：顯示細節)
 def generate_roster_image_buffer(year, month, shifts_df, days_in_month):
     try:
-        fig, ax = plt.subplots(figsize=(10, 8))
+        # 嘗試尋找中文字型
+        font_path = None
+        for font in fm.findSystemFonts():
+            if 'heiti' in font.lower() or 'noto' in font.lower() or 'microsoft' in font.lower() or 'arial unicode' in font.lower():
+                font_path = font; break
+        prop = fm.FontProperties(fname=font_path) if font_path else None
+        
+        fig, ax = plt.subplots(figsize=(12, 10)) # 加大尺寸
         ax.axis('off')
         
-        ax.text(0.5, 0.95, f"IFUKUK Roster - {year}/{month}", ha='center', va='center', fontsize=20, weight='bold')
+        title = f"IFUKUK Roster - {year}/{month}"
+        ax.text(0.5, 0.96, title, ha='center', va='center', fontsize=22, weight='bold', fontproperties=prop)
         
         cols = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
         cal = calendar.monthcalendar(year, month)
@@ -287,27 +296,44 @@ def generate_roster_image_buffer(year, month, shifts_df, days_in_month):
                     date_str = f"{year}-{str(month).zfill(2)}-{str(day).zfill(2)}"
                     day_shifts = shifts_df[shifts_df['Date'] == date_str]
                     
-                    # 邏輯判斷：是否全店公休
                     is_store_closed = False
                     if not day_shifts.empty:
                         for _, r in day_shifts.iterrows():
                             if r['Staff'] == "全店" and r['Type'] == "公休": is_store_closed = True; break
                     
+                    cell_text = f"{day}\n"
                     if is_store_closed:
-                        cell_text = f"{day}\n[全店公休]"
+                        cell_text += "\n[全店公休]\nStore Closed"
                     else:
-                        cell_text = f"{day}\n"
                         if not day_shifts.empty:
                             for _, r in day_shifts.iterrows():
-                                s_code = r['Type'][0] if r['Type'] else "?"
-                                cell_text += f"{r['Staff']}({s_code})\n"
+                                # 格式：Name (Shift)
+                                s_type = r['Type']
+                                # 簡化班別文字以防過長
+                                s_short = s_type.replace("早班","早").replace("晚班","晚").replace("全班","全").replace("公休","休")
+                                cell_text += f"{r['Staff']} ({s_short})\n"
                     row_data.append(cell_text)
             table_data.append(row_data)
 
+        # 繪製表格
         table = ax.table(cellText=table_data, loc='center', cellLoc='left', bbox=[0, 0, 1, 0.9])
         table.auto_set_font_size(False)
-        table.set_fontsize(10)
-        table.scale(1, 2) 
+        table.set_fontsize(11)
+        
+        # 調整儲存格高度與顏色
+        for (i, j), cell in table.get_celld().items():
+            if i == 0: # Header
+                cell.set_text_props(weight='bold')
+                cell.set_facecolor('#f3f4f6')
+                cell.set_height(0.05)
+            else: # Body
+                cell.set_height(0.15) # 增加高度以容納多行文字
+                cell.set_valign('top') # 文字置頂
+                # 檢查內容是否包含全店公休
+                txt = cell.get_text().get_text()
+                if "全店公休" in txt:
+                    cell.set_facecolor('#FECACA') # 淺紅背景
+                    cell.get_text().set_color('#991B1B') # 深紅文字
 
         buf = io.BytesIO()
         plt.savefig(buf, format='png', dpi=150, bbox_inches='tight')
@@ -318,7 +344,6 @@ def generate_roster_image_buffer(year, month, shifts_df, days_in_month):
         return None
 
 def render_roster_system(sh, users_list, user_name):
-    # 讀取資料
     ws_shifts = get_worksheet_safe(sh, "Shifts", ["Date", "Staff", "Shift_Type", "Note", "Notify", "Updated_By"])
     shifts_df = get_data_safe(ws_shifts, ["Date", "Staff", "Shift_Type", "Note", "Notify", "Updated_By"])
     
@@ -328,50 +353,63 @@ def render_roster_system(sh, users_list, user_name):
     else:
         shifts_df = pd.DataFrame(columns=["Date", "Staff", "Type", "Note", "Notify", "Updated_By"])
 
-    st.markdown("<div class='roster-header'><h3>🗓️ 專業排班中心 PRO</h3></div>", unsafe_allow_html=True)
+    st.markdown("<div class='roster-header'><h3>🗓️ 專業排班中心 ELITE</h3></div>", unsafe_allow_html=True)
 
-    # --- 時間控制區 ---
+    # --- 時間控制區 (Point 5: 月份顯示優化) ---
     now = datetime.utcnow() + timedelta(hours=8)
     c_ctrl1, c_ctrl2, c_ctrl3 = st.columns([2, 1, 1])
     with c_ctrl1:
         c_y, c_m = st.columns(2)
         sel_year = c_y.number_input("年份", 2024, 2030, now.year, label_visibility="collapsed")
-        sel_month = c_m.selectbox("月份", range(1, 13), now.month, label_visibility="collapsed")
+        # 月份 Map
+        month_map = {1:"1月 (Jan)", 2:"2月 (Feb)", 3:"3月 (Mar)", 4:"4月 (Apr)", 5:"5月 (May)", 6:"6月 (Jun)", 
+                     7:"7月 (Jul)", 8:"8月 (Aug)", 9:"9月 (Sep)", 10:"10月 (Oct)", 11:"11月 (Nov)", 12:"12月 (Dec)"}
+        rev_month_map = {v:k for k,v in month_map.items()}
+        curr_m_str = month_map[now.month]
+        sel_month_str = c_m.selectbox("月份", list(month_map.values()), index=list(month_map.values()).index(curr_m_str), label_visibility="collapsed")
+        sel_month = rev_month_map[sel_month_str]
     
     with c_ctrl2:
+        # Point 3: LINE 通告優化
         if st.button("📤 生成 LINE 通告", use_container_width=True):
-            line_txt = f"【IFUKUK {sel_month}月班表通知】\n"
+            line_txt = f"📅 【IFUKUK {sel_month}月班表公告】\n"
+            line_txt += f"------------------------\n"
             m_prefix = f"{sel_year}-{str(sel_month).zfill(2)}"
             m_data = shifts_df[shifts_df['Date'].str.startswith(m_prefix)].sort_values(['Date', 'Staff'])
             if not m_data.empty:
                 last_date = ""
                 for _, r in m_data.iterrows():
                     d_short = r['Date'][5:]
-                    if d_short != last_date: line_txt += f"\n📅 {d_short}:\n"; last_date = d_short
+                    # 日期分組
+                    if d_short != last_date: 
+                        line_txt += f"\n🗓️ {d_short} ({calendar.day_name[datetime.strptime(r['Date'], '%Y-%m-%d').weekday()][:3]})\n"
+                        last_date = d_short
+                    
                     if r['Staff'] == "全店" and r['Type'] == "公休":
-                        line_txt += f" - 🔴 全店公休\n"
+                        line_txt += f"   ⛔ 全店公休 (Store Closed)\n"
                     else:
-                        line_txt += f" - {r['Staff']}: {r['Type']} {f'({r['Note']})' if r['Note'] else ''}\n"
-                st.code(line_txt, language="text")
-                st.caption("👆 點擊右上角複製按鈕，貼上 LINE 群組")
+                        line_txt += f"   👤 {r['Staff']}：{r['Type']} {f'({r['Note']})' if r['Note'] else ''}\n"
+                
+                line_txt += f"\n------------------------\nGenerated by OMEGA System"
+                st.text_area("複製下方內容", value=line_txt, height=200)
             else:
                 st.warning("本月尚無排班")
 
     with c_ctrl3:
+        # Point 4: 班表存圖按鈕
         if st.button("📸 班表存圖", use_container_width=True):
-            with st.spinner("繪製中..."):
+            with st.spinner("繪製高解析圖片中..."):
                 img_buf = generate_roster_image_buffer(sel_year, sel_month, shifts_df, calendar.monthrange(sel_year, sel_month)[1])
                 if img_buf:
                     st.image(img_buf, caption=f"{sel_year}/{sel_month} 班表預覽")
                     st.download_button("💾 下載圖片", data=img_buf, file_name=f"roster_{sel_year}_{sel_month}.png", mime="image/png", use_container_width=True)
                 else:
-                    st.error("繪圖失敗")
+                    st.error("繪圖失敗 (可能為伺服器字型問題)")
 
     st.markdown("---")
 
-    # --- 核心日曆區 (V109.1 Update) ---
+    # --- 核心日曆區 (Point 1: 顏色邏輯應用) ---
     cal = calendar.monthcalendar(sel_year, sel_month)
-    
     cols = st.columns(7)
     days_map = ["MON 一", "TUE 二", "WED 三", "THU 四", "FRI 五", "SAT 六", "SUN 日"]
     for i, d in enumerate(days_map): 
@@ -389,7 +427,6 @@ def render_roster_system(sh, users_list, user_name):
                         st.session_state['roster_date'] = date_str
                         st.rerun()
 
-                    # 邏輯判斷：優先檢查 "全店公休"
                     is_store_closed = False
                     if not day_shifts.empty:
                         for _, r in day_shifts.iterrows():
@@ -397,30 +434,28 @@ def render_roster_system(sh, users_list, user_name):
 
                     html_content = ""
                     if is_store_closed:
-                        # 強制顯示全店公休 (紅色)
                         html_content = "<div class='store-closed'>🔴 全店公休</div>"
                     else:
                         if not day_shifts.empty:
                             for _, r in day_shifts.iterrows():
-                                bg_color = get_shift_color(r['Type'])
+                                # 使用新顏色邏輯: 依據 Staff Name + 公休強制紅
+                                bg_color = get_staff_color(r['Staff'], r['Type'])
                                 html_content += f"""
                                     <span class='shift-pill' style='background-color:{bg_color};'>
                                         {r['Staff']} - {r['Type']}
                                     </span>
                                 """
-                    
                     st.markdown(f"<div class='day-cell'>{html_content}</div>", unsafe_allow_html=True)
                 else:
                     st.markdown("<div style='min-height:90px;'></div>", unsafe_allow_html=True)
 
-    # --- 編輯與數據區 ---
     st.markdown("---")
     
+    # 戰情數據區
     with st.expander("📊 人員出勤戰情室 (Month Statistics)", expanded=True):
         if not shifts_df.empty:
             m_prefix = f"{sel_year}-{str(sel_month).zfill(2)}"
             m_data = shifts_df[shifts_df['Date'].str.startswith(m_prefix)]
-            
             if not m_data.empty:
                 stats = []
                 for user in users_list:
@@ -428,19 +463,9 @@ def render_roster_system(sh, users_list, user_name):
                     total_shifts = len(u_data[~u_data['Type'].isin(['公休', '特休', '事假', '病假'])])
                     off_days = len(u_data[u_data['Type'] == '公休'])
                     leave_days = len(u_data[u_data['Type'] == '特休'])
-                    other_days = len(u_data[u_data['Type'].isin(['事假', '病假'])])
-                    stats.append({
-                        "人員": user,
-                        "上班天數": total_shifts,
-                        "公休": off_days,
-                        "特休 (累計)": leave_days,
-                        "其他假": other_days
-                    })
+                    stats.append({"人員": user, "上班天數": total_shifts, "公休": off_days, "特休 (累計)": leave_days})
                 st.dataframe(pd.DataFrame(stats), use_container_width=True, hide_index=True)
-            else:
-                st.info("本月尚無數據")
-        else:
-            st.info("尚無數據")
+            else: st.info("本月尚無數據")
 
     c_edit, c_smart = st.columns([1, 1])
     
@@ -450,15 +475,13 @@ def render_roster_system(sh, users_list, user_name):
             st.markdown(f"#### ✏️ 編輯排班: {t_date}")
             
             current_day_shifts = shifts_df[shifts_df['Date'] == t_date] if not shifts_df.empty else pd.DataFrame()
-            
-            # 檢查是否已設定全店公休
             is_closed = False
             if not current_day_shifts.empty:
                  if ((current_day_shifts['Staff'] == "全店") & (current_day_shifts['Type'] == "公休")).any(): is_closed = True
 
             if is_closed:
                 st.error("🔴 目前設定為：全店公休")
-                if st.button("🔓 解除全店公休 (恢復排班)", use_container_width=True):
+                if st.button("🔓 解除全店公休", use_container_width=True):
                      all_vals = ws_shifts.get_all_values()
                      for idx, row in enumerate(all_vals):
                          if len(row) > 1 and row[0] == t_date and row[1] == "全店":
@@ -477,65 +500,73 @@ def render_roster_system(sh, users_list, user_name):
 
                 with st.form("add_shift_pro"):
                     s_staff = st.selectbox("人員", users_list)
-                    s_type = st.selectbox("班別類型", list(SHIFT_COLORS.keys()))
+                    s_type = st.selectbox("班別類型", ["早班", "晚班", "全班", "代班", "公休", "特休", "空班"])
                     s_note = st.text_input("備註 (可選)")
-                    
-                    if not current_day_shifts.empty and s_staff in current_day_shifts['Staff'].values:
-                        st.warning(f"⚠️ {s_staff} 在這天已經有班了！送出將會覆蓋。")
-
                     if st.form_submit_button("➕ 加入/更新排班", use_container_width=True):
                         all_vals = ws_shifts.get_all_values()
                         rows_to_del = []
                         for idx, row in enumerate(all_vals):
                             if len(row) > 1 and row[0] == t_date and row[1] == s_staff: rows_to_del.append(idx + 1)
                         for r_idx in reversed(rows_to_del): retry_action(ws_shifts.delete_rows, r_idx)
-                        
                         retry_action(ws_shifts.append_row, [t_date, s_staff, s_type, s_note, "FALSE", user_name])
                         st.cache_data.clear(); st.success("已更新"); time.sleep(0.5); st.rerun()
 
-                # V109.1 新增：全店公休按鈕
                 st.markdown("---")
                 if st.button("🔴 設定為全店公休 (Store Closed)", type="primary", use_container_width=True):
-                    # 刪除當天所有排班
                     all_vals = ws_shifts.get_all_values()
                     rows_to_del = []
                     for idx, row in enumerate(all_vals):
                         if len(row) > 1 and row[0] == t_date: rows_to_del.append(idx + 1)
                     for r_idx in reversed(rows_to_del): retry_action(ws_shifts.delete_rows, r_idx)
-                    
-                    # 寫入全店公休
                     retry_action(ws_shifts.append_row, [t_date, "全店", "公休", "Store Closed", "FALSE", user_name])
                     st.cache_data.clear(); st.success("已設定全店公休"); st.rerun()
         else:
             st.info("👈 請點選左側日曆日期進行編輯")
 
     with c_smart:
-        st.markdown("#### 🧠 智能排班工具")
-        with st.expander("⚡ 快速複製 (Smart Copy)"):
-            st.caption("將上週同一天的班表複製到這一天")
+        st.markdown("#### 🧠 智能排班工具 (Pattern Fill)")
+        # Point 2: 智能排班重構 - 週期性排班
+        with st.expander("🔄 週期性自動排班 (Weekly Pattern)", expanded=False):
+            st.caption("例如：每週一都排 A員 早班")
+            p_staff = st.selectbox("對象", users_list, key="p_st")
+            p_day = st.selectbox("每週幾?", ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"], key="p_wd")
+            p_type = st.selectbox("班別", ["早班", "晚班", "全班"], key="p_ty")
+            
+            if st.button("🚀 執行本月填充"):
+                target_weekday = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].index(p_day)
+                # 遍歷本月所有日期
+                cal = calendar.monthcalendar(sel_year, sel_month)
+                added_count = 0
+                for week in cal:
+                    day = week[target_weekday]
+                    if day != 0:
+                        d_str = f"{sel_year}-{str(sel_month).zfill(2)}-{str(day).zfill(2)}"
+                        # 檢查是否已排
+                        is_exist = False
+                        if not shifts_df.empty:
+                            if not shifts_df[(shifts_df['Date']==d_str) & (shifts_df['Staff']==p_staff)].empty: is_exist=True
+                        
+                        if not is_exist:
+                            retry_action(ws_shifts.append_row, [d_str, p_staff, p_type, "Auto", "FALSE", user_name])
+                            added_count += 1
+                st.cache_data.clear(); st.success(f"已填充 {added_count} 筆排班"); time.sleep(1); st.rerun()
+
+        with st.expander("⚡ 複製單日 (Clone Day)", expanded=False):
             if 'roster_date' in st.session_state:
                 target_date_obj = datetime.strptime(st.session_state['roster_date'], "%Y-%m-%d")
                 source_date_obj = target_date_obj - timedelta(days=7)
                 source_date_str = source_date_obj.strftime("%Y-%m-%d")
-                
-                if st.button(f"從 {source_date_str} 複製到 {st.session_state['roster_date']}"):
+                if st.button(f"從上週 ({source_date_str}) 複製到本日"):
                     source_shifts = shifts_df[shifts_df['Date'] == source_date_str]
                     if not source_shifts.empty:
                         target_d = st.session_state['roster_date']
                         all_vals = ws_shifts.get_all_values()
                         rows_to_del = [i+1 for i, r in enumerate(all_vals) if len(r)>0 and r[0]==target_d]
                         for r_idx in reversed(rows_to_del): retry_action(ws_shifts.delete_rows, r_idx)
-                        
-                        new_rows = []
                         for _, r in source_shifts.iterrows():
-                            new_rows.append([target_d, r['Staff'], r['Type'], r.get('Note',''), r.get('Notify','FALSE'), user_name])
-                        
-                        for nr in new_rows: retry_action(ws_shifts.append_row, nr)
-                        st.cache_data.clear(); st.success(f"已從 {source_date_str} 複製 {len(new_rows)} 筆排班"); time.sleep(1); st.rerun()
-                    else:
-                        st.error("上週同一天沒有排班資料")
-            else:
-                st.caption("請先選擇日期")
+                            retry_action(ws_shifts.append_row, [target_d, r['Staff'], r['Type'], r.get('Note',''), "FALSE", user_name])
+                        st.cache_data.clear(); st.success("複製完成"); st.rerun()
+                    else: st.error("上週無資料")
 
 # --- 主程式 ---
 def main():
@@ -559,7 +590,7 @@ def main():
         with c2:
             st.markdown("<br><br><br>", unsafe_allow_html=True)
             st.markdown("<div style='text-align:center; font-weight:900; font-size:2.5rem; margin-bottom:10px;'>IFUKUK</div>", unsafe_allow_html=True)
-            st.markdown("<div style='text-align:center; color:#666; font-size:0.9rem; margin-bottom:30px;'>OMEGA V109.1 ROSTER PRO</div>", unsafe_allow_html=True)
+            st.markdown("<div style='text-align:center; color:#666; font-size:0.9rem; margin-bottom:30px;'>OMEGA V109.2 ROSTER ELITE</div>", unsafe_allow_html=True)
             with st.form("login"):
                 u = st.text_input("帳號 (ID)"); p = st.text_input("密碼 (Password)", type="password")
                 if st.form_submit_button("登入 (LOGIN)", type="primary"):
@@ -600,7 +631,6 @@ def main():
     df['SKU'] = df['SKU'].astype(str)
     df['Style_Code'] = df['SKU'].apply(get_style_code)
     
-    # 建立 SKU 對照表
     product_map = {}
     if not df.empty:
         for _, r in df.iterrows(): product_map[r['SKU']] = f"{r['Name']} ({r['Size']})"
@@ -1034,35 +1064,69 @@ def main():
                         st.cache_data.clear(); st.success("已記錄"); st.rerun()
         
         st.divider()
-        st.markdown("#### 🕵️ 紀錄管理")
+        st.markdown("#### 🕵️ 紀錄管理 (Point 6: 修正功能優化)")
         if not logs_df.empty and not int_df.empty:
-            view_int_df = int_df.copy()
-            view_int_df['商品'] = view_int_df['Details'].apply(lambda x: x.split(' | ')[0].split(' -')[0])
-            view_int_df['商品'] = view_int_df['商品'].map(product_map).fillna(view_int_df['商品'])
-            st.dataframe(view_int_df[['Timestamp', 'User', '實際領用人', '商品', '數量', '原因']], use_container_width=True)
-            
-            st.markdown("##### ✏️ 修正紀錄 (刪除或修改)")
-            rev_opts = int_df.apply(lambda x: f"{x['Timestamp']} | {product_map.get(x['Details'].split(' -')[0], x['Details'])}", axis=1).tolist()
-            sel_rev = st.selectbox("選擇要修正的紀錄", ["..."] + rev_opts)
+            # Point 6: 下拉選單只顯示「已存在」的紀錄
+            rev_opts = int_df.apply(lambda x: f"{x['Timestamp']} | {x['Details']}", axis=1).tolist()
+            sel_rev = st.selectbox("選擇要修正/編輯的領用紀錄", ["..."] + rev_opts)
             
             if sel_rev != "...":
                 target_ts = sel_rev.split(" | ")[0]
                 orig_row = logs_df[logs_df['Timestamp'] == target_ts].iloc[0]
                 orig_detail = orig_row['Details']
-                orig_sku = orig_detail.split(' -')[0]
-                orig_qty = int(orig_detail.split(' -')[1].split(' | ')[0])
-                
-                c_mod1, c_mod2 = st.columns(2)
-                if c_mod1.button("🚫 僅撤銷 (歸還庫存並刪除)"):
-                    all_logs = ws_logs.get_all_values()
-                    for idx, row in enumerate(all_logs):
-                        if row[0] == target_ts: retry_action(ws_logs.delete_rows, idx + 1); break
+                # 解析原始資料: SKU -Qty | Who | Reason | Note
+                try:
+                    parts = orig_detail.split(' | ')
+                    orig_sku_part = parts[0]
+                    orig_sku = orig_sku_part.split(' -')[0]
+                    orig_qty = int(orig_sku_part.split(' -')[1])
+                    orig_who = parts[1]
+                    orig_reason = parts[2]
+                    orig_note = parts[3] if len(parts) > 3 else ""
+                except:
+                    st.error("資料格式無法解析，無法編輯"); st.stop()
+
+                # 顯示編輯表單
+                with st.form("edit_internal_log"):
+                    st.info(f"正在編輯: {orig_sku} (原數量: {orig_qty})")
+                    new_q = st.number_input("修正數量", value=orig_qty, min_value=1)
+                    new_who = st.selectbox("修正領用人", staff_list, index=staff_list.index(orig_who) if orig_who in staff_list else 0)
+                    new_rsn = st.selectbox("修正原因", ["公務", "公關", "福利", "報廢", "樣品", "其他"], index=["公務", "公關", "福利", "報廢", "樣品", "其他"].index(orig_reason) if orig_reason in ["公務", "公關", "福利", "報廢", "樣品", "其他"] else 0)
+                    new_note = st.text_input("修正備註", value=orig_note)
                     
-                    cell = ws_items.find(orig_sku)
-                    if cell:
-                        curr_q = int(ws_items.cell(cell.row, 5).value)
-                        retry_action(ws_items.update_cell, cell.row, 5, curr_q + orig_qty)
-                        st.success(f"已歸還 {orig_sku} +{orig_qty}"); time.sleep(1); st.rerun()
+                    c_edit_1, c_edit_2 = st.columns(2)
+                    
+                    # 1. 更新按鈕
+                    if c_edit_1.form_submit_button("✅ 確認更新"):
+                        cell = ws_items.find(orig_sku)
+                        if cell:
+                            # 邏輯: 1.歸還舊數量 2.扣除新數量
+                            curr_stock = int(ws_items.cell(cell.row, 5).value)
+                            temp_stock = curr_stock + orig_qty # 歸還
+                            final_stock = temp_stock - new_q # 扣除新
+                            
+                            retry_action(ws_items.update_cell, cell.row, 5, final_stock)
+                            
+                            # 更新 Log: 刪除舊的 -> 寫入新的
+                            all_logs = ws_logs.get_all_values()
+                            for idx, row in enumerate(all_logs):
+                                if row[0] == target_ts: retry_action(ws_logs.delete_rows, idx + 1); break
+                            
+                            log_event(ws_logs, st.session_state['user_name'], "Internal_Use", f"{orig_sku} -{new_q} | {new_who} | {new_rsn} | {new_note} (Edited)")
+                            st.success("紀錄已更新"); time.sleep(1); st.rerun()
+                        else: st.error("找不到該商品SKU，無法更新庫存")
+
+                    # 2. 刪除按鈕
+                    if c_edit_2.form_submit_button("🗑️ 刪除此紀錄 (歸還庫存)"):
+                        cell = ws_items.find(orig_sku)
+                        if cell:
+                            curr_stock = int(ws_items.cell(cell.row, 5).value)
+                            retry_action(ws_items.update_cell, cell.row, 5, curr_stock + orig_qty)
+                            
+                            all_logs = ws_logs.get_all_values()
+                            for idx, row in enumerate(all_logs):
+                                if row[0] == target_ts: retry_action(ws_logs.delete_rows, idx + 1); break
+                            st.success("紀錄已刪除，庫存已歸還"); time.sleep(1); st.rerun()
 
     with tabs[4]:
         st.markdown("<div class='mgmt-box'>", unsafe_allow_html=True)
