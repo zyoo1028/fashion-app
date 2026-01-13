@@ -18,7 +18,7 @@ import matplotlib.font_manager as fm
 
 # --- 1. 系統全域設定 ---
 st.set_page_config(
-    page_title="IFUKUK ERP V109.4 ROSTER SUPREME", 
+    page_title="IFUKUK ERP V109.5 ROSTER PERFECTED", 
     layout="wide", 
     page_icon="🌏",
     initial_sidebar_state="expanded"
@@ -246,23 +246,31 @@ def render_navbar(user_initial):
 CAT_LIST = ["上衣(Top)", "褲子(Btm)", "外套(Out)", "套裝(Suit)", "鞋類(Shoe)", "包款(Bag)", "帽子(Hat)", "飾品(Acc)", "其他(Misc)"]
 
 # ==========================================
-# 🗓️ 排班系統 ELITE (Module Rewrite V109.4)
+# 🗓️ 排班系統 ELITE (Module Rewrite V109.5)
 # ==========================================
 
-# 1. 班別顏色與定義 (全域)
 SHIFT_COLORS = {
     "早班": "#3B82F6", "晚班": "#8B5CF6", "全班": "#10B981", 
     "代班": "#F59E0B", "公休": "#EF4444", "特休": "#DB2777", 
     "空班": "#6B7280", "事假": "#EC4899", "病假": "#14B8A6"
 }
 
-def get_staff_color(name, shift_type):
-    if shift_type == "公休": return "#EF4444" 
-    PALETTE = ["#3B82F6", "#10B981", "#8B5CF6", "#F59E0B", "#EC4899", "#6366F1", "#14B8A6", "#F97316", "#0EA5E9", "#84CC16"]
-    idx = sum(ord(c) for c in name) % len(PALETTE)
-    return PALETTE[idx]
+# Point 1: 絕對色票系統 (避免撞色)
+def get_staff_color_map(users_list):
+    # 20色高對比色票
+    VIBRANT_PALETTE = [
+        "#2563EB", "#059669", "#7C3AED", "#DB2777", "#D97706", 
+        "#DC2626", "#0891B2", "#4F46E5", "#BE123C", "#B45309",
+        "#1D4ED8", "#047857", "#6D28D9", "#BE185D", "#B45309",
+        "#B91C1C", "#0E7490", "#4338CA", "#9F1239", "#92400E"
+    ]
+    color_map = {}
+    sorted_users = sorted([u for u in users_list if u != "全店"]) # 排序確保每次相同
+    for i, user in enumerate(sorted_users):
+        color_map[user] = VIBRANT_PALETTE[i % len(VIBRANT_PALETTE)]
+    return color_map
 
-def generate_roster_image_buffer(year, month, shifts_df, days_in_month):
+def generate_roster_image_buffer(year, month, shifts_df, days_in_month, color_map):
     try:
         font_path = None
         for font in fm.findSystemFonts():
@@ -343,7 +351,10 @@ def render_roster_system(sh, users_list, user_name):
     else:
         shifts_df = pd.DataFrame(columns=["Date", "Staff", "Type", "Note", "Notify", "Updated_By"])
 
-    st.markdown("<div class='roster-header'><h3>🗓️ 專業排班中心 SUPREME</h3></div>", unsafe_allow_html=True)
+    # 產生全域人員色票
+    staff_color_map = get_staff_color_map(users_list)
+
+    st.markdown("<div class='roster-header'><h3>🗓️ 專業排班中心 PERFECTED</h3></div>", unsafe_allow_html=True)
 
     now = datetime.utcnow() + timedelta(hours=8)
     c_ctrl1, c_ctrl2, c_ctrl3 = st.columns([2, 1, 1])
@@ -384,7 +395,7 @@ def render_roster_system(sh, users_list, user_name):
     with c_ctrl3:
         if st.button("📸 班表存圖", use_container_width=True):
             with st.spinner("繪製高解析圖片中..."):
-                img_buf = generate_roster_image_buffer(sel_year, sel_month, shifts_df, calendar.monthrange(sel_year, sel_month)[1])
+                img_buf = generate_roster_image_buffer(sel_year, sel_month, shifts_df, calendar.monthrange(sel_year, sel_month)[1], staff_color_map)
                 if img_buf:
                     st.image(img_buf, caption=f"{sel_year}/{sel_month} 班表預覽")
                     st.download_button("💾 下載圖片", data=img_buf, file_name=f"roster_{sel_year}_{sel_month}.png", mime="image/png", use_container_width=True)
@@ -422,7 +433,9 @@ def render_roster_system(sh, users_list, user_name):
                     else:
                         if not day_shifts.empty:
                             for _, r in day_shifts.iterrows():
-                                bg_color = get_staff_color(r['Staff'], r['Type'])
+                                if r['Type'] == "公休": bg_color = "#EF4444"
+                                else: bg_color = staff_color_map.get(r['Staff'], "#6B7280")
+                                
                                 html_content += f"""
                                     <span class='shift-pill' style='background-color:{bg_color};'>
                                         {r['Staff']} - {r['Type']}
@@ -471,9 +484,9 @@ def render_roster_system(sh, users_list, user_name):
                      st.success("已解除"); time.sleep(0.5); st.cache_data.clear(); st.rerun()
             else:
                 if not current_day_shifts.empty:
-                    st.caption("已安排:")
+                    st.caption("已安排 (點擊❌移除):")
                     for _, r in current_day_shifts.iterrows():
-                        if st.button(f"❌ 移除 {r['Staff']} ({r['Type']})", key=f"del_{r['Staff']}_{t_date}"):
+                        if st.button(f"❌ {r['Staff']} ({r['Type']})", key=f"del_{r['Staff']}_{t_date}"):
                             all_vals = ws_shifts.get_all_values()
                             for idx, row in enumerate(all_vals):
                                 if len(row) > 1 and row[0] == t_date and row[1] == r['Staff']:
@@ -484,14 +497,19 @@ def render_roster_system(sh, users_list, user_name):
                     s_staff = st.selectbox("人員", users_list)
                     s_type = st.selectbox("班別類型", list(SHIFT_COLORS.keys()))
                     s_note = st.text_input("備註 (可選)")
-                    if st.form_submit_button("➕ 加入/更新排班", use_container_width=True):
+                    
+                    # Point 2: 智能覆蓋寫入 (Upsert)
+                    if st.form_submit_button("➕ 新增/更新排班", use_container_width=True):
+                        # 1. 刪除舊資料 (如果存在)
                         all_vals = ws_shifts.get_all_values()
                         rows_to_del = []
                         for idx, row in enumerate(all_vals):
                             if len(row) > 1 and row[0] == t_date and row[1] == s_staff: rows_to_del.append(idx + 1)
                         for r_idx in reversed(rows_to_del): retry_action(ws_shifts.delete_rows, r_idx)
+                        
+                        # 2. 寫入新資料
                         retry_action(ws_shifts.append_row, [t_date, s_staff, s_type, s_note, "FALSE", user_name])
-                        st.cache_data.clear(); st.success("已更新"); time.sleep(0.5); st.rerun()
+                        st.cache_data.clear(); st.success(f"已更新 {s_staff} 的班表"); time.sleep(0.5); st.rerun()
 
                 st.markdown("---")
                 if st.button("🔴 設定為全店公休 (Store Closed)", type="primary", use_container_width=True):
@@ -509,7 +527,6 @@ def render_roster_system(sh, users_list, user_name):
         st.markdown("#### 🧠 智能排班工具 (Pattern Fill)")
         
         with st.expander("🔄 設定循環週期 (Weekly Cycle)", expanded=True):
-            # Point 1 & 2: 分頁設計 (人員/全店公休)
             wc_tab1, wc_tab2 = st.tabs(["👤 人員排班", "🔴 全店公休"])
             week_map = {"週一":0, "週二":1, "週三":2, "週四":3, "週五":4, "週六":5, "週日":6}
 
@@ -517,7 +534,6 @@ def render_roster_system(sh, users_list, user_name):
                 st.caption("例如: 每週一都排 A員 早班")
                 p_staff = st.selectbox("對象", users_list, key="p_st")
                 p_day_cn = st.selectbox("每週幾?", list(week_map.keys()), key="p_wd")
-                # Point 1: 班別同步
                 p_type = st.selectbox("班別", list(SHIFT_COLORS.keys()), key="p_ty")
                 
                 if st.button("🚀 執行人員排班"):
@@ -528,17 +544,16 @@ def render_roster_system(sh, users_list, user_name):
                         day = week[target_weekday]
                         if day != 0:
                             d_str = f"{sel_year}-{str(sel_month).zfill(2)}-{str(day).zfill(2)}"
-                            is_exist = False
-                            if not shifts_df.empty:
-                                if not shifts_df[(shifts_df['Date']==d_str) & (shifts_df['Staff']==p_staff)].empty: is_exist=True
+                            # 循環排班也要執行 Upsert 邏輯 (先刪再加)
+                            all_vals = ws_shifts.get_all_values()
+                            rows_to_del = [idx+1 for idx, row in enumerate(all_vals) if len(row)>1 and row[0]==d_str and row[1]==p_staff]
+                            for r_idx in reversed(rows_to_del): retry_action(ws_shifts.delete_rows, r_idx)
                             
-                            if not is_exist:
-                                retry_action(ws_shifts.append_row, [d_str, p_staff, p_type, "Auto", "FALSE", user_name])
-                                added_count += 1
+                            retry_action(ws_shifts.append_row, [d_str, p_staff, p_type, "Auto", "FALSE", user_name])
+                            added_count += 1
                     st.cache_data.clear(); st.success(f"已填充 {added_count} 筆排班"); time.sleep(1); st.rerun()
 
             with wc_tab2:
-                # Point 2: 週期性全店公休
                 st.caption("例如: 設定本月每週二都全店公休")
                 sc_day_cn = st.selectbox("每週幾?", list(week_map.keys()), key="sc_wd")
                 
@@ -547,7 +562,6 @@ def render_roster_system(sh, users_list, user_name):
                     cal = calendar.monthcalendar(sel_year, sel_month)
                     closed_count = 0
                     
-                    # 1. 找出所有日期
                     target_dates = []
                     for week in cal:
                         day = week[target_weekday]
@@ -555,17 +569,14 @@ def render_roster_system(sh, users_list, user_name):
                             target_dates.append(f"{sel_year}-{str(sel_month).zfill(2)}-{str(day).zfill(2)}")
                     
                     if target_dates:
-                        # 2. 清除舊資料 (批量刪除)
                         all_vals = ws_shifts.get_all_values()
                         rows_to_del = []
                         for idx, row in enumerate(all_vals):
                             if len(row) > 0 and row[0] in target_dates:
                                 rows_to_del.append(idx + 1)
                         
-                        # 倒序刪除
                         for r_idx in reversed(rows_to_del): retry_action(ws_shifts.delete_rows, r_idx)
                         
-                        # 3. 寫入新資料
                         for d_str in target_dates:
                             retry_action(ws_shifts.append_row, [d_str, "全店", "公休", "Store Closed", "FALSE", user_name])
                             closed_count += 1
@@ -619,7 +630,7 @@ def main():
         with c2:
             st.markdown("<br><br><br>", unsafe_allow_html=True)
             st.markdown("<div style='text-align:center; font-weight:900; font-size:2.5rem; margin-bottom:10px;'>IFUKUK</div>", unsafe_allow_html=True)
-            st.markdown("<div style='text-align:center; color:#666; font-size:0.9rem; margin-bottom:30px;'>OMEGA V109.4 ROSTER SUPREME</div>", unsafe_allow_html=True)
+            st.markdown("<div style='text-align:center; color:#666; font-size:0.9rem; margin-bottom:30px;'>OMEGA V109.5 ROSTER PERFECTED</div>", unsafe_allow_html=True)
             with st.form("login"):
                 u = st.text_input("帳號 (ID)"); p = st.text_input("密碼 (Password)", type="password")
                 if st.form_submit_button("登入 (LOGIN)", type="primary"):
