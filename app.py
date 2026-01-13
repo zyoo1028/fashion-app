@@ -10,8 +10,9 @@ import base64
 import hashlib
 import math
 import re
+import random
 
-# --- 1. 系統全域設定 (V103.0) ---
+# --- 1. 系統全域設定 (V103.0 Original) ---
 st.set_page_config(
     page_title="IFUKUK 企業資源中樞", 
     layout="wide", 
@@ -20,7 +21,7 @@ st.set_page_config(
 )
 
 # ==========================================
-# 🛑 【V103.0 原始視覺核心】
+# 🛑 【V103.0 視覺核心】
 # ==========================================
 st.markdown("""
     <style>
@@ -80,6 +81,22 @@ IMGBB_API_KEY = "c2f93d2a1a62bd3a6da15f477d2bb88a"
 SHEET_HEADERS = ["SKU", "Name", "Category", "Size", "Qty", "Price", "Cost", "Last_Updated", "Image_URL", "Safety_Stock", "Orig_Currency", "Orig_Cost", "Qty_CN"]
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
 
+# --- OMEGA 核心防護層 (Anti-Crash Logic) ---
+# 這個函式是唯一新增的「保護裝置」，用於防止操作過快時系統崩潰
+def retry_action(func, *args, **kwargs):
+    max_retries = 5
+    for i in range(max_retries):
+        try:
+            return func(*args, **kwargs)
+        except Exception as e:
+            if "429" in str(e) or "Quota exceeded" in str(e):
+                wait_time = (2 ** i) + random.uniform(0, 1) # 指數退避 (1s, 2s, 4s...)
+                time.sleep(wait_time)
+                continue
+            else:
+                raise e
+    return None
+
 @st.cache_resource(ttl=600)
 def get_connection():
     if "gcp_service_account" not in st.secrets:
@@ -89,9 +106,8 @@ def get_connection():
     creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
     return gspread.authorize(creds)
 
-# 🛑 【關鍵修復】加入快取 (ttl=10s) + 重試機制 + 空表防護
-# 這就是防止 "Quota Exceeded" 和 "KeyError" 的核心保護罩
-@st.cache_data(ttl=10, show_spinner=False)
+# 強化版數據讀取 (含自動欄位修復)
+@st.cache_data(ttl=5, show_spinner=False) # 縮短 TTL 以確保數據即時性
 def get_data_safe(_ws, expected_headers=None):
     max_retries = 3
     for attempt in range(max_retries):
@@ -112,10 +128,10 @@ def get_data_safe(_ws, expected_headers=None):
             
             rows = raw_data[1:]
             
-            # V103 Auto-Fix Logic (僅在快取刷新時檢查，節省資源)
+            # V103 Auto-Fix Logic
             if "Qty_CN" not in new_headers and expected_headers and "Qty_CN" in expected_headers:
                 try:
-                    _ws.update_cell(1, len(new_headers)+1, "Qty_CN")
+                    retry_action(_ws.update_cell, 1, len(new_headers)+1, "Qty_CN") # 使用防護罩寫入
                     new_headers.append("Qty_CN"); raw_data = _ws.get_all_values(); rows = raw_data[1:]
                 except: pass
 
@@ -127,19 +143,10 @@ def get_data_safe(_ws, expected_headers=None):
                 
             return df
         except Exception as e:
-            # 遇到 429 錯誤時，自動暫停後重試，不直接崩潰
             if "429" in str(e): time.sleep(2 ** (attempt + 1)); continue
             return pd.DataFrame(columns=expected_headers) if expected_headers else pd.DataFrame()
             
     return pd.DataFrame(columns=expected_headers) if expected_headers else pd.DataFrame()
-
-# [強力寫入] 解決 Quota Exceeded (寫入時不快取，但有重試)
-def update_cell_retry(ws, row, col, value, retries=3):
-    for i in range(retries):
-        try: ws.update_cell(row, col, value); return True
-        except Exception as e:
-            if "429" in str(e): time.sleep(2 ** (i + 1)); continue
-    return False
 
 @st.cache_resource(ttl=600)
 def init_db():
@@ -185,7 +192,7 @@ def upload_image_to_imgbb(image_file):
     except: pass; return None
 
 def log_event(ws_logs, user, action, detail):
-    try: ws_logs.append_row([get_taiwan_time_str(), user, action, detail])
+    try: retry_action(ws_logs.append_row, [get_taiwan_time_str(), user, action, detail])
     except: pass
 
 def render_navbar(user_initial):
@@ -205,7 +212,7 @@ def render_navbar(user_initial):
     """, unsafe_allow_html=True)
 
 # ----------------------------------------------------
-# V103.0 核心邏輯
+# V103.0 核心邏輯 (Logic Core)
 # ----------------------------------------------------
 def get_style_code(sku):
     sku_str = str(sku).strip()
@@ -231,7 +238,7 @@ def generate_smart_style_code(category, existing_skus):
 
 COLUMN_MAPPING = {"Style_Code": "款號(Style)", "Name": "商品名稱", "Category": "分類", "Size_Detail": "庫存分佈 (TW | CN)", "Total_Qty": "總庫存 (TW+CN)", "Price": "售價(NTD)", "Avg_Cost": "平均成本(NTD)", "Ref_Orig_Cost": "參考原幣(CNY)", "Last_Updated": "最後更新"}
 
-# 🛑 [修復] 安全營收計算：防止空表 KeyError
+# ⚠️ 注意：此函式依賴 "Total:$..." 格式，舊版本日誌若格式不同將無法被讀取 (這是 V103 特性)
 def calculate_realized_revenue(logs_df):
     total_revenue = 0
     if logs_df.empty or 'Action' not in logs_df.columns: return 0 
@@ -257,6 +264,7 @@ def main():
     sh = init_db()
     if not sh: st.error("Database Connection Failed"); st.stop()
 
+    # 安全獲取工作表
     ws_items = get_worksheet_safe(sh, "Items", SHEET_HEADERS)
     ws_logs = get_worksheet_safe(sh, "Logs", ["Timestamp", "User", "Action", "Details"])
     ws_users = get_worksheet_safe(sh, "Users", ["Name", "Password", "Role", "Status", "Created_At"])
@@ -269,20 +277,19 @@ def main():
         with c2:
             st.markdown("<br><br><br>", unsafe_allow_html=True)
             st.markdown("<div style='text-align:center; font-weight:900; font-size:2.5rem; margin-bottom:10px;'>IFUKUK</div>", unsafe_allow_html=True)
-            st.markdown("<div style='text-align:center; color:#666; font-size:0.9rem; margin-bottom:30px;'>MATRIX ERP V103.0 (GOLD)</div>", unsafe_allow_html=True)
+            st.markdown("<div style='text-align:center; color:#666; font-size:0.9rem; margin-bottom:30px;'>MATRIX ERP V103.0 (REINFORCED)</div>", unsafe_allow_html=True)
             with st.form("login"):
                 user_input = st.text_input("帳號 (ID)")
                 pass_input = st.text_input("密碼 (Password)", type="password")
                 if st.form_submit_button("登入 (LOGIN)", type="primary"):
                     with st.spinner("Connecting..."):
-                        # 使用 Cache 讀取，並允許安全空表
                         users_df = get_data_safe(ws_users, ["Name", "Password", "Role", "Status", "Created_At"])
                         input_u = str(user_input).strip(); input_p = str(pass_input).strip()
                         
                         if users_df.empty and input_u == "Boss" and input_p == "1234":
                             hashed_pw = make_hash("1234")
-                            ws_users.append_row(["Boss", hashed_pw, "Admin", "Active", get_taiwan_time_str()])
-                            st.cache_data.clear() # 初始化後清除快取
+                            retry_action(ws_users.append_row, ["Boss", hashed_pw, "Admin", "Active", get_taiwan_time_str()])
+                            st.cache_data.clear()
                             st.success("Boss Created"); time.sleep(1); st.rerun()
 
                         if not users_df.empty and 'Name' in users_df.columns:
@@ -295,7 +302,7 @@ def main():
                                     st.session_state['logged_in'] = True; st.session_state['user_name'] = input_u; st.session_state['user_role'] = target_user.iloc[0]['Role']; log_event(ws_logs, input_u, "Login", "登入成功"); st.rerun()
                                 else: st.error("密碼錯誤")
                             else: st.error("帳號無效")
-                        else: st.error("連線忙碌中，請等待 10 秒後再試 (Protected)")
+                        else: st.error("連線忙碌中 (Protected)")
         return
 
     # --- 主畫面 ---
@@ -338,7 +345,7 @@ def main():
             log_event(ws_logs, st.session_state['user_name'], "Logout", "登出")
             st.session_state['logged_in'] = False; st.rerun()
 
-    # --- Dashboard (V103.0 Original) ---
+    # --- Dashboard ---
     total_qty_tw = df['Qty'].sum(); total_qty_cn = df['Qty_CN'].sum(); total_qty = total_qty_tw + total_qty_cn
     total_cost = ((df['Qty'] + df['Qty_CN']) * df['Cost']).sum()
     total_rev = (df['Qty'] * df['Price']).sum()
@@ -409,7 +416,10 @@ def main():
                                 for t_sku, new_q_tw in inputs_tw.items():
                                     if t_sku in df['SKU'].tolist():
                                         new_q_cn = inputs_cn[t_sku]; r = ws_items.find(t_sku).row
-                                        update_cell_retry(ws_items, r, 5, new_q_tw); update_cell_retry(ws_items, r, 13, new_q_cn); update_cell_retry(ws_items, r, 8, get_taiwan_time_str())
+                                        # 使用防護罩寫入
+                                        retry_action(ws_items.update_cell, r, 5, new_q_tw)
+                                        retry_action(ws_items.update_cell, r, 13, new_q_cn)
+                                        retry_action(ws_items.update_cell, r, 8, get_taiwan_time_str())
                                 st.cache_data.clear(); st.success("更新完成！"); time.sleep(1); st.rerun()
         else: st.info("無符合資料")
 
@@ -447,11 +457,48 @@ def main():
                     items = []
                     for i in st.session_state['pos_cart']:
                         r = ws_items.find(i['sku']).row; curr = int(ws_items.cell(r, 5).value)
-                        if curr >= i['qty']: update_cell_retry(ws_items, r, 5, curr - i['qty']); items.append(f"{i['sku']} x{i['qty']}")
+                        if curr >= i['qty']: 
+                            retry_action(ws_items.update_cell, r, 5, curr - i['qty'])
+                            items.append(f"{i['sku']} x{i['qty']}")
                         else: st.error("庫存不足"); st.stop()
                     log_event(ws_logs, st.session_state['user_name'], "Sale", f"Total:${final} | Items: {', '.join(items)} | {rem} {note} | Ch:{ch} | By:{who}")
                     st.session_state['pos_cart'] = []; st.cache_data.clear(); st.success("結帳完成"); time.sleep(2); st.rerun()
             else: st.info("購物車空")
+
+    with tabs[2]:
+        st.subheader("📈 銷售戰情室")
+        sales_data = []
+        if not logs_df.empty:
+            s_logs = logs_df[logs_df['Action'] == 'Sale']
+            for _, row in s_logs.iterrows():
+                try:
+                    # V103 原汁原味的 Regex 解析邏輯
+                    details = row['Details']
+                    total_match = re.search(r'Total:\$(\d+)', details)
+                    total_val = int(total_match.group(1)) if total_match else 0
+                    chan_match = re.search(r'Ch:(\w+)', details); chan_val = chan_match.group(1) if chan_match else "未分類"
+                    by_match = re.search(r'By:(\w+)', details); person_val = by_match.group(1) if by_match else row['User']
+                    items_match = re.search(r'Items: (.*?) \|', details); items_val = items_match.group(1) if items_match else "-"
+                    if total_val > 0: # 只顯示有金額的
+                        sales_data.append({"日期": row['Timestamp'], "總金額": total_val, "通路": chan_val, "銷售員": person_val, "明細": items_val})
+                except: pass
+        
+        sdf = pd.DataFrame(sales_data)
+        if not sdf.empty:
+            st.markdown(f"""<div class="audit-dashboard"><div style="display:flex; justify-content:space-around;"><div style="text-align:center;"><div class="audit-title">總銷售額</div><div class="audit-stat">${sdf['總金額'].sum():,}</div></div><div style="text-align:center;"><div class="audit-title">交易筆數</div><div class="audit-stat">{len(sdf)}</div></div></div></div>""", unsafe_allow_html=True)
+            c_s1, c_s2 = st.columns(2)
+            with c_s1:
+                st.markdown("##### 🏆 銷售員業績")
+                person_stats = sdf.groupby('銷售員')['總金額'].sum().reset_index().sort_values('總金額', ascending=False)
+                fig_p = px.bar(person_stats, x='銷售員', y='總金額', text='總金額', color='總金額', color_continuous_scale='Viridis')
+                st.plotly_chart(fig_p, use_container_width=True)
+            with c_s2:
+                st.markdown("##### 🛍️ 通路分佈")
+                chan_stats = sdf.groupby('通路')['總金額'].sum().reset_index()
+                fig_c = px.pie(chan_stats, names='通路', values='總金額', hole=0.4)
+                st.plotly_chart(fig_c, use_container_width=True)
+            st.dataframe(sdf, use_container_width=True)
+        else: st.info("⚠️ 暫無符合 V103.0 格式的銷售數據 (舊資料可能因格式不同而不顯示，請嘗試下幾筆新訂單)")
 
     with tabs[3]:
         st.subheader("內部領用")
@@ -468,7 +515,8 @@ def main():
                 with st.form("int"):
                     q = st.number_input("數量", 1); who = st.selectbox("人", staff_list); rsn = st.selectbox("因", ["公務", "福利", "樣品", "報廢"]); n = st.text_input("備註")
                     if st.form_submit_button("執行"):
-                        r = ws_items.find(tsku).row; update_cell_retry(ws_items, r, 5, int(trow['Qty']) - q)
+                        r = ws_items.find(tsku).row
+                        retry_action(ws_items.update_cell, r, 5, int(trow['Qty']) - q)
                         log_event(ws_logs, st.session_state['user_name'], "Internal_Use", f"{tsku} -{q} | {who} | {rsn} | {n}")
                         st.cache_data.clear(); st.success("OK"); st.rerun()
 
@@ -497,7 +545,7 @@ def main():
                     url = upload_image_to_imgbb(im) if im else img_p
                     final_cost = int(co * st.session_state['exchange_rate']) if cur == "CNY" else co
                     for s, q in sz.items():
-                        if q > 0: ws_items.append_row([f"{bs}-{s}", nm, "New", s, q, pr, final_cost, get_taiwan_time_str(), url, 5, cur, co, 0])
+                        if q > 0: retry_action(ws_items.append_row, [f"{bs}-{s}", nm, "New", s, q, pr, final_cost, get_taiwan_time_str(), url, 5, cur, co, 0])
                     st.cache_data.clear(); st.success("完成"); st.rerun()
         
         with mt2:
@@ -507,13 +555,21 @@ def main():
                 row = df[df['SKU']==sel].iloc[0]; st.write(f"TW: {row['Qty']} | CN: {row['Qty_CN']}"); q = st.number_input("量", 1)
                 c1, c2 = st.columns(2)
                 if c1.button("TW->CN"): 
-                    r = ws_items.find(sel).row; update_cell_retry(ws_items, r, 5, int(row['Qty'])-q); update_cell_retry(ws_items, r, 13, int(row['Qty_CN'])+q); st.cache_data.clear(); st.success("OK"); st.rerun()
+                    r = ws_items.find(sel).row
+                    retry_action(ws_items.update_cell, r, 5, int(row['Qty'])-q)
+                    retry_action(ws_items.update_cell, r, 13, int(row['Qty_CN'])+q)
+                    st.cache_data.clear(); st.success("OK"); st.rerun()
                 if c2.button("CN->TW"):
-                    r = ws_items.find(sel).row; update_cell_retry(ws_items, r, 5, int(row['Qty'])+q); update_cell_retry(ws_items, r, 13, int(row['Qty_CN'])-q); st.cache_data.clear(); st.success("OK"); st.rerun()
+                    r = ws_items.find(sel).row
+                    retry_action(ws_items.update_cell, r, 5, int(row['Qty'])+q)
+                    retry_action(ws_items.update_cell, r, 13, int(row['Qty_CN'])-q)
+                    st.cache_data.clear(); st.success("OK"); st.rerun()
 
         with mt3:
             d = st.selectbox("刪除", ["..."] + df['SKU'].tolist())
-            if d != "..." and st.button("確認刪除"): ws_items.delete_rows(ws_items.find(d).row); st.cache_data.clear(); st.success("OK"); st.rerun()
+            if d != "..." and st.button("確認刪除"): 
+                retry_action(ws_items.delete_rows, ws_items.find(d).row)
+                st.cache_data.clear(); st.success("OK"); st.rerun()
 
     with tabs[5]: st.dataframe(logs_df, use_container_width=True)
     with tabs[6]: st.dataframe(users_df, use_container_width=True)
