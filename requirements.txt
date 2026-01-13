@@ -7,3 +7,10 @@ plotly
 openpyxl
 qrcode
 pillow
+streamlit
+pandas
+gspread
+google-auth
+requests
+plotly
+matplotlib
