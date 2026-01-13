@@ -18,7 +18,7 @@ import matplotlib.font_manager as fm
 
 # --- 1. 系統全域設定 ---
 st.set_page_config(
-    page_title="IFUKUK ERP V109.5 ROSTER PERFECTED", 
+    page_title="IFUKUK ERP V109.6 ROSTER STABILITY", 
     layout="wide", 
     page_icon="🌏",
     initial_sidebar_state="expanded"
@@ -111,8 +111,9 @@ def retry_action(func, *args, **kwargs):
         try:
             return func(*args, **kwargs)
         except Exception as e:
-            if "429" in str(e) or "Quota exceeded" in str(e):
-                wait_time = (2 ** i) + random.uniform(0, 1)
+            # V109.6: 強化錯誤捕捉，若是 Connection 相關錯誤則等待更久
+            if "429" in str(e) or "Quota exceeded" in str(e) or "1006" in str(e):
+                wait_time = (2 ** i) + random.uniform(1, 2)
                 time.sleep(wait_time)
                 continue
             else:
@@ -173,7 +174,9 @@ def get_worksheet_safe(sh, title, headers):
         ws = sh.add_worksheet(title, rows=100, cols=20)
         ws.append_row(headers)
         return ws
-    except: return None
+    except Exception as e:
+        # V109.6: 若連線失敗回傳 None，讓後端邏輯處理
+        return None
 
 # --- 工具模組 ---
 def get_taiwan_time_str(): return (datetime.utcnow() + timedelta(hours=8)).strftime("%Y-%m-%d %H:%M:%S")
@@ -246,7 +249,7 @@ def render_navbar(user_initial):
 CAT_LIST = ["上衣(Top)", "褲子(Btm)", "外套(Out)", "套裝(Suit)", "鞋類(Shoe)", "包款(Bag)", "帽子(Hat)", "飾品(Acc)", "其他(Misc)"]
 
 # ==========================================
-# 🗓️ 排班系統 ELITE (Module Rewrite V109.5)
+# 🗓️ 排班系統 ELITE (Module Rewrite V109.6)
 # ==========================================
 
 SHIFT_COLORS = {
@@ -343,6 +346,12 @@ def generate_roster_image_buffer(year, month, shifts_df, days_in_month, color_ma
 
 def render_roster_system(sh, users_list, user_name):
     ws_shifts = get_worksheet_safe(sh, "Shifts", ["Date", "Staff", "Shift_Type", "Note", "Notify", "Updated_By"])
+    
+    # V109.6: 防崩潰護盾
+    if ws_shifts is None:
+        st.error("⚠️ 雲端資料庫連線忙碌中，請稍候重試 (API Busy)")
+        return
+
     shifts_df = get_data_safe(ws_shifts, ["Date", "Staff", "Shift_Type", "Note", "Notify", "Updated_By"])
     
     if not shifts_df.empty:
@@ -354,7 +363,7 @@ def render_roster_system(sh, users_list, user_name):
     # 產生全域人員色票
     staff_color_map = get_staff_color_map(users_list)
 
-    st.markdown("<div class='roster-header'><h3>🗓️ 專業排班中心 PERFECTED</h3></div>", unsafe_allow_html=True)
+    st.markdown("<div class='roster-header'><h3>🗓️ 專業排班中心 STABILITY</h3></div>", unsafe_allow_html=True)
 
     now = datetime.utcnow() + timedelta(hours=8)
     c_ctrl1, c_ctrl2, c_ctrl3 = st.columns([2, 1, 1])
@@ -498,16 +507,13 @@ def render_roster_system(sh, users_list, user_name):
                     s_type = st.selectbox("班別類型", list(SHIFT_COLORS.keys()))
                     s_note = st.text_input("備註 (可選)")
                     
-                    # Point 2: 智能覆蓋寫入 (Upsert)
                     if st.form_submit_button("➕ 新增/更新排班", use_container_width=True):
-                        # 1. 刪除舊資料 (如果存在)
                         all_vals = ws_shifts.get_all_values()
                         rows_to_del = []
                         for idx, row in enumerate(all_vals):
                             if len(row) > 1 and row[0] == t_date and row[1] == s_staff: rows_to_del.append(idx + 1)
                         for r_idx in reversed(rows_to_del): retry_action(ws_shifts.delete_rows, r_idx)
                         
-                        # 2. 寫入新資料
                         retry_action(ws_shifts.append_row, [t_date, s_staff, s_type, s_note, "FALSE", user_name])
                         st.cache_data.clear(); st.success(f"已更新 {s_staff} 的班表"); time.sleep(0.5); st.rerun()
 
@@ -544,7 +550,7 @@ def render_roster_system(sh, users_list, user_name):
                         day = week[target_weekday]
                         if day != 0:
                             d_str = f"{sel_year}-{str(sel_month).zfill(2)}-{str(day).zfill(2)}"
-                            # 循環排班也要執行 Upsert 邏輯 (先刪再加)
+                            # V109.6: 智能工具也要確保先刪後寫
                             all_vals = ws_shifts.get_all_values()
                             rows_to_del = [idx+1 for idx, row in enumerate(all_vals) if len(row)>1 and row[0]==d_str and row[1]==p_staff]
                             for r_idx in reversed(rows_to_del): retry_action(ws_shifts.delete_rows, r_idx)
@@ -630,7 +636,7 @@ def main():
         with c2:
             st.markdown("<br><br><br>", unsafe_allow_html=True)
             st.markdown("<div style='text-align:center; font-weight:900; font-size:2.5rem; margin-bottom:10px;'>IFUKUK</div>", unsafe_allow_html=True)
-            st.markdown("<div style='text-align:center; color:#666; font-size:0.9rem; margin-bottom:30px;'>OMEGA V109.5 ROSTER PERFECTED</div>", unsafe_allow_html=True)
+            st.markdown("<div style='text-align:center; color:#666; font-size:0.9rem; margin-bottom:30px;'>OMEGA V109.6 ROSTER STABILITY</div>", unsafe_allow_html=True)
             with st.form("login"):
                 u = st.text_input("帳號 (ID)"); p = st.text_input("密碼 (Password)", type="password")
                 if st.form_submit_button("登入 (LOGIN)", type="primary"):
