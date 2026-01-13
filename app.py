@@ -15,68 +15,65 @@ import calendar
 
 # --- 1. 系統全域設定 ---
 st.set_page_config(
-    page_title="IFUKUK ERP V106.0 SUPERNOVA", 
+    page_title="IFUKUK ERP V107.0 HYPERNOVA", 
     layout="wide", 
     page_icon="🌏",
     initial_sidebar_state="expanded"
 )
 
 # ==========================================
-# 🛑 【CSS 視覺核心：手機優先 (Mobile First)】
+# 🛑 【CSS 視覺核心：手機優先 & 資訊透視】
 # ==========================================
 st.markdown("""
     <style>
         .stApp { background-color: #FFFFFF !important; }
         
-        /* POS 卡片 - 手機優化版 */
+        /* POS 卡片 (V107) */
         .pos-card {
             border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden;
             background: #fff; display: flex; flex-direction: column; 
-            height: 100%; transition: transform 0.1s;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.05); margin-bottom: 10px;
+            height: 100%; box-shadow: 0 1px 3px rgba(0,0,0,0.05); margin-bottom: 10px;
         }
-        .pos-card:active { transform: scale(0.98); border-color: #3b82f6; }
-        .pos-img { width: 100%; height: 150px; object-fit: cover; background: #f9fafb; border-bottom: 1px solid #f3f4f6; }
-        .pos-content { padding: 12px; flex-grow: 1; display: flex; flex-direction: column; }
+        .pos-img { width: 100%; height: 160px; object-fit: cover; background: #f9fafb; border-bottom: 1px solid #f3f4f6; }
+        .pos-content { padding: 10px; flex-grow: 1; display: flex; flex-direction: column; }
         .pos-title { font-weight: bold; font-size: 1rem; margin-bottom: 4px; color: #111; line-height: 1.3; }
-        .pos-meta { font-size: 0.85rem; color: #666; margin-bottom: 8px; background: #f3f4f6; padding: 2px 6px; border-radius: 4px; width: fit-content;}
-        .pos-price-row { display: flex; justify-content: space-between; align-items: center; margin-top: auto; }
-        .pos-price { font-weight: 900; color: #059669; font-size: 1.2rem; }
-        .pos-stock { font-size: 0.75rem; background: #eff6ff; color: #1d4ed8; padding: 3px 8px; border-radius: 12px; font-weight: 600; }
-
-        /* 庫存列表優化 */
-        .inv-row { border: 1px solid #eee; border-radius: 10px; padding: 10px; margin-bottom: 10px; background: #fff; display: flex; align-items: center; gap: 10px; }
-        .inv-img { width: 80px; height: 80px; object-fit: cover; border-radius: 8px; flex-shrink: 0; }
+        .pos-meta { font-size: 0.8rem; color: #666; margin-bottom: 5px; }
+        
+        /* 庫存透視標籤 (New) */
+        .stock-tag-row { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; margin-bottom: 5px; }
+        .stock-tag { font-size: 0.75rem; padding: 2px 6px; border-radius: 4px; font-weight: 600; border: 1px solid transparent; }
+        .stock-tag.has-stock { background-color: #dcfce7; color: #166534; border-color: #bbf7d0; }
+        .stock-tag.no-stock { background-color: #f3f4f6; color: #9ca3af; border-color: #e5e7eb; }
+        
+        /* 庫存列表優化 (V107) */
+        .inv-row { border: 1px solid #e2e8f0; border-radius: 12px; padding: 12px; margin-bottom: 12px; background: #fff; display: flex; align-items: start; gap: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
+        .inv-img { width: 90px; height: 90px; object-fit: cover; border-radius: 8px; flex-shrink: 0; background: #f1f5f9; }
         .inv-info { flex-grow: 1; }
+        .inv-title { font-size: 1.1rem; font-weight: bold; color: #0f172a; margin-bottom: 4px; }
+        .inv-meta { font-size: 0.85rem; color: #64748b; margin-bottom: 8px; }
         
-        /* 排班表樣式 */
-        .roster-header { background: #f0f9ff; padding: 15px; border-radius: 12px; margin-bottom: 20px; border: 1px solid #bae6fd; }
-        .day-cell { border: 1px solid #eee; border-radius: 8px; padding: 5px; min-height: 90px; position: relative; margin-bottom: 5px; transition: 0.2s; background: #fff; }
-        .day-cell:hover { border-color: #3b82f6; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
-        .shift-tag { font-size: 0.75rem; padding: 3px 6px; border-radius: 4px; margin-bottom: 3px; color: white; display: block; text-align: center; font-weight: bold; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
-        .note-dot { position: absolute; top: 5px; right: 5px; width: 8px; height: 8px; background: #ef4444; border-radius: 50%; }
+        /* 排班表 */
+        .roster-header { background: #eff6ff; padding: 15px; border-radius: 12px; margin-bottom: 20px; border: 1px solid #bfdbfe; }
+        .day-cell { border: 1px solid #e2e8f0; border-radius: 8px; padding: 4px; min-height: 85px; position: relative; margin-bottom: 5px; background: #fff; }
+        .shift-tag { font-size: 0.7rem; padding: 2px 4px; border-radius: 4px; margin-bottom: 2px; color: white; display: block; text-align: center; font-weight: bold; }
+        .note-dot { position: absolute; top: 4px; right: 4px; width: 6px; height: 6px; background: #ef4444; border-radius: 50%; }
 
-        /* 通用樣式 */
-        .metric-card { background: linear-gradient(145deg, #ffffff, #f5f7fa); border-radius: 16px; padding: 15px; border: 1px solid #e1e4e8; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.02); margin-bottom: 10px; height: 100%; }
-        .metric-value { font-size: 1.8rem; font-weight: 800; margin: 5px 0; color:#111 !important; }
-        .metric-label { font-size: 0.8rem; letter-spacing: 1px; color:#666 !important; font-weight: 600; text-transform: uppercase;}
+        /* Dashboard & General */
+        .metric-card { background: linear-gradient(145deg, #ffffff, #f8fafc); border-radius: 16px; padding: 15px; border: 1px solid #e2e8f0; text-align: center; margin-bottom: 10px; }
+        .metric-value { font-size: 1.6rem; font-weight: 800; margin: 5px 0; color:#0f172a !important; }
+        .metric-label { font-size: 0.8rem; color:#64748b !important; font-weight: 600; text-transform: uppercase;}
         
-        .cart-box { background: #f8fafc; border: 1px solid #e2e8f0; padding: 15px; border-radius: 12px; margin-bottom: 15px; }
-        .cart-item { display: flex; justify-content: space-between; border-bottom: 1px dashed #cbd5e1; padding: 10px 0; font-size: 0.95rem; }
-        .cart-total { font-size: 1.3rem; font-weight: 800; color: #0f172a; text-align: right; margin-top: 15px; }
-        .final-price-display { font-size: 2rem; font-weight: 900; color: #16a34a; text-align: center; background: #dcfce7; padding: 15px; border-radius: 12px; margin-top: 15px; border: 1px solid #86efac; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+        .cart-box { background: #f8fafc; border: 1px solid #cbd5e1; padding: 15px; border-radius: 12px; margin-bottom: 15px; }
+        .cart-item { display: flex; justify-content: space-between; border-bottom: 1px dashed #cbd5e1; padding: 8px 0; font-size: 0.95rem; }
+        .final-price-display { font-size: 2rem; font-weight: 900; color: #15803d; text-align: center; background: #dcfce7; padding: 10px; border-radius: 12px; margin-top: 15px; border: 1px solid #86efac; }
         
-        .stButton>button { border-radius: 8px; height: 3.5em; font-weight: 700; border:none; box-shadow: 0 2px 5px rgba(0,0,0,0.1); background-color: #FFFFFF; color: #000000; border: 1px solid #E5E7EB; width: 100%; transition: all 0.2s; }
+        .stButton>button { border-radius: 8px; height: 3.2em; font-weight: 700; border:none; box-shadow: 0 1px 2px rgba(0,0,0,0.1); background-color: #FFFFFF; color: #0f172a; border: 1px solid #cbd5e1; width: 100%; }
         .stButton>button:hover { border-color: #3b82f6; color: #3b82f6; }
         
-        input, .stTextInput>div>div, div[data-baseweb="select"]>div { border-radius: 8px !important; min-height: 45px; }
+        input, .stTextInput>div>div, div[data-baseweb="select"]>div { border-radius: 8px !important; min-height: 42px; }
         
-        /* 矩陣與稽核區塊優化 */
-        .mgmt-box { border: 1px solid #e2e8f0; padding: 20px; border-radius: 16px; background: #fff; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
-        .mgmt-title { font-size: 1.1rem; font-weight: bold; margin-bottom: 15px; color: #1e293b; border-bottom: 2px solid #f1f5f9; padding-bottom: 10px; }
-        
-        /* 分頁按鈕區 */
-        .pagination-box { display: flex; justify-content: center; gap: 10px; margin-top: 20px; align-items: center; }
+        .mgmt-box { border: 1px solid #e2e8f0; padding: 20px; border-radius: 16px; background: #fff; margin-bottom: 20px; }
+        .mgmt-title { font-size: 1.1rem; font-weight: bold; margin-bottom: 15px; color: #334155; border-bottom: 2px solid #f1f5f9; padding-bottom: 10px; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -228,7 +225,7 @@ def render_navbar(user_initial):
 CAT_LIST = ["上衣(Top)", "褲子(Btm)", "外套(Out)", "套裝(Suit)", "鞋類(Shoe)", "包款(Bag)", "帽子(Hat)", "飾品(Acc)", "其他(Misc)"]
 
 # ==========================================
-# 🗓️ 排班系統 (Roster)
+# 🗓️ 排班系統
 # ==========================================
 def get_staff_color(name):
     colors = ["#3B82F6", "#10B981", "#F59E0B", "#8B5CF6", "#EC4899", "#6366F1", "#14B8A6", "#F97316"]
@@ -336,7 +333,7 @@ def main():
         l_rate, succ = get_live_rate()
         st.session_state['exchange_rate'] = l_rate
         st.session_state['rate_source'] = "Live API" if succ else "Manual"
-    if 'inv_page' not in st.session_state: st.session_state['inv_page'] = 1 # 分頁記錄
+    if 'inv_page' not in st.session_state: st.session_state['inv_page'] = 1
 
     sh = init_db()
     if not sh: st.error("Database Connection Failed"); st.stop()
@@ -350,7 +347,7 @@ def main():
         with c2:
             st.markdown("<br><br><br>", unsafe_allow_html=True)
             st.markdown("<div style='text-align:center; font-weight:900; font-size:2.5rem; margin-bottom:10px;'>IFUKUK</div>", unsafe_allow_html=True)
-            st.markdown("<div style='text-align:center; color:#666; font-size:0.9rem; margin-bottom:30px;'>OMEGA V106.0 SUPERNOVA</div>", unsafe_allow_html=True)
+            st.markdown("<div style='text-align:center; color:#666; font-size:0.9rem; margin-bottom:30px;'>OMEGA V107.0 HYPERNOVA</div>", unsafe_allow_html=True)
             with st.form("login"):
                 u = st.text_input("帳號 (ID)"); p = st.text_input("密碼 (Password)", type="password")
                 if st.form_submit_button("登入 (LOGIN)", type="primary"):
@@ -459,6 +456,14 @@ def main():
             if curr_page < 1: curr_page = 1
             st.session_state['inv_page'] = curr_page
             
+            # 手機版分頁控制 (上)
+            c_p1, c_p2, c_p3 = st.columns([1, 2, 1])
+            with c_p1: 
+                if st.button("◀", key="p_up_prev", use_container_width=True, disabled=(curr_page==1)): st.session_state['inv_page'] -= 1; st.rerun()
+            with c_p2: st.markdown(f"<div style='text-align:center;font-weight:bold;padding-top:10px;'>第 {curr_page} / {total_pages} 頁</div>", unsafe_allow_html=True)
+            with c_p3:
+                if st.button("▶", key="p_up_next", use_container_width=True, disabled=(curr_page==total_pages)): st.session_state['inv_page'] += 1; st.rerun()
+
             start_idx = (curr_page - 1) * items_per_page
             end_idx = start_idx + items_per_page
             view_df = gallery_df.iloc[start_idx:end_idx]
@@ -469,17 +474,22 @@ def main():
                 total_qty_tw = group['Qty'].sum(); total_qty_cn = group['Qty_CN'].sum()
                 group['size_sort'] = group['Size'].apply(get_size_sort_key); sorted_group = group.sort_values('size_sort')
                 
+                # V107: 產生庫存透視 HTML
+                stock_badges = ""
+                for _, r in sorted_group.iterrows():
+                    cls = "has-stock" if r['Qty'] > 0 else "no-stock"
+                    stock_badges += f"<span class='stock-tag {cls}'>{r['Size']}:{r['Qty']}</span>"
+
                 with st.container(border=True):
-                    # 手機版佈局: 圖左文右
                     st.markdown(f"""
                     <div class='inv-row'>
                         <img src='{img}' class='inv-img'>
                         <div class='inv-info'>
-                            <div style='font-weight:bold; font-size:1.1rem;'>{name}</div>
-                            <div style='font-size:0.8rem; color:#666;'>{style_code} | ${price}</div>
-                            <div style='font-size:0.9rem; margin-top:5px;'>
-                                <span style='background:#dbeafe; padding:2px 6px; border-radius:4px; color:#1e40af; font-weight:bold;'>TW: {total_qty_tw}</span>
-                                <span style='background:#fef3c7; padding:2px 6px; border-radius:4px; color:#92400e; font-weight:bold;'>CN: {total_qty_cn}</span>
+                            <div class='inv-title'>{name}</div>
+                            <div class='inv-meta'>{style_code} | ${price}</div>
+                            <div class='stock-tag-row'>{stock_badges}</div>
+                            <div style='font-size:0.8rem; color:#64748b; margin-top:4px;'>
+                                🇹🇼 總庫存: <b>{total_qty_tw}</b> | 🇨🇳 中國倉: <b>{total_qty_cn}</b>
                             </div>
                         </div>
                     </div>
@@ -500,17 +510,14 @@ def main():
                                         retry_action(ws_items.update_cell, r, 13, n_cn)
                                         retry_action(ws_items.update_cell, r, 8, get_taiwan_time_str())
                                 st.cache_data.clear(); st.success("已更新"); time.sleep(0.5); st.rerun()
-
-            # 分頁按鈕
-            c_prev, c_page, c_next = st.columns([1, 2, 1])
-            with c_prev:
-                if st.button("⬅️ 上一頁", use_container_width=True, disabled=(curr_page==1)):
-                    st.session_state['inv_page'] -= 1; st.rerun()
-            with c_page:
-                st.markdown(f"<div style='text-align:center; line-height:3em;'>第 {curr_page} / {total_pages} 頁</div>", unsafe_allow_html=True)
-            with c_next:
-                if st.button("下一頁 ➡️", use_container_width=True, disabled=(curr_page==total_pages)):
-                    st.session_state['inv_page'] += 1; st.rerun()
+            
+            # 手機版分頁控制 (下)
+            c_p4, c_p5, c_p6 = st.columns([1, 2, 1])
+            with c_p4: 
+                if st.button("◀", key="p_dn_prev", use_container_width=True, disabled=(curr_page==1)): st.session_state['inv_page'] -= 1; st.rerun()
+            with c_p5: st.markdown(f"<div style='text-align:center;font-weight:bold;padding-top:10px;'>{curr_page} / {total_pages}</div>", unsafe_allow_html=True)
+            with c_p6:
+                if st.button("▶", key="p_dn_next", use_container_width=True, disabled=(curr_page==total_pages)): st.session_state['inv_page'] += 1; st.rerun()
 
         else: st.info("無資料")
 
@@ -586,7 +593,7 @@ def main():
                     st.markdown(f"<div class='final-price-display'>${final_total}</div>", unsafe_allow_html=True)
                     
                     sale_who = st.selectbox("經手", [st.session_state['user_name']] + [u for u in staff_list if u != st.session_state['user_name']])
-                    sale_ch = st.selectbox("通路", ["門市","官網","直播","網路","其他"]) # V106: Added 網路
+                    sale_ch = st.selectbox("通路", ["門市","官網","直播","網路","其他"]) # V107: Added 網路
                     pay = st.selectbox("付款", ["現金","刷卡","轉帳","禮券","其他"])
                     note = st.text_input("備註")
                     
@@ -672,57 +679,105 @@ def main():
                 st.plotly_chart(fig2, use_container_width=True)
             
             st.markdown("##### 📝 銷售明細表 (含管理)")
-            # 顯示表單 (不含原始Log)
             st.dataframe(sdf.drop(columns=['原始Log']), use_container_width=True)
 
-            # V106: 銷售訂單管理 (刪除與回補)
-            st.markdown("##### ✏️ 銷售紀錄修正/作廢 (自動回補庫存)")
+            # V107: 真正的銷售編輯 (自動退補庫存)
+            st.markdown("##### 📝 編輯/修正訂單 (核心功能)")
             sale_opts = sdf.apply(lambda x: f"{x['日期']} | ${x['金額']} | {x['明細'][:20]}...", axis=1).tolist()
-            sel_sale = st.selectbox("選擇要作廢的訂單", ["..."] + sale_opts)
+            sel_sale = st.selectbox("選擇要處理的訂單", ["..."] + sale_opts)
             
             if sel_sale != "...":
                 target_ts = sel_sale.split(" | ")[0]
                 target_row = sdf[sdf['日期'] == target_ts].iloc[0]
+                raw_log = target_row['原始Log']
                 
-                if st.button("🗑️ 作廢訂單並退回庫存", type="primary"):
-                    # 1. 解析原始 Log 裡的 Items
-                    raw_log = target_row['原始Log']
-                    try:
-                        items_str = re.search(r'Items:(.*?) \|', raw_log).group(1)
-                        # 2. 迴圈每一項商品，加回庫存
-                        restored_log = []
-                        for part in items_str.split(','):
-                            p_sku = part.split(' x')[0].strip()
-                            p_qty = int(part.split(' x')[1].strip())
+                # 解析原始資料
+                curr_note = ""; curr_ch = ""; curr_pay = ""; curr_items_str = ""
+                try:
+                    curr_items_str = re.search(r'Items:(.*?) \|', raw_log).group(1)
+                    if "Note:" in raw_log: curr_note = re.search(r'Note:(.*?) \|', raw_log + " |").group(1).strip()
+                    if "Channel:" in raw_log: curr_ch = re.search(r'Channel:(.*?) \|', raw_log + " |").group(1).strip()
+                    if "Pay:" in raw_log: curr_pay = re.search(r'Pay:(.*?) \|', raw_log + " |").group(1).strip()
+                except: pass
+
+                st.info("⚠️ 注意：修改內容或商品後，系統將自動『歸還舊庫存』並『扣除新庫存』，確保數據絕對準確。")
+                
+                with st.form("edit_sale_form"):
+                    e_items = st.text_area("商品內容 (格式: SKU x數量, SKU x數量)", value=curr_items_str)
+                    c_e1, c_e2, c_e3 = st.columns(3)
+                    e_total = c_e1.number_input("總金額", value=target_row['金額'])
+                    e_ch = c_e2.selectbox("通路", ["門市","官網","直播","網路","其他"], index=["門市","官網","直播","網路","其他"].index(curr_ch) if curr_ch in ["門市","官網","直播","網路","其他"] else 0)
+                    e_pay = c_e3.selectbox("付款", ["現金","刷卡","轉帳","禮券","其他"], index=["現金","刷卡","轉帳","禮券","其他"].index(curr_pay) if curr_pay in ["現金","刷卡","轉帳","禮券","其他"] else 0)
+                    e_note = st.text_input("備註", value=curr_note)
+                    
+                    if st.form_submit_button("✅ 確認修改並同步庫存", type="primary"):
+                        try:
+                            # 1. 歸還舊庫存
+                            all_logs = ws_logs.get_all_values()
+                            log_idx = -1
+                            for idx, row in enumerate(all_logs):
+                                if row[0] == target_ts and "Sale" in row[2]: log_idx = idx + 1; break
                             
+                            if log_idx == -1: st.error("找不到原始訂單，無法修改"); st.stop()
+
+                            # 執行歸還
+                            for part in curr_items_str.split(','):
+                                p_sku = part.split(' x')[0].strip(); p_qty = int(part.split(' x')[1].strip())
+                                cell = ws_items.find(p_sku)
+                                if cell:
+                                    curr_q = int(ws_items.cell(cell.row, 5).value)
+                                    retry_action(ws_items.update_cell, cell.row, 5, curr_q + p_qty)
+                            
+                            # 2. 扣除新庫存
+                            new_items_list = []
+                            for part in e_items.split(','):
+                                p_sku = part.split(' x')[0].strip(); p_qty = int(part.split(' x')[1].strip())
+                                cell = ws_items.find(p_sku)
+                                if cell:
+                                    curr_q = int(ws_items.cell(cell.row, 5).value)
+                                    if curr_q >= p_qty:
+                                        retry_action(ws_items.update_cell, cell.row, 5, curr_q - p_qty)
+                                        new_items_list.append(f"{p_sku} x{p_qty}")
+                                    else:
+                                        st.error(f"❌ 修改失敗：商品 {p_sku} 庫存不足 (現貨 {curr_q}, 需要 {p_qty})。請先手動補貨或減少數量。"); st.stop()
+                                else: st.error(f"❌ 商品 {p_sku} 不存在"); st.stop()
+
+                            # 3. 更新日誌 (刪除舊的，寫入新的)
+                            retry_action(ws_logs.delete_rows, log_idx)
+                            new_content = f"Sale | Total:${e_total} | Items:{','.join(new_items_list)} | Note:{e_note} | Pay:{e_pay} | Channel:{e_ch} | By:{st.session_state['user_name']} (Edited)"
+                            log_event(ws_logs, st.session_state['user_name'], "Sale", new_content)
+                            
+                            st.success("✅ 訂單已修正，庫存已自動校正！"); time.sleep(2); st.rerun()
+                            
+                        except Exception as e:
+                            st.error(f"系統錯誤: {e}")
+
+                if st.button("🗑️ 直接作廢此單 (歸還庫存)"):
+                    try:
+                        for part in curr_items_str.split(','):
+                            p_sku = part.split(' x')[0].strip(); p_qty = int(part.split(' x')[1].strip())
                             cell = ws_items.find(p_sku)
                             if cell:
                                 curr_q = int(ws_items.cell(cell.row, 5).value)
                                 retry_action(ws_items.update_cell, cell.row, 5, curr_q + p_qty)
-                                restored_log.append(f"{p_sku}(+{p_qty})")
                         
-                        # 3. 刪除 Log
                         all_logs = ws_logs.get_all_values()
                         for idx, row in enumerate(all_logs):
                             if row[0] == target_ts and "Sale" in row[2]:
                                 retry_action(ws_logs.delete_rows, idx + 1); break
                         
-                        st.success(f"訂單已作廢，庫存已回補: {', '.join(restored_log)}")
-                        time.sleep(2); st.rerun()
-                    except Exception as e:
-                        st.error(f"自動回補失敗 (格式無法解析)，請手動調整庫存。錯誤: {e}")
+                        st.success("已作廢"); time.sleep(1); st.rerun()
+                    except: st.error("作廢失敗")
 
         else: st.info("尚無銷售數據")
 
     with tabs[3]:
         st.subheader("🎁 內部領用/稽核 (統計修正)")
-        
-        # 統計看板 (V106: 修正統計對象為 Details 裡的領用人)
         if not logs_df.empty:
             int_df = logs_df[logs_df['Action'] == "Internal_Use"].copy()
             if not int_df.empty:
                 def parse_int_who(d):
-                    try: return d.split(' | ')[1].strip() # 格式: SKU-Qty | WHO | Reason...
+                    try: return d.split(' | ')[1].strip()
                     except: return "未分類"
                 def parse_int_qty(d):
                     try: return int(d.split(' | ')[0].split(' -')[1])
@@ -748,7 +803,6 @@ def main():
                     q = st.number_input("數量", 1); who = st.selectbox("領用人 (實際拿貨者)", staff_list); rsn = st.selectbox("原因", ["公務", "公關", "福利", "報廢", "樣品", "其他"]); n = st.text_input("備註")
                     if st.form_submit_button("執行"):
                         r = ws_items.find(tsku).row; retry_action(ws_items.update_cell, r, 5, int(tr['Qty'])-q)
-                        # Log 格式: SKU -Qty | WHO | Reason | Note
                         log_event(ws_logs, st.session_state['user_name'], "Internal_Use", f"{tsku} -{q} | {who} | {rsn} | {n}")
                         st.cache_data.clear(); st.success("已記錄"); st.rerun()
         
@@ -766,7 +820,6 @@ def main():
             
             if sel_rev != "...":
                 target_ts = sel_rev.split(" | ")[0]
-                # 找到原始資料
                 orig_row = logs_df[logs_df['Timestamp'] == target_ts].iloc[0]
                 orig_detail = orig_row['Details']
                 orig_sku = orig_detail.split(' -')[0]
