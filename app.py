@@ -18,7 +18,7 @@ import matplotlib.font_manager as fm
 
 # --- 1. 系統全域設定 ---
 st.set_page_config(
-    page_title="IFUKUK ERP V109.6 ROSTER STABILITY", 
+    page_title="IFUKUK ERP V109.7 ROSTER INFINITY", 
     layout="wide", 
     page_icon="🌏",
     initial_sidebar_state="expanded"
@@ -104,20 +104,25 @@ IMGBB_API_KEY = "c2f93d2a1a62bd3a6da15f477d2bb88a"
 SHEET_HEADERS = ["SKU", "Name", "Category", "Size", "Qty", "Price", "Cost", "Last_Updated", "Image_URL", "Safety_Stock", "Orig_Currency", "Orig_Cost", "Qty_CN"]
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
 
-# --- OMEGA 核心防護層 (Anti-Crash Logic) ---
+# --- OMEGA 核心防護層 V109.7 (Anti-Crash Logic) ---
 def retry_action(func, *args, **kwargs):
-    max_retries = 5
+    # V109.7: 增加到 15 次重試，並且在 UI 顯示等待
+    max_retries = 15
     for i in range(max_retries):
         try:
             return func(*args, **kwargs)
         except Exception as e:
-            # V109.6: 強化錯誤捕捉，若是 Connection 相關錯誤則等待更久
-            if "429" in str(e) or "Quota exceeded" in str(e) or "1006" in str(e):
-                wait_time = (2 ** i) + random.uniform(1, 2)
+            # 針對 API 配額限制 (Quota) 與 連線重置 (1006) 進行強力處理
+            if "429" in str(e) or "Quota exceeded" in str(e) or "1006" in str(e) or "500" in str(e) or "503" in str(e):
+                wait_time = (1.5 ** i) + random.uniform(0.5, 1.5) # 指數退避
+                if i > 2:
+                    # 只有在連續失敗3次後才顯示 Toast，避免干擾微小延遲
+                    st.toast(f"⏳ 雲端連線忙碌中... 自動重試 ({i+1}/{max_retries})")
                 time.sleep(wait_time)
                 continue
             else:
                 raise e
+    st.error("❌ 雲端同步失敗，請檢查網路或稍後再試。")
     return None
 
 @st.cache_resource(ttl=600)
@@ -129,12 +134,15 @@ def get_connection():
     creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
     return gspread.authorize(creds)
 
-@st.cache_data(ttl=5, show_spinner=False)
+@st.cache_data(ttl=10, show_spinner=False) # 增加 TTL 到 10秒，減少頻繁讀取
 def get_data_safe(_ws, expected_headers=None):
-    max_retries = 3
+    # V109.7: 強制防崩潰，如果 ws 是 None，直接回傳空 DataFrame
+    if _ws is None:
+        return pd.DataFrame(columns=expected_headers) if expected_headers else pd.DataFrame()
+
+    max_retries = 5
     for attempt in range(max_retries):
         try:
-            if _ws is None: return pd.DataFrame(columns=expected_headers) if expected_headers else pd.DataFrame()
             raw_data = _ws.get_all_values()
             if not raw_data or len(raw_data) < 2: return pd.DataFrame(columns=expected_headers) if expected_headers else pd.DataFrame()
             
@@ -158,8 +166,9 @@ def get_data_safe(_ws, expected_headers=None):
                 df.columns = new_headers[:len(df.columns)]
             return df
         except Exception as e:
-            if "429" in str(e): time.sleep(2 ** (attempt + 1)); continue
-            return pd.DataFrame(columns=expected_headers) if expected_headers else pd.DataFrame()
+            time.sleep(1.5 ** (attempt + 1))
+            continue
+            
     return pd.DataFrame(columns=expected_headers) if expected_headers else pd.DataFrame()
 
 @st.cache_resource(ttl=600)
@@ -168,15 +177,23 @@ def init_db():
     try: return client.open_by_url(GOOGLE_SHEET_URL)
     except: return None
 
+# V109.7: 這裡加入無限重連邏輯
 def get_worksheet_safe(sh, title, headers):
     try: return sh.worksheet(title)
     except gspread.WorksheetNotFound:
-        ws = sh.add_worksheet(title, rows=100, cols=20)
-        ws.append_row(headers)
-        return ws
+        try:
+            ws = sh.add_worksheet(title, rows=100, cols=20)
+            ws.append_row(headers)
+            return ws
+        except: return None
     except Exception as e:
-        # V109.6: 若連線失敗回傳 None，讓後端邏輯處理
-        return None
+        # 如果連線失敗，不要直接回傳 None，嘗試重新連接 sh
+        try:
+            time.sleep(2)
+            sh_retry = init_db()
+            return sh_retry.worksheet(title)
+        except:
+            return None
 
 # --- 工具模組 ---
 def get_taiwan_time_str(): return (datetime.utcnow() + timedelta(hours=8)).strftime("%Y-%m-%d %H:%M:%S")
@@ -249,7 +266,7 @@ def render_navbar(user_initial):
 CAT_LIST = ["上衣(Top)", "褲子(Btm)", "外套(Out)", "套裝(Suit)", "鞋類(Shoe)", "包款(Bag)", "帽子(Hat)", "飾品(Acc)", "其他(Misc)"]
 
 # ==========================================
-# 🗓️ 排班系統 ELITE (Module Rewrite V109.6)
+# 🗓️ 排班系統 ELITE (Module Rewrite V109.7)
 # ==========================================
 
 SHIFT_COLORS = {
@@ -345,11 +362,12 @@ def generate_roster_image_buffer(year, month, shifts_df, days_in_month, color_ma
         return None
 
 def render_roster_system(sh, users_list, user_name):
+    # V109.7: 使用更安全的讀取方式
     ws_shifts = get_worksheet_safe(sh, "Shifts", ["Date", "Staff", "Shift_Type", "Note", "Notify", "Updated_By"])
     
-    # V109.6: 防崩潰護盾
+    # 這裡是最重要的防崩潰點：如果 retry 了 15 次還是 None，就顯示警告並退出 render
     if ws_shifts is None:
-        st.error("⚠️ 雲端資料庫連線忙碌中，請稍候重試 (API Busy)")
+        st.warning("⚠️ 系統正在全力與 Google 連線，請稍候 3 秒後重新整理頁面...")
         return
 
     shifts_df = get_data_safe(ws_shifts, ["Date", "Staff", "Shift_Type", "Note", "Notify", "Updated_By"])
@@ -363,7 +381,7 @@ def render_roster_system(sh, users_list, user_name):
     # 產生全域人員色票
     staff_color_map = get_staff_color_map(users_list)
 
-    st.markdown("<div class='roster-header'><h3>🗓️ 專業排班中心 STABILITY</h3></div>", unsafe_allow_html=True)
+    st.markdown("<div class='roster-header'><h3>🗓️ 專業排班中心 INFINITY</h3></div>", unsafe_allow_html=True)
 
     now = datetime.utcnow() + timedelta(hours=8)
     c_ctrl1, c_ctrl2, c_ctrl3 = st.columns([2, 1, 1])
@@ -508,24 +526,31 @@ def render_roster_system(sh, users_list, user_name):
                     s_note = st.text_input("備註 (可選)")
                     
                     if st.form_submit_button("➕ 新增/更新排班", use_container_width=True):
-                        all_vals = ws_shifts.get_all_values()
-                        rows_to_del = []
-                        for idx, row in enumerate(all_vals):
-                            if len(row) > 1 and row[0] == t_date and row[1] == s_staff: rows_to_del.append(idx + 1)
-                        for r_idx in reversed(rows_to_del): retry_action(ws_shifts.delete_rows, r_idx)
-                        
-                        retry_action(ws_shifts.append_row, [t_date, s_staff, s_type, s_note, "FALSE", user_name])
-                        st.cache_data.clear(); st.success(f"已更新 {s_staff} 的班表"); time.sleep(0.5); st.rerun()
+                        # V109.7: 加入重試保護
+                        try:
+                            all_vals = ws_shifts.get_all_values()
+                            rows_to_del = []
+                            for idx, row in enumerate(all_vals):
+                                if len(row) > 1 and row[0] == t_date and row[1] == s_staff: rows_to_del.append(idx + 1)
+                            for r_idx in reversed(rows_to_del): retry_action(ws_shifts.delete_rows, r_idx)
+                            
+                            retry_action(ws_shifts.append_row, [t_date, s_staff, s_type, s_note, "FALSE", user_name])
+                            st.cache_data.clear(); st.success(f"已更新 {s_staff} 的班表"); time.sleep(0.5); st.rerun()
+                        except Exception as e:
+                            st.error(f"寫入失敗，請重試: {e}")
 
                 st.markdown("---")
                 if st.button("🔴 設定為全店公休 (Store Closed)", type="primary", use_container_width=True):
-                    all_vals = ws_shifts.get_all_values()
-                    rows_to_del = []
-                    for idx, row in enumerate(all_vals):
-                        if len(row) > 1 and row[0] == t_date: rows_to_del.append(idx + 1)
-                    for r_idx in reversed(rows_to_del): retry_action(ws_shifts.delete_rows, r_idx)
-                    retry_action(ws_shifts.append_row, [t_date, "全店", "公休", "Store Closed", "FALSE", user_name])
-                    st.cache_data.clear(); st.success("已設定全店公休"); st.rerun()
+                    try:
+                        all_vals = ws_shifts.get_all_values()
+                        rows_to_del = []
+                        for idx, row in enumerate(all_vals):
+                            if len(row) > 1 and row[0] == t_date: rows_to_del.append(idx + 1)
+                        for r_idx in reversed(rows_to_del): retry_action(ws_shifts.delete_rows, r_idx)
+                        retry_action(ws_shifts.append_row, [t_date, "全店", "公休", "Store Closed", "FALSE", user_name])
+                        st.cache_data.clear(); st.success("已設定全店公休"); st.rerun()
+                    except Exception as e:
+                        st.error(f"設定失敗: {e}")
         else:
             st.info("👈 請點選左側日曆日期進行編輯")
 
@@ -543,53 +568,58 @@ def render_roster_system(sh, users_list, user_name):
                 p_type = st.selectbox("班別", list(SHIFT_COLORS.keys()), key="p_ty")
                 
                 if st.button("🚀 執行人員排班"):
-                    target_weekday = week_map[p_day_cn]
-                    cal = calendar.monthcalendar(sel_year, sel_month)
-                    added_count = 0
-                    for week in cal:
-                        day = week[target_weekday]
-                        if day != 0:
-                            d_str = f"{sel_year}-{str(sel_month).zfill(2)}-{str(day).zfill(2)}"
-                            # V109.6: 智能工具也要確保先刪後寫
-                            all_vals = ws_shifts.get_all_values()
-                            rows_to_del = [idx+1 for idx, row in enumerate(all_vals) if len(row)>1 and row[0]==d_str and row[1]==p_staff]
-                            for r_idx in reversed(rows_to_del): retry_action(ws_shifts.delete_rows, r_idx)
-                            
-                            retry_action(ws_shifts.append_row, [d_str, p_staff, p_type, "Auto", "FALSE", user_name])
-                            added_count += 1
-                    st.cache_data.clear(); st.success(f"已填充 {added_count} 筆排班"); time.sleep(1); st.rerun()
+                    try:
+                        target_weekday = week_map[p_day_cn]
+                        cal = calendar.monthcalendar(sel_year, sel_month)
+                        added_count = 0
+                        # 預先讀取一次，減少 loop 中的讀取
+                        all_vals = ws_shifts.get_all_values() 
+                        
+                        for week in cal:
+                            day = week[target_weekday]
+                            if day != 0:
+                                d_str = f"{sel_year}-{str(sel_month).zfill(2)}-{str(day).zfill(2)}"
+                                rows_to_del = [idx+1 for idx, row in enumerate(all_vals) if len(row)>1 and row[0]==d_str and row[1]==p_staff]
+                                for r_idx in reversed(rows_to_del): retry_action(ws_shifts.delete_rows, r_idx)
+                                
+                                retry_action(ws_shifts.append_row, [d_str, p_staff, p_type, "Auto", "FALSE", user_name])
+                                added_count += 1
+                        st.cache_data.clear(); st.success(f"已填充 {added_count} 筆排班"); time.sleep(1); st.rerun()
+                    except Exception as e: st.error(f"執行失敗: {e}")
 
             with wc_tab2:
                 st.caption("例如: 設定本月每週二都全店公休")
                 sc_day_cn = st.selectbox("每週幾?", list(week_map.keys()), key="sc_wd")
                 
                 if st.button("🔴 執行全店公休填充", type="primary"):
-                    target_weekday = week_map[sc_day_cn]
-                    cal = calendar.monthcalendar(sel_year, sel_month)
-                    closed_count = 0
-                    
-                    target_dates = []
-                    for week in cal:
-                        day = week[target_weekday]
-                        if day != 0:
-                            target_dates.append(f"{sel_year}-{str(sel_month).zfill(2)}-{str(day).zfill(2)}")
-                    
-                    if target_dates:
-                        all_vals = ws_shifts.get_all_values()
-                        rows_to_del = []
-                        for idx, row in enumerate(all_vals):
-                            if len(row) > 0 and row[0] in target_dates:
-                                rows_to_del.append(idx + 1)
+                    try:
+                        target_weekday = week_map[sc_day_cn]
+                        cal = calendar.monthcalendar(sel_year, sel_month)
+                        closed_count = 0
                         
-                        for r_idx in reversed(rows_to_del): retry_action(ws_shifts.delete_rows, r_idx)
+                        target_dates = []
+                        for week in cal:
+                            day = week[target_weekday]
+                            if day != 0:
+                                target_dates.append(f"{sel_year}-{str(sel_month).zfill(2)}-{str(day).zfill(2)}")
                         
-                        for d_str in target_dates:
-                            retry_action(ws_shifts.append_row, [d_str, "全店", "公休", "Store Closed", "FALSE", user_name])
-                            closed_count += 1
+                        if target_dates:
+                            all_vals = ws_shifts.get_all_values()
+                            rows_to_del = []
+                            for idx, row in enumerate(all_vals):
+                                if len(row) > 0 and row[0] in target_dates:
+                                    rows_to_del.append(idx + 1)
                             
-                        st.cache_data.clear(); st.success(f"已設定 {closed_count} 天為全店公休"); time.sleep(1); st.rerun()
-                    else:
-                        st.warning("本月沒有這個星期幾")
+                            for r_idx in reversed(rows_to_del): retry_action(ws_shifts.delete_rows, r_idx)
+                            
+                            for d_str in target_dates:
+                                retry_action(ws_shifts.append_row, [d_str, "全店", "公休", "Store Closed", "FALSE", user_name])
+                                closed_count += 1
+                                
+                            st.cache_data.clear(); st.success(f"已設定 {closed_count} 天為全店公休"); time.sleep(1); st.rerun()
+                        else:
+                            st.warning("本月沒有這個星期幾")
+                    except Exception as e: st.error(f"執行失敗: {e}")
 
         with st.expander("⚡ 複製排班 (Clone Day)", expanded=False):
             if 'roster_date' in st.session_state:
@@ -601,16 +631,18 @@ def render_roster_system(sh, users_list, user_name):
                 src_date_str = src_date.strftime("%Y-%m-%d")
 
                 if st.button(f"執行複製 ({src_date_str} ➡️ {target_d})"):
-                    source_shifts = shifts_df[shifts_df['Date'] == src_date_str]
-                    if not source_shifts.empty:
-                        all_vals = ws_shifts.get_all_values()
-                        rows_to_del = [i+1 for i, r in enumerate(all_vals) if len(r)>0 and r[0]==target_d]
-                        for r_idx in reversed(rows_to_del): retry_action(ws_shifts.delete_rows, r_idx)
-                        
-                        for _, r in source_shifts.iterrows():
-                            retry_action(ws_shifts.append_row, [target_d, r['Staff'], r['Type'], r.get('Note',''), "FALSE", user_name])
-                        st.cache_data.clear(); st.success("複製完成"); st.rerun()
-                    else: st.warning(f"來源日期 ({src_date_str}) 沒有排班資料")
+                    try:
+                        source_shifts = shifts_df[shifts_df['Date'] == src_date_str]
+                        if not source_shifts.empty:
+                            all_vals = ws_shifts.get_all_values()
+                            rows_to_del = [i+1 for i, r in enumerate(all_vals) if len(r)>0 and r[0]==target_d]
+                            for r_idx in reversed(rows_to_del): retry_action(ws_shifts.delete_rows, r_idx)
+                            
+                            for _, r in source_shifts.iterrows():
+                                retry_action(ws_shifts.append_row, [target_d, r['Staff'], r['Type'], r.get('Note',''), "FALSE", user_name])
+                            st.cache_data.clear(); st.success("複製完成"); st.rerun()
+                        else: st.warning(f"來源日期 ({src_date_str}) 沒有排班資料")
+                    except Exception as e: st.error(f"複製失敗: {e}")
             else:
                 st.caption("請先在左側點選一個「目標日期」")
 
@@ -636,7 +668,7 @@ def main():
         with c2:
             st.markdown("<br><br><br>", unsafe_allow_html=True)
             st.markdown("<div style='text-align:center; font-weight:900; font-size:2.5rem; margin-bottom:10px;'>IFUKUK</div>", unsafe_allow_html=True)
-            st.markdown("<div style='text-align:center; color:#666; font-size:0.9rem; margin-bottom:30px;'>OMEGA V109.6 ROSTER STABILITY</div>", unsafe_allow_html=True)
+            st.markdown("<div style='text-align:center; color:#666; font-size:0.9rem; margin-bottom:30px;'>OMEGA V109.7 ROSTER INFINITY</div>", unsafe_allow_html=True)
             with st.form("login"):
                 u = st.text_input("帳號 (ID)"); p = st.text_input("密碼 (Password)", type="password")
                 if st.form_submit_button("登入 (LOGIN)", type="primary"):
