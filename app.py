@@ -19,18 +19,18 @@ import os
 
 # --- 1. 系統全域設定 ---
 st.set_page_config(
-    page_title="IFUKUK ERP V110.1 RESTORE", 
+    page_title="IFUKUK ERP V111.0 SUPREME", 
     layout="wide", 
     page_icon="🌏",
     initial_sidebar_state="expanded"
 )
 
 # ==========================================
-# 🛑 【CSS 視覺核心：強制白底 & 手機 Grid】
+# 🛑 【CSS 視覺核心：卡片美學 + 手機優化 + 白底強制】
 # ==========================================
 st.markdown("""
     <style>
-        /* 1. 強制全域白底黑字 */
+        /* 1. 強制全域白底黑字 (防止手機深色模式影響) */
         [data-testid="stAppViewContainer"] { background-color: #FFFFFF !important; color: #000000 !important; }
         [data-testid="stSidebar"] { background-color: #F8F9FA !important; }
         [data-testid="stHeader"] { background-color: #FFFFFF !important; }
@@ -43,75 +43,78 @@ st.markdown("""
         div[data-baseweb="select"] > div { background-color: #FFFFFF !important; color: #000000 !important; }
         label, .stMarkdown, h1, h2, h3, h4, h5, h6, p, span { color: #0f172a !important; }
 
-        /* 卡片樣式 */
-        .pos-card, .inv-row, .finance-card, .metric-card, .cart-box, .mgmt-box {
-            background-color: #FFFFFF !important; border: 1px solid #E2E8F0 !important;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05) !important; color: #000000 !important;
+        /* 2. 數據儀表板卡片 (Visuals Restored) */
+        .metric-card { 
+            background: linear-gradient(145deg, #ffffff, #f8fafc) !important; 
+            border-radius: 12px; padding: 15px; border: 1px solid #e2e8f0; 
+            text-align: center; margin-bottom: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05);
         }
-        
-        .pos-img { width: 100%; height: 160px; object-fit: cover; background: #f9fafb; border-bottom: 1px solid #f3f4f6; }
-        .pos-content { padding: 10px; flex-grow: 1; display: flex; flex-direction: column; }
-        .pos-title { font-weight: bold; font-size: 1rem; margin-bottom: 4px; color: #111 !important; line-height: 1.3; }
-        .pos-meta { font-size: 0.8rem; color: #666 !important; margin-bottom: 5px; }
-        
-        /* 庫存標籤 */
-        .stock-tag-row { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; margin-bottom: 5px; }
-        .stock-tag { font-size: 0.75rem; padding: 2px 6px; border-radius: 4px; font-weight: 600; border: 1px solid transparent; }
+        .metric-label { font-size: 0.9rem; color: #64748b !important; font-weight: bold; margin-bottom: 5px; }
+        .metric-value { font-size: 1.6rem; font-weight: 800; color: #0f172a !important; margin: 0; }
+        .profit-card .metric-value { color: #f59e0b !important; }
+        .realized-card .metric-value { color: #10b981 !important; }
+
+        /* 3. POS 與 庫存卡片 (Native Container Style) */
+        [data-testid="stVerticalBlock"] > [style*="flex-direction: column;"] > [data-testid="stVerticalBlock"] {
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 12px;
+            background-color: white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        /* 庫存透視標籤 */
+        .stock-tag-row { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+        .stock-tag { font-size: 0.75rem; padding: 2px 8px; border-radius: 4px; font-weight: 700; border: 1px solid transparent; }
         .stock-tag.has-stock { background-color: #dcfce7 !important; color: #166534 !important; border-color: #bbf7d0; }
         .stock-tag.no-stock { background-color: #f3f4f6 !important; color: #9ca3af !important; border-color: #e5e7eb; }
-        
-        .inv-row { display: flex; align-items: start; gap: 12px; padding: 12px; border-radius: 12px; margin-bottom: 10px; }
-        .inv-img { width: 90px; height: 90px; object-fit: cover; border-radius: 8px; flex-shrink: 0; background: #f1f5f9; }
-        .inv-info { flex-grow: 1; }
-        .inv-title { font-size: 1.1rem; font-weight: bold; color: #0f172a !important; margin-bottom: 4px; }
-        
-        .finance-card { padding: 15px; text-align: center; border-radius: 10px; }
-        .finance-val { font-size: 1.4rem; font-weight: 900; color: #0f172a !important; }
-        .finance-lbl { font-size: 0.8rem; color: #64748b !important; font-weight: bold; }
 
-        /* V110.1 手機 Grid 優化 */
-        [data-testid="column"] {
-            min-width: 0px !important; flex: 1 1 0px !important; padding: 0px 2px !important;
-        }
+        /* 4. 排班表手機優化 (Mobile Grid Force) */
+        [data-testid="column"] { min-width: 0px !important; flex: 1 1 0px !important; padding: 0px 2px !important; }
         
         .roster-header { background: #f1f5f9 !important; padding: 10px; border-radius: 12px; margin-bottom: 10px; border: 1px solid #e2e8f0; text-align: center; }
-        .week-header { font-size: 0.6rem !important; color: #64748b; font-weight: bold; text-align: center; }
+        .week-header { font-size: 0.6rem !important; color: #64748b; font-weight: bold; text-align: center; margin-bottom:5px; }
 
         .day-cell { 
-            border: 1px solid #e2e8f0; border-radius: 4px; 
-            padding: 2px; min-height: 60px; 
-            position: relative; margin-bottom: 2px; 
+            border: 1px solid #e2e8f0; border-radius: 6px; 
+            padding: 2px; min-height: 65px; 
+            position: relative; margin-bottom: 4px; 
             background: #fff !important; 
             overflow: hidden;
+            display: flex; flex-direction: column;
         }
         
-        .day-num { font-size: 0.7rem !important; font-weight: bold; color: #64748b; margin-bottom: 1px; text-align: center; }
+        .day-num { font-size: 0.75rem !important; font-weight: 800; color: #334155; margin-bottom: 2px; text-align: center; background: #f8fafc; border-bottom: 1px solid #f1f5f9; }
         
         .shift-pill { 
-            font-size: 0.55rem !important; padding: 1px 2px; border-radius: 3px; 
+            font-size: 0.6rem !important; padding: 2px 1px; border-radius: 3px; 
             margin-bottom: 1px; color: white !important; display: block; 
             text-align: center; font-weight: bold; line-height: 1.1;
             white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
         }
-
+        
         .store-closed {
             background-color: #EF4444 !important; color: white !important;
-            font-weight: 900; font-size: 0.6rem !important;
+            font-weight: 900; font-size: 0.65rem !important;
             display: flex; align-items: center; justify-content: center;
-            height: 100%; border-radius: 4px; min-height: 50px;
+            height: 100%; width: 100%; flex-grow: 1;
             writing-mode: vertical-rl;
         }
         
-        /* 隱形按鈕 */
+        /* 按鈕優化 */
         div.stButton > button:first-child {
-            border-radius: 6px; height: 2.5em; font-weight: 700; 
+            border-radius: 8px; height: 3em; font-weight: 700; 
             border: 1px solid #cbd5e1; background-color: #FFFFFF !important; 
             color: #0f172a !important; width: 100%; padding: 0px;
         }
         
-        /* 儀表板 */
-        .metric-card { background: linear-gradient(145deg, #ffffff, #f8fafc) !important; color: black !important; padding: 10px; text-align: center; }
-        .metric-value { color: #0f172a !important; font-size: 1.5em; font-weight: 800; }
+        /* 購物車 */
+        .cart-box { background: #f8fafc !important; border: 1px solid #cbd5e1; padding: 15px; border-radius: 12px; margin-bottom: 15px; }
+        .cart-item { display: flex; justify-content: space-between; border-bottom: 1px dashed #cbd5e1; padding: 8px 0; font-size: 0.95rem; color: #333 !important; }
+        .final-price-display { font-size: 2rem; font-weight: 900; color: #15803d !important; text-align: center; background: #dcfce7 !important; padding: 10px; border-radius: 12px; margin-top: 15px; border: 1px solid #86efac; }
+        
+        /* 編輯模式提示 */
+        .edit-mode-active { border: 2px solid #3b82f6; background: #eff6ff; padding: 10px; border-radius: 8px; margin-bottom: 10px; text-align: center; font-weight: bold; color: #1d4ed8; }
 
     </style>
 """, unsafe_allow_html=True)
@@ -133,11 +136,11 @@ def retry_action(func, *args, **kwargs):
                 if i > 2: st.toast(f"⏳ 雲端同步中... ({i+1}/{max_retries})")
                 time.sleep(wait_time); continue
             else: raise e
-    st.error("❌ 同步失敗"); return None
+    st.error("❌ 同步失敗，請稍後再試"); return None
 
 @st.cache_resource(ttl=600)
 def get_connection():
-    if "gcp_service_account" not in st.secrets: st.error("❌ 找不到 Secrets"); st.stop()
+    if "gcp_service_account" not in st.secrets: st.error("❌ 找不到 Secrets 金鑰"); st.stop()
     creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=SCOPES)
     return gspread.authorize(creds)
 
@@ -154,6 +157,7 @@ def get_data_safe(_ws, expected_headers=None):
                 if h in seen: seen[h]+=1; new_h.append(f"{h}_{seen[h]}")
                 else: seen[h]=0; new_h.append(h)
             
+            # 自動補全欄位
             if expected_headers and "Qty_CN" in expected_headers and "Qty_CN" not in new_h:
                 try: retry_action(_ws.update_cell, 1, len(new_h)+1, "Qty_CN"); new_h.append("Qty_CN"); raw = _ws.get_all_values(); rows = raw[1:]
                 except: pass
@@ -228,16 +232,18 @@ def render_navbar(ui):
     d = (datetime.utcnow()+timedelta(hours=8)).strftime("%Y/%m/%d")
     r = st.session_state.get('exchange_rate', 4.5)
     st.markdown(f"""
-        <div style="display:flex; justify-content:space-between; align-items:center; background:#fff; padding:15px; border-bottom:1px solid #eee; margin-bottom:15px;">
-            <div><span style="font-size:18px; font-weight:900; color:#111;">IFUKUK GLOBAL</span><br><span style="font-size:11px; color:#666; font-family:monospace;">{d} • Rate: {r}</span></div>
-            <div style="width:36px; height:36px; background:#111; color:#fff; border-radius:8px; display:flex; align-items:center; justify-content:center; font-weight:bold;">{ui}</div>
+        <div class="navbar-container">
+            <div style="display:flex; justify-content:space-between; align-items:center; background:#fff; padding:15px; border-bottom:1px solid #eee; margin-bottom:15px;">
+                <div><span style="font-size:18px; font-weight:900; color:#111;">IFUKUK GLOBAL</span><br><span style="font-size:11px; color:#666; font-family:monospace;">{d} • Rate: {r}</span></div>
+                <div style="width:36px; height:36px; background:#111; color:#fff; border-radius:8px; display:flex; align-items:center; justify-content:center; font-weight:bold;">{ui}</div>
+            </div>
         </div>
     """, unsafe_allow_html=True)
 
 CAT_LIST = ["上衣(Top)", "褲子(Btm)", "外套(Out)", "套裝(Suit)", "鞋類(Shoe)", "包款(Bag)", "帽子(Hat)", "飾品(Acc)", "其他(Misc)"]
 
 # ==========================================
-# 🗓️ 排班系統 ELITE (V110.1 Restore)
+# 🗓️ 排班系統 ELITE (V111.0 完美整合版)
 # ==========================================
 
 SHIFT_COLORS = {
@@ -247,12 +253,12 @@ SHIFT_COLORS = {
 }
 
 def get_staff_color_map(users):
+    # 20色高對比色票 (固定分配)
     VP = ["#2563EB", "#059669", "#7C3AED", "#DB2777", "#D97706", "#DC2626", "#0891B2", "#4F46E5", "#BE123C", "#B45309", "#1D4ED8", "#047857", "#6D28D9", "#BE185D", "#B45309", "#B91C1C", "#0E7490", "#4338CA", "#9F1239", "#92400E"]
     cm = {}; su = sorted([u for u in users if u != "全店"])
     for i, u in enumerate(su): cm[u] = VP[i % len(VP)]
     return cm
 
-# V110.1: 字型下載修復 (存到 /tmp)
 def get_chinese_font_path():
     font_url = "https://github.com/googlefonts/noto-cjk/raw/main/Sans/OTF/TraditionalChinese/NotoSansCJKtc-Regular.otf"
     font_path = "/tmp/NotoSansCJKtc-Regular.otf"
@@ -339,7 +345,7 @@ def render_roster_system(sh, users_list, user_name):
     
     st.markdown("---")
 
-    # V110.1: 強制使用 Grid Layout (手機適配)
+    # 手機強制 Grid 布局
     cal = calendar.monthcalendar(sel_year, sel_month)
     cols = st.columns(7)
     days = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"]
@@ -353,9 +359,8 @@ def render_roster_system(sh, users_list, user_name):
                     d_str = f"{sel_year}-{str(sel_month).zfill(2)}-{str(day).zfill(2)}"
                     ds = shifts_df[shifts_df['Date'] == d_str] if not shifts_df.empty else pd.DataFrame()
                     
-                    # 隱形按鈕覆蓋
                     if st.button(f"{day}", key=f"d_{d_str}", use_container_width=True):
-                        st.session_state['roster_date'] = d_str; st.rerun()
+                        st.session_state['roster_date'] = d_str; st.session_state['edit_target_staff'] = None; st.rerun()
 
                     is_closed = False
                     html = ""
@@ -375,7 +380,6 @@ def render_roster_system(sh, users_list, user_name):
 
     st.markdown("---")
     
-    # 編輯區
     c_edit, c_smart = st.columns([1, 1])
     with c_edit:
         if 'roster_date' in st.session_state:
@@ -383,6 +387,8 @@ def render_roster_system(sh, users_list, user_name):
             st.markdown(f"#### ✏️ 編輯: {t_date}")
             ds = shifts_df[shifts_df['Date'] == t_date] if not shifts_df.empty else pd.DataFrame()
             
+            if 'edit_target_staff' not in st.session_state: st.session_state['edit_target_staff'] = None
+
             is_closed = False
             if not ds.empty and ((ds['Staff']=="全店")&(ds['Type']=="公休")).any(): is_closed=True
             
@@ -395,27 +401,53 @@ def render_roster_system(sh, users_list, user_name):
                     st.success("已解除"); st.rerun()
             else:
                 if not ds.empty:
-                    st.caption("點擊移除:")
+                    st.caption("排班列表 (點擊✏️修改):")
                     for _, r in ds.iterrows():
-                        if st.button(f"❌ {r['Staff']} ({r['Type']})", key=f"del_{r['Staff']}_{t_date}"):
-                            all_v = ws_shifts.get_all_values()
-                            for i, row in enumerate(all_v):
-                                if len(row)>1 and row[0]==t_date and row[1]==r['Staff']: retry_action(ws_shifts.delete_rows, i+1); break
-                            st.success("已移除"); st.rerun()
+                        c1, c2, c3 = st.columns([3, 1, 1])
+                        with c1: st.write(f"{r['Staff']} ({r['Type']})")
+                        with c2: 
+                            if st.button("✏️", key=f"ed_{r['Staff']}_{t_date}"):
+                                st.session_state['edit_target_staff'] = r['Staff']
+                                st.session_state['edit_target_type'] = r['Type']
+                                st.session_state['edit_target_note'] = r.get('Note','')
+                                st.rerun()
+                        with c3:
+                            if st.button("🗑️", key=f"del_{r['Staff']}_{t_date}"):
+                                all_v = ws_shifts.get_all_values()
+                                for i, row in enumerate(all_v):
+                                    if len(row)>1 and row[0]==t_date and row[1]==r['Staff']: retry_action(ws_shifts.delete_rows, i+1); break
+                                st.success("已移除"); st.rerun()
                 
-                with st.form("add_shift"):
-                    s = st.selectbox("人員", users_list)
-                    t = st.selectbox("班別", list(SHIFT_COLORS.keys()))
-                    n = st.text_input("備註")
-                    if st.form_submit_button("➕ 新增/更新"):
-                        all_v = ws_shifts.get_all_values() # Upsert Logic
-                        for i, r in enumerate(all_v):
-                            if len(r)>1 and r[0]==t_date and r[1]==s: retry_action(ws_shifts.delete_rows, i+1); break
+                target = st.session_state.get('edit_target_staff')
+                if target:
+                    st.markdown(f"<div class='edit-mode-active'>正在修改: {target}</div>", unsafe_allow_html=True)
+                    s_idx = users_list.index(target) if target in users_list else 0
+                    t_idx = list(SHIFT_COLORS.keys()).index(st.session_state['edit_target_type']) if st.session_state['edit_target_type'] in SHIFT_COLORS else 0
+                    n_val = st.session_state['edit_target_note']
+                    btn_txt = "✅ 確認修改"
+                else:
+                    st.caption("新增排班:")
+                    s_idx=0; t_idx=0; n_val=""; btn_txt = "➕ 新增排班"
+
+                with st.form("shift_op"):
+                    s = st.selectbox("人員", users_list, index=s_idx)
+                    t = st.selectbox("班別", list(SHIFT_COLORS.keys()), index=t_idx)
+                    n = st.text_input("備註", value=n_val)
+                    c_sub1, c_sub2 = st.columns(2)
+                    if c_sub1.form_submit_button(btn_txt):
+                        all_v = ws_shifts.get_all_values()
+                        del_target = target if target else s
+                        to_del = [i+1 for i, r in enumerate(all_v) if len(r)>1 and r[0]==t_date and r[1]==del_target]
+                        for i in reversed(to_del): retry_action(ws_shifts.delete_rows, i)
                         retry_action(ws_shifts.append_row, [t_date, s, t, n, "FALSE", user_name])
-                        st.success("已更新"); st.rerun()
+                        st.session_state['edit_target_staff'] = None
+                        st.success("已更新"); time.sleep(0.5); st.rerun()
+                    
+                    if target and c_sub2.form_submit_button("❌ 取消"):
+                        st.session_state['edit_target_staff'] = None; st.rerun()
                 
-                if st.button("🔴 設定全店公休"):
-                    all_v = ws_shifts.get_all_values() # Clean day
+                if not target and st.button("🔴 設定全店公休"):
+                    all_v = ws_shifts.get_all_values() 
                     to_del = [i+1 for i, r in enumerate(all_v) if len(r)>0 and r[0]==t_date]
                     for i in reversed(to_del): retry_action(ws_shifts.delete_rows, i)
                     retry_action(ws_shifts.append_row, [t_date, "全店", "公休", "Store Closed", "FALSE", user_name])
@@ -424,7 +456,7 @@ def render_roster_system(sh, users_list, user_name):
 
     with c_smart:
         st.markdown("#### 🧠 智能工具")
-        with st.expander("📤 LINE / 存圖", expanded=True):
+        with st.expander("📤 LINE / 存圖 / 循環", expanded=True):
             if st.button("生成 LINE 通告"):
                 txt = f"📅 【IFUKUK {sel_month}月班表公告】\n━━━━━━━━━━━━━━\n"
                 mp = f"{sel_year}-{str(sel_month).zfill(2)}"
@@ -440,18 +472,50 @@ def render_roster_system(sh, users_list, user_name):
                     st.text_area("內容", txt, height=200)
                 else: st.warning("無資料")
             
-            if st.button("班表存圖"):
-                with st.spinner("繪製中..."):
+            if st.button("班表存圖 (修復版)"):
+                with st.spinner("下載字型與繪圖中..."):
                     ib = generate_roster_image_buffer(sel_year, sel_month, shifts_df, 30, staff_color_map)
                     if ib: st.image(ib); st.download_button("下載圖片", ib, f"roster_{sel_year}_{sel_month}.png", "image/png")
                     else: st.error("繪圖失敗")
+
+            st.markdown("---")
+            wc_t1, wc_t2 = st.tabs(["人員", "公休"])
+            week_map = {"週一":0, "週二":1, "週三":2, "週四":3, "週五":4, "週六":5, "週日":6}
+            with wc_t1:
+                p_s = st.selectbox("誰", users_list, key="wc_s")
+                p_d = st.selectbox("週幾", list(week_map.keys()), key="wc_d")
+                p_t = st.selectbox("班別", list(SHIFT_COLORS.keys()), key="wc_t")
+                if st.button("執行人員"):
+                    cal = calendar.monthcalendar(sel_year, sel_month); av = ws_shifts.get_all_values()
+                    cnt=0
+                    for w in cal:
+                        d = w[week_map[p_d]]
+                        if d!=0:
+                            ds = f"{sel_year}-{str(sel_month).zfill(2)}-{str(d).zfill(2)}"
+                            td = [i+1 for i,r in enumerate(av) if len(r)>1 and r[0]==ds and r[1]==p_s]
+                            for i in reversed(td): retry_action(ws_shifts.delete_rows, i)
+                            retry_action(ws_shifts.append_row, [ds, p_s, p_t, "Auto", "FALSE", user_name]); cnt+=1
+                    st.success(f"完成 {cnt} 筆"); st.rerun()
+            with wc_t2:
+                sc_d = st.selectbox("週幾", list(week_map.keys()), key="sc_d")
+                if st.button("執行公休"):
+                    cal = calendar.monthcalendar(sel_year, sel_month); av = ws_shifts.get_all_values()
+                    cnt=0
+                    for w in cal:
+                        d = w[week_map[sc_d]]
+                        if d!=0:
+                            ds = f"{sel_year}-{str(sel_month).zfill(2)}-{str(d).zfill(2)}"
+                            td = [i+1 for i,r in enumerate(av) if len(r)>0 and r[0]==ds]
+                            for i in reversed(td): retry_action(ws_shifts.delete_rows, i)
+                            retry_action(ws_shifts.append_row, [ds, "全店", "公休", "Store Closed", "FALSE", user_name]); cnt+=1
+                    st.success(f"完成 {cnt} 筆"); st.rerun()
 
 # --- 主程式 ---
 def main():
     if 'logged_in' not in st.session_state: st.session_state['logged_in']=False
     if 'pos_cart' not in st.session_state: st.session_state['pos_cart']=[]
     
-    # [V110.1 PATCH] 自動清理舊格式購物車，防止 KeyError
+    # [V111.0 PATCH] 自動清洗舊格式購物車，防止 KeyError 崩潰
     if st.session_state['pos_cart']:
         if 'Price' not in st.session_state['pos_cart'][0]:
             st.session_state['pos_cart'] = []
@@ -495,7 +559,7 @@ def main():
     
     df['SKU']=df['SKU'].astype(str); df['Style_Code']=df['SKU'].apply(get_style_code)
     
-    # 復原 V108 數據儀表板 (視覺核心)
+    # 復原數據儀表板 (Visual Restored)
     total_qty = df['Qty'].sum() + df['Qty_CN'].sum()
     total_rev = (df['Qty'] * df['Price']).sum()
     total_cost = ((df['Qty'] + df['Qty_CN']) * df['Cost']).sum()
@@ -515,7 +579,7 @@ def main():
 
     tabs = st.tabs(["📊 庫存", "🛒 POS", "📈 戰情", "🎁 領用", "👔 管理", "📝 日誌", "👥 Admin", "🗓️ 排班"])
 
-    with tabs[0]: # 庫存 (Visual Restore)
+    with tabs[0]: # 庫存 (Visual Restored)
         st.subheader("📦 庫存總覽")
         col_s1, col_s2 = st.columns([2, 1])
         search_q = col_s1.text_input("🔍 搜尋商品", placeholder="輸入貨號或品名...")
@@ -552,7 +616,7 @@ def main():
                     cls = "has-stock" if r['Qty'] > 0 else "no-stock"
                     stock_badges += f"<span class='stock-tag {cls}'>{r['Size']}:{r['Qty']}</span>"
 
-                with st.container(border=True): # V110.1 卡片容器
+                with st.container():
                     st.markdown(f"""
                     <div class='inv-row'>
                         <img src='{img}' class='inv-img'>
@@ -578,7 +642,7 @@ def main():
                                     retry_action(ws_items.update_cell, r, 13, icn[sku])
                                 st.success("已更新"); time.sleep(0.5); st.rerun()
 
-    with tabs[1]: # POS (Visual Restore)
+    with tabs[1]: # POS (Visual Restored + Grid)
         c1, c2 = st.columns([2,1])
         with c1:
             q = st.text_input("POS 搜尋", placeholder="關鍵字...")
@@ -591,7 +655,7 @@ def main():
                     for i, (_, item) in enumerate(r.iterrows()):
                         with cols[i]:
                             # 使用原生 Container 模擬卡片
-                            with st.container(border=True):
+                            with st.container():
                                 st.image(render_image_url(item['Image_URL']), use_container_width=True)
                                 st.markdown(f"**{item['Name']}**")
                                 st.caption(f"{item['Size']} | ${item['Price']}")
@@ -608,7 +672,7 @@ def main():
             with st.container():
                 st.markdown("<div class='cart-box'>", unsafe_allow_html=True)
                 if st.session_state['pos_cart']:
-                    # V110.1 Patch: 防止 KeyError
+                    # V111.0: 使用 .get 安全讀取，防止 KeyError
                     total = sum(int(item.get('Price', 0)) for item in st.session_state['pos_cart'])
                     
                     for item in st.session_state['pos_cart']:
@@ -678,7 +742,7 @@ def main():
                 log_event(ws_logs, st.session_state['user_name'], "Internal_Use", f"{sel} -{q} | {who} | {rsn} | {note}")
                 st.success("OK"); st.rerun()
 
-    with tabs[7]: # 排班 (V110.1 Grid)
+    with tabs[7]: # 排班 (Mobile Grid Restored)
         render_roster_system(sh, staff_list, st.session_state['user_name'])
 
 if __name__ == "__main__":
