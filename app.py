@@ -19,18 +19,18 @@ import os
 
 # --- 1. 系統全域設定 ---
 st.set_page_config(
-    page_title="IFUKUK ERP V110.5 VISUAL RESTORE", 
+    page_title="IFUKUK ERP V110.6 VISUAL RESURRECTION", 
     layout="wide", 
     page_icon="🌏",
     initial_sidebar_state="expanded"
 )
 
 # ==========================================
-# 🛑 【CSS 視覺核心：還原 V109 卡片美學 + 手機適配】
+# 🛑 【CSS 視覺核心：強制白底 + HTML 卡片還原】
 # ==========================================
 st.markdown("""
     <style>
-        /* 全域設定 */
+        /* 1. 強制全域白底黑字 */
         [data-testid="stAppViewContainer"] { background-color: #FFFFFF !important; color: #000000 !important; }
         [data-testid="stSidebar"] { background-color: #F8F9FA !important; }
         [data-testid="stHeader"] { background-color: #FFFFFF !important; }
@@ -43,15 +43,13 @@ st.markdown("""
         div[data-baseweb="select"] > div { background-color: #FFFFFF !important; color: #000000 !important; }
         label, .stMarkdown, h1, h2, h3, h4, h5, h6, p, span { color: #0f172a !important; }
 
-        /* --- V109 經典卡片樣式還原 --- */
-        
-        /* POS 卡片 */
+        /* 2. 卡片樣式 (HTML 渲染用) */
         .pos-card {
             border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden;
             background: #fff; display: flex; flex-direction: column; 
-            height: 100%; box-shadow: 0 2px 5px rgba(0,0,0,0.05); margin-bottom: 10px;
+            height: 100%; box-shadow: 0 2px 5px rgba(0,0,0,0.05); margin-bottom: 5px;
         }
-        .pos-img { width: 100%; height: 150px; object-fit: cover; background: #f9fafb; border-bottom: 1px solid #f3f4f6; }
+        .pos-img { width: 100%; height: 160px; object-fit: cover; background: #f9fafb; border-bottom: 1px solid #f3f4f6; }
         .pos-content { padding: 10px; flex-grow: 1; display: flex; flex-direction: column; }
         .pos-title { font-weight: bold; font-size: 1rem; margin-bottom: 4px; color: #111 !important; line-height: 1.3; }
         .pos-meta { font-size: 0.8rem; color: #666 !important; margin-bottom: 5px; }
@@ -92,7 +90,7 @@ st.markdown("""
         .finance-val { font-size: 1.4rem; font-weight: 900; color: #0f172a !important; }
         .finance-lbl { font-size: 0.8rem; color: #64748b !important; font-weight: bold; }
 
-        /* V110.4 手機排班優化 (保留) */
+        /* V110.1 手機排班優化 */
         [data-testid="column"] { min-width: 0px !important; flex: 1 1 0px !important; padding: 0px 2px !important; }
         .roster-header { background: #f1f5f9 !important; padding: 10px; border-radius: 12px; margin-bottom: 10px; border: 1px solid #e2e8f0; text-align: center; }
         .week-header { font-size: 0.6rem !important; color: #64748b; font-weight: bold; text-align: center; }
@@ -235,7 +233,7 @@ def render_navbar(ui):
 CAT_LIST = ["上衣(Top)", "褲子(Btm)", "外套(Out)", "套裝(Suit)", "鞋類(Shoe)", "包款(Bag)", "帽子(Hat)", "飾品(Acc)", "其他(Misc)"]
 
 # ==========================================
-# 🗓️ 排班系統 ELITE (V110.5 Final)
+# 🗓️ 排班系統 ELITE (V110.6 Final Restore)
 # ==========================================
 
 SHIFT_COLORS = {
@@ -321,7 +319,7 @@ def render_roster_system(sh, users_list, user_name):
     else: shifts_df = pd.DataFrame(columns=["Date", "Staff", "Type", "Note", "Notify", "Updated_By"])
 
     staff_color_map = get_staff_color_map(users_list)
-    st.markdown("<div class='roster-header'><h3>🗓️ 專業排班中心 (Visual Restore)</h3></div>", unsafe_allow_html=True)
+    st.markdown("<div class='roster-header'><h3>🗓️ 專業排班中心</h3></div>", unsafe_allow_html=True)
 
     now = datetime.utcnow() + timedelta(hours=8)
     with st.container():
@@ -653,7 +651,8 @@ def main():
                                     </div>
                                 </div>
                             </div>""", unsafe_allow_html=True)
-                            # 修復：明確指定加入購物車的 Dict 結構 (Key 首字母大寫以配合後續邏輯)
+                            
+                            # 修復：加入購物車時統一 Key 為 "Price" (大寫P)
                             if st.button("➕ 加入", key=f"add_{item['SKU']}", use_container_width=True):
                                 st.session_state['pos_cart'].append({
                                     "SKU": item['SKU'], "Name": item['Name'], 
@@ -667,10 +666,12 @@ def main():
             with st.container():
                 st.markdown("<div class='cart-box'>", unsafe_allow_html=True)
                 if st.session_state['pos_cart']:
-                    # 修復 KeyError: 確保這裡用大寫 'Price'
-                    total = sum(item['Price'] for item in st.session_state['pos_cart'])
+                    # 修復 KeyError: 使用 .get('Price', 0) 安全讀取
+                    total = sum(int(item.get('Price', 0)) for item in st.session_state['pos_cart'])
+                    
                     for item in st.session_state['pos_cart']:
-                        st.markdown(f"<div class='cart-item'><span>{item['Name']} ({item['Size']})</span><b>${item['Price']}</b></div>", unsafe_allow_html=True)
+                        p = item.get('Price', 0)
+                        st.markdown(f"<div class='cart-item'><span>{item['Name']} ({item['Size']})</span><b>${p}</b></div>", unsafe_allow_html=True)
                     
                     st.markdown(f"<div class='final-price-display'>${total}</div>", unsafe_allow_html=True)
                     
