@@ -19,14 +19,14 @@ import os
 
 # --- 1. 系統全域設定 ---
 st.set_page_config(
-    page_title="IFUKUK ERP V110.6 VISUAL RESURRECTION", 
+    page_title="IFUKUK ERP V110.7 STABLE FUSION", 
     layout="wide", 
     page_icon="🌏",
     initial_sidebar_state="expanded"
 )
 
 # ==========================================
-# 🛑 【CSS 視覺核心：強制白底 + HTML 卡片還原】
+# 🛑 【CSS 視覺核心：強制白底 & 手機 Grid 優化】
 # ==========================================
 st.markdown("""
     <style>
@@ -43,30 +43,14 @@ st.markdown("""
         div[data-baseweb="select"] > div { background-color: #FFFFFF !important; color: #000000 !important; }
         label, .stMarkdown, h1, h2, h3, h4, h5, h6, p, span { color: #0f172a !important; }
 
-        /* 2. 卡片樣式 (HTML 渲染用) */
-        .pos-card {
-            border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden;
-            background: #fff; display: flex; flex-direction: column; 
-            height: 100%; box-shadow: 0 2px 5px rgba(0,0,0,0.05); margin-bottom: 5px;
+        /* 2. 原生組件優化 (取代純 HTML 卡片) */
+        [data-testid="stVerticalBlock"] > [style*="flex-direction: column;"] > [data-testid="stVerticalBlock"] {
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 10px;
+            background-color: white;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
         }
-        .pos-img { width: 100%; height: 160px; object-fit: cover; background: #f9fafb; border-bottom: 1px solid #f3f4f6; }
-        .pos-content { padding: 10px; flex-grow: 1; display: flex; flex-direction: column; }
-        .pos-title { font-weight: bold; font-size: 1rem; margin-bottom: 4px; color: #111 !important; line-height: 1.3; }
-        .pos-meta { font-size: 0.8rem; color: #666 !important; margin-bottom: 5px; }
-        .pos-price-row { display: flex; justify-content: space-between; align-items: center; margin-top: auto; }
-        .pos-price { font-weight: 900; color: #059669 !important; font-size: 1.1rem; }
-        .pos-stock { font-size: 0.75rem; color: #64748b; background: #f1f5f9; padding: 2px 6px; border-radius: 4px; }
-
-        /* 庫存列表卡片 */
-        .inv-row { 
-            border: 1px solid #e2e8f0; border-radius: 12px; padding: 12px; margin-bottom: 12px; 
-            background: #fff; display: flex; align-items: start; gap: 12px; 
-            box-shadow: 0 2px 4px rgba(0,0,0,0.02); 
-        }
-        .inv-img { width: 90px; height: 90px; object-fit: cover; border-radius: 8px; flex-shrink: 0; background: #f1f5f9; }
-        .inv-info { flex-grow: 1; }
-        .inv-title { font-size: 1.1rem; font-weight: bold; color: #0f172a !important; margin-bottom: 4px; }
-        .inv-meta { font-size: 0.85rem; color: #64748b !important; margin-bottom: 6px; font-family: monospace; }
 
         /* 庫存透視標籤 */
         .stock-tag-row { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
@@ -85,12 +69,7 @@ st.markdown("""
         .profit-card .metric-value { color: #f59e0b !important; }
         .realized-card .metric-value { color: #10b981 !important; }
 
-        /* 財務看板 */
-        .finance-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 15px; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
-        .finance-val { font-size: 1.4rem; font-weight: 900; color: #0f172a !important; }
-        .finance-lbl { font-size: 0.8rem; color: #64748b !important; font-weight: bold; }
-
-        /* V110.1 手機排班優化 */
+        /* V110.1 手機排班優化 (保留) */
         [data-testid="column"] { min-width: 0px !important; flex: 1 1 0px !important; padding: 0px 2px !important; }
         .roster-header { background: #f1f5f9 !important; padding: 10px; border-radius: 12px; margin-bottom: 10px; border: 1px solid #e2e8f0; text-align: center; }
         .week-header { font-size: 0.6rem !important; color: #64748b; font-weight: bold; text-align: center; }
@@ -233,7 +212,7 @@ def render_navbar(ui):
 CAT_LIST = ["上衣(Top)", "褲子(Btm)", "外套(Out)", "套裝(Suit)", "鞋類(Shoe)", "包款(Bag)", "帽子(Hat)", "飾品(Acc)", "其他(Misc)"]
 
 # ==========================================
-# 🗓️ 排班系統 ELITE (V110.6 Final Restore)
+# 🗓️ 排班系統 ELITE (V110.7 Stable)
 # ==========================================
 
 SHIFT_COLORS = {
@@ -502,6 +481,13 @@ def render_roster_system(sh, users_list, user_name):
 def main():
     if 'logged_in' not in st.session_state: st.session_state['logged_in']=False
     if 'pos_cart' not in st.session_state: st.session_state['pos_cart']=[]
+    
+    # [V110.7] 購物車格式自動清洗 (Anti-KeyError Sanitizer)
+    if st.session_state['pos_cart']:
+        # 檢查第一筆資料是否有 'Price' 鍵值 (大寫開頭)
+        if 'Price' not in st.session_state['pos_cart'][0]:
+            st.session_state['pos_cart'] = [] # 格式不符，強制清空以防崩潰
+            
     if 'exchange_rate' not in st.session_state: st.session_state['exchange_rate'],_ = get_live_rate()
     if 'inv_page' not in st.session_state: st.session_state['inv_page']=1
 
@@ -561,7 +547,7 @@ def main():
 
     tabs = st.tabs(["📊 庫存", "🛒 POS", "📈 戰情", "🎁 領用", "👔 管理", "📝 日誌", "👥 Admin", "🗓️ 排班"])
 
-    with tabs[0]: # 庫存 (復原卡片視覺)
+    with tabs[0]: # 庫存 (復原卡片視覺 + 原生組件)
         st.subheader("📦 庫存總覽")
         col_s1, col_s2 = st.columns([2, 1])
         search_q = col_s1.text_input("🔍 搜尋商品", placeholder="輸入貨號或品名...")
@@ -572,7 +558,6 @@ def main():
         if filter_cat != "全部": gallery_df = gallery_df[gallery_df['Category'] == filter_cat]
 
         if not gallery_df.empty:
-            # 分頁
             items_per_page = 10
             total_pages = math.ceil(len(gallery_df) / items_per_page)
             curr_page = st.session_state['inv_page']
@@ -591,68 +576,56 @@ def main():
             grouped = view_df.groupby(['Style_Code', 'Name'])
             for (style_code, name), group in grouped:
                 first = group.iloc[0]
-                img = render_image_url(first['Image_URL'])
+                img_url = render_image_url(first['Image_URL'])
                 
-                # 庫存透視
-                stock_badges = ""
-                group['size_sort'] = group['Size'].apply(get_size_sort_key)
-                for _, r in group.sort_values('size_sort').iterrows():
-                    cls = "has-stock" if r['Qty'] > 0 else "no-stock"
-                    stock_badges += f"<span class='stock-tag {cls}'>{r['Size']}:{r['Qty']}</span>"
+                # 使用 container 包裹每一筆商品，模仿卡片
+                with st.container():
+                    c_img, c_info = st.columns([1, 3])
+                    with c_img:
+                        st.image(img_url, use_container_width=True)
+                    with c_info:
+                        st.markdown(f"#### {name}")
+                        st.caption(f"{style_code} | ${first['Price']}")
+                        
+                        # 庫存透視
+                        group['size_sort'] = group['Size'].apply(get_size_sort_key)
+                        badges = ""
+                        for _, r in group.sort_values('size_sort').iterrows():
+                            cls = "has-stock" if r['Qty'] > 0 else "no-stock"
+                            badges += f"<span class='stock-tag {cls}'>{r['Size']}:{r['Qty']}</span> "
+                        st.markdown(f"<div class='stock-tag-row'>{badges}</div>", unsafe_allow_html=True)
+                        
+                        with st.expander("📝 調整庫存"):
+                            with st.form(f"f_{style_code}"):
+                                itw={}; icn={}
+                                cols = st.columns(4)
+                                for i, (_, row) in enumerate(group.sort_values('size_sort').iterrows()):
+                                    with cols[i%4]:
+                                        itw[row['SKU']] = st.number_input(f"TW {row['Size']}", value=int(row['Qty']), key=f"t_{row['SKU']}")
+                                        icn[row['SKU']] = st.number_input(f"CN {row['Size']}", value=int(row['Qty_CN']), key=f"c_{row['SKU']}")
+                                if st.form_submit_button("💾 儲存"):
+                                    for sku, qty in itw.items():
+                                        r = ws_items.find(sku).row
+                                        retry_action(ws_items.update_cell, r, 5, qty)
+                                        retry_action(ws_items.update_cell, r, 13, icn[sku])
+                                    st.success("已更新"); time.sleep(0.5); st.rerun()
+                st.markdown("---") # 分隔線
 
-                with st.container(border=True):
-                    st.markdown(f"""
-                    <div class='inv-row'>
-                        <img src='{img}' class='inv-img'>
-                        <div class='inv-info'>
-                            <div class='inv-title'>{name}</div>
-                            <div class='inv-meta'>{style_code} | ${first['Price']}</div>
-                            <div class='stock-tag-row'>{stock_badges}</div>
-                        </div>
-                    </div>""", unsafe_allow_html=True)
-                    
-                    with st.expander("📝 調整庫存"):
-                        with st.form(f"f_{style_code}"):
-                            itw={}; icn={}
-                            cols = st.columns(4)
-                            for i, (_, row) in enumerate(group.sort_values('size_sort').iterrows()):
-                                with cols[i%4]:
-                                    itw[row['SKU']] = st.number_input(f"TW {row['Size']}", value=int(row['Qty']), key=f"t_{row['SKU']}")
-                                    icn[row['SKU']] = st.number_input(f"CN {row['Size']}", value=int(row['Qty_CN']), key=f"c_{row['SKU']}")
-                            if st.form_submit_button("💾 儲存"):
-                                for sku, qty in itw.items():
-                                    r = ws_items.find(sku).row
-                                    retry_action(ws_items.update_cell, r, 5, qty)
-                                    retry_action(ws_items.update_cell, r, 13, icn[sku])
-                                st.success("已更新"); time.sleep(0.5); st.rerun()
-
-    with tabs[1]: # POS (復原畫廊視覺 & 修復 KeyError)
+    with tabs[1]: # POS (復原畫廊視覺 & 原生 Grid)
         c1, c2 = st.columns([2,1])
         with c1:
             q = st.text_input("POS 搜尋", placeholder="關鍵字...")
             pdf = df[df.apply(lambda x: q.lower() in str(x.values).lower(), axis=1)] if q else df.head(20)
             
-            # 使用畫廊模式
             if not pdf.empty:
-                rows = [pdf.iloc[i:i+3] for i in range(0, len(pdf), 3)]
-                for r in rows:
-                    cols = st.columns(3)
-                    for i, (_, item) in enumerate(r.iterrows()):
-                        with cols[i]:
-                            st.markdown(f"""
-                            <div class='pos-card'>
-                                <div class='pos-img'><img src='{render_image_url(item['Image_URL'])}' style='width:100%;height:100%;object-fit:cover;'></div>
-                                <div class='pos-content'>
-                                    <div class='pos-title'>{item['Name']}</div>
-                                    <div class='pos-meta'>{item['Size']}</div>
-                                    <div class='pos-price-row'>
-                                        <div class='pos-price'>${item['Price']}</div>
-                                        <div class='pos-stock'>現:{item['Qty']}</div>
-                                    </div>
-                                </div>
-                            </div>""", unsafe_allow_html=True)
-                            
-                            # 修復：加入購物車時統一 Key 為 "Price" (大寫P)
+                # 使用原生 columns 3欄排列
+                pos_cols = st.columns(3)
+                for i, (_, item) in enumerate(pdf.iterrows()):
+                    with pos_cols[i % 3]:
+                        with st.container(border=True): # V1.30+ 功能，若舊版 Streamlit 無此參數會忽略
+                            st.image(render_image_url(item['Image_URL']), use_container_width=True)
+                            st.markdown(f"**{item['Name']}**")
+                            st.caption(f"{item['Size']} | ${item['Price']}")
                             if st.button("➕ 加入", key=f"add_{item['SKU']}", use_container_width=True):
                                 st.session_state['pos_cart'].append({
                                     "SKU": item['SKU'], "Name": item['Name'], 
@@ -666,7 +639,7 @@ def main():
             with st.container():
                 st.markdown("<div class='cart-box'>", unsafe_allow_html=True)
                 if st.session_state['pos_cart']:
-                    # 修復 KeyError: 使用 .get('Price', 0) 安全讀取
+                    # 使用 .get 避免 KeyError
                     total = sum(int(item.get('Price', 0)) for item in st.session_state['pos_cart'])
                     
                     for item in st.session_state['pos_cart']:
@@ -696,7 +669,7 @@ def main():
                 else: st.info("購物車是空的")
                 st.markdown("</div>", unsafe_allow_html=True)
 
-    with tabs[3]: # 領用 (V110.2 功能保留)
+    with tabs[3]: # 領用
         st.subheader("🎁 領用/稽核 (Pivot Analytics)")
         if not logs_df.empty:
             int_df = logs_df[logs_df['Action']=="Internal_Use"].copy()
