@@ -19,14 +19,14 @@ import os
 
 # --- 1. 系統全域設定 ---
 st.set_page_config(
-    page_title="IFUKUK ERP V110.1 VISUAL MASTER", 
+    page_title="IFUKUK ERP V110.1 REBORN", 
     layout="wide", 
     page_icon="🌏",
     initial_sidebar_state="expanded"
 )
 
 # ==========================================
-# 🛑 【CSS 視覺核心：強制白底 & 手機 Grid 優化】
+# 🛑 【CSS 視覺核心：強制白底 & 卡片介面 & 手機 Grid】
 # ==========================================
 st.markdown("""
     <style>
@@ -43,7 +43,7 @@ st.markdown("""
         div[data-baseweb="select"] > div { background-color: #FFFFFF !important; color: #000000 !important; }
         label, .stMarkdown, h1, h2, h3, h4, h5, h6, p, span { color: #0f172a !important; }
 
-        /* 卡片樣式 */
+        /* 卡片樣式 (視覺核心) */
         .pos-card, .inv-row, .finance-card, .metric-card, .cart-box, .mgmt-box {
             background-color: #FFFFFF !important; border: 1px solid #E2E8F0 !important;
             box-shadow: 0 2px 4px rgba(0,0,0,0.05) !important; color: #000000 !important;
@@ -53,6 +53,7 @@ st.markdown("""
         .pos-content { padding: 10px; flex-grow: 1; display: flex; flex-direction: column; }
         .pos-title { font-weight: bold; font-size: 1rem; margin-bottom: 4px; color: #111 !important; line-height: 1.3; }
         .pos-meta { font-size: 0.8rem; color: #666 !important; margin-bottom: 5px; }
+        .pos-price { font-weight: 900; color: #059669 !important; font-size: 1.1rem; }
         
         /* 庫存標籤 */
         .stock-tag-row { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; margin-bottom: 5px; }
@@ -60,62 +61,54 @@ st.markdown("""
         .stock-tag.has-stock { background-color: #dcfce7 !important; color: #166534 !important; border-color: #bbf7d0; }
         .stock-tag.no-stock { background-color: #f3f4f6 !important; color: #9ca3af !important; border-color: #e5e7eb; }
         
+        /* 庫存列表區塊 */
         .inv-row { display: flex; align-items: start; gap: 12px; padding: 12px; border-radius: 12px; margin-bottom: 10px; }
         .inv-img { width: 90px; height: 90px; object-fit: cover; border-radius: 8px; flex-shrink: 0; background: #f1f5f9; }
         .inv-info { flex-grow: 1; }
         .inv-title { font-size: 1.1rem; font-weight: bold; color: #0f172a !important; margin-bottom: 4px; }
         
-        .finance-card { padding: 15px; text-align: center; border-radius: 10px; }
-        .finance-val { font-size: 1.4rem; font-weight: 900; color: #0f172a !important; }
-        .finance-lbl { font-size: 0.8rem; color: #64748b !important; font-weight: bold; }
-
-        /* V110.1 排班表 CSS (Mobile Grid Optimized) */
-        .roster-header { background: #f1f5f9 !important; padding: 15px; border-radius: 12px; margin-bottom: 20px; border: 1px solid #e2e8f0; text-align: center; }
+        /* 數據儀表板 */
+        .metric-card { background: linear-gradient(145deg, #ffffff, #f8fafc) !important; color: black !important; padding: 15px; text-align: center; border-radius: 12px; margin-bottom: 10px; }
+        .metric-value { font-size: 1.6rem; font-weight: 800; color: #0f172a !important; margin: 5px 0; }
         
-        /* 響應式 Grid 格子: 手機上縮小字體與內距 */
+        /* 手機 Grid Force (排班表專用) */
+        [data-testid="column"] {
+            min-width: 0px !important; /* 允許無限縮小 */
+            flex: 1 1 0px !important;  /* 強制均分寬度 */
+            padding: 0px 2px !important; /* 減少間距 */
+        }
+        
+        .roster-header { background: #f1f5f9 !important; padding: 10px; border-radius: 12px; margin-bottom: 10px; border: 1px solid #e2e8f0; text-align: center; }
+        .week-header { font-size: 0.6rem !important; color: #64748b; font-weight: bold; text-align: center; }
+
         .day-cell { 
-            border: 1px solid #e2e8f0; border-radius: 6px; 
-            padding: 2px; min-height: 80px; /* 手機高度減少 */
-            position: relative; margin-bottom: 4px; 
+            border: 1px solid #e2e8f0; border-radius: 4px; 
+            padding: 2px; min-height: 60px; /* 手機高度減少 */
+            position: relative; margin-bottom: 2px; 
             background: #fff !important; 
             overflow: hidden;
         }
+        .day-num { font-size: 0.7rem !important; font-weight: bold; color: #64748b; margin-bottom: 1px; text-align: center; }
         
-        /* 日期數字 */
-        .day-num { 
-            font-size: 0.8rem; font-weight: bold; color: #64748b; 
-            margin-bottom: 2px; padding-left: 2px; 
-        }
-        
-        /* 班別膠囊: 手機優化 */
         .shift-pill { 
-            font-size: 0.65rem; /* 字體縮小 */
-            padding: 2px 4px; border-radius: 4px; 
-            margin-bottom: 2px; color: white !important; 
-            display: block; /* 確保換行 */
-            text-align: center; font-weight: bold; 
-            box-shadow: 0 1px 1px rgba(0,0,0,0.1);
+            font-size: 0.55rem !important; padding: 1px 2px; border-radius: 3px; 
+            margin-bottom: 1px; color: white !important; display: block; 
+            text-align: center; font-weight: bold; line-height: 1.1;
             white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
         }
-
-        /* 全店公休 */
-        .store-closed {
-            background-color: #EF4444 !important; color: white !important;
-            font-weight: 900; font-size: 0.7rem;
-            display: flex; align-items: center; justify-content: center;
-            height: 100%; border-radius: 4px; min-height: 70px;
-            text-align: center; line-height: 1.2;
-        }
+        .store-closed { background-color: #EF4444 !important; color: white !important; font-weight: 900; font-size: 0.6rem !important; display: flex; align-items: center; justify-content: center; height: 100%; border-radius: 4px; min-height: 50px; writing-mode: vertical-rl; }
         
-        /* 隱形按鈕覆蓋 */
+        /* 隱形按鈕覆蓋優化 */
         div.stButton > button:first-child {
-            border-radius: 8px; height: 3.2em; font-weight: 700; 
+            border-radius: 6px; height: 2.5em; font-weight: 700; 
             border: 1px solid #cbd5e1; background-color: #FFFFFF !important; 
-            color: #0f172a !important; width: 100%;
+            color: #0f172a !important; width: 100%; padding: 0px;
         }
         
-        /* 星期標頭 (手機縮小) */
-        .week-header { font-size: 0.75rem; color: #94a3b8; font-weight: bold; text-align: center; }
+        /* 購物車與財務 */
+        .cart-box { background: #f8fafc !important; border: 1px solid #cbd5e1; padding: 15px; border-radius: 12px; margin-bottom: 15px; }
+        .cart-item { display: flex; justify-content: space-between; border-bottom: 1px dashed #cbd5e1; padding: 8px 0; font-size: 0.95rem; color: #333 !important; }
+        .final-price-display { font-size: 2rem; font-weight: 900; color: #15803d !important; text-align: center; background: #dcfce7 !important; padding: 10px; border-radius: 12px; margin-top: 15px; border: 1px solid #86efac; }
 
     </style>
 """, unsafe_allow_html=True)
@@ -232,16 +225,18 @@ def render_navbar(ui):
     d = (datetime.utcnow()+timedelta(hours=8)).strftime("%Y/%m/%d")
     r = st.session_state.get('exchange_rate', 4.5)
     st.markdown(f"""
-        <div style="display:flex; justify-content:space-between; align-items:center; background:#fff; padding:15px; border-bottom:1px solid #eee; margin-bottom:15px;">
-            <div><span style="font-size:18px; font-weight:900; color:#111;">IFUKUK GLOBAL</span><br><span style="font-size:11px; color:#666; font-family:monospace;">{d} • Rate: {r}</span></div>
-            <div style="width:36px; height:36px; background:#111; color:#fff; border-radius:8px; display:flex; align-items:center; justify-content:center; font-weight:bold;">{ui}</div>
+        <div class="navbar-container">
+            <div style="display:flex; justify-content:space-between; align-items:center; background:#fff; padding:15px; border-bottom:1px solid #eee; margin-bottom:15px;">
+                <div><span style="font-size:18px; font-weight:900; color:#111;">IFUKUK GLOBAL</span><br><span style="font-size:11px; color:#666; font-family:monospace;">{d} • Rate: {r}</span></div>
+                <div style="width:36px; height:36px; background:#111; color:#fff; border-radius:8px; display:flex; align-items:center; justify-content:center; font-weight:bold;">{ui}</div>
+            </div>
         </div>
     """, unsafe_allow_html=True)
 
 CAT_LIST = ["上衣(Top)", "褲子(Btm)", "外套(Out)", "套裝(Suit)", "鞋類(Shoe)", "包款(Bag)", "帽子(Hat)", "飾品(Acc)", "其他(Misc)"]
 
 # ==========================================
-# 🗓️ 排班系統 ELITE (Module Rewrite V110.1)
+# 🗓️ 排班系統 (V110.1 手機 Grid 完美還原)
 # ==========================================
 
 SHIFT_COLORS = {
@@ -256,15 +251,18 @@ def get_staff_color_map(users):
     for i, u in enumerate(su): cm[u] = VP[i % len(VP)]
     return cm
 
-# V110.1: 字型修復 (自動下載)
+# 自動下載中文字型
 def get_chinese_font_path():
-    f_name = "NotoSansTC-Regular.otf"
-    if not os.path.exists(f_name):
+    font_url = "https://github.com/googlefonts/noto-cjk/raw/main/Sans/OTF/TraditionalChinese/NotoSansCJKtc-Regular.otf"
+    font_path = "/tmp/NotoSansCJKtc-Regular.otf"
+    if not os.path.exists(font_path):
         try:
-            r = requests.get("https://github.com/googlefonts/noto-cjk/raw/main/Sans/OTF/TraditionalChinese/NotoSansCJKtc-Regular.otf")
-            with open(f_name, 'wb') as f: f.write(r.content)
+            r = requests.get(font_url, timeout=10)
+            if r.status_code == 200:
+                with open(font_path, 'wb') as f: f.write(r.content)
+            else: return None
         except: return None
-    return f_name
+    return font_path
 
 def generate_roster_image_buffer(year, month, shifts_df, days_in_month, color_map):
     try:
@@ -325,7 +323,7 @@ def render_roster_system(sh, users_list, user_name):
     else: shifts_df = pd.DataFrame(columns=["Date", "Staff", "Type", "Note", "Notify", "Updated_By"])
 
     staff_color_map = get_staff_color_map(users_list)
-    st.markdown("<div class='roster-header'><h3>🗓️ 專業排班中心 (手機版)</h3></div>", unsafe_allow_html=True)
+    st.markdown("<div class='roster-header'><h3>🗓️ 專業排班中心 (手機最適化)</h3></div>", unsafe_allow_html=True)
 
     now = datetime.utcnow() + timedelta(hours=8)
     with st.container():
@@ -340,7 +338,7 @@ def render_roster_system(sh, users_list, user_name):
     
     st.markdown("---")
 
-    # V110.1: 強制使用 Grid Layout (手機適配)
+    # 手機強制 Grid 布局
     cal = calendar.monthcalendar(sel_year, sel_month)
     cols = st.columns(7)
     days = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"]
@@ -351,4 +349,339 @@ def render_roster_system(sh, users_list, user_name):
         for i, day in enumerate(week):
             with cols[i]:
                 if day != 0:
-                    d_str = f"{sel_year}-{str
+                    d_str = f"{sel_year}-{str(sel_month).zfill(2)}-{str(day).zfill(2)}"
+                    ds = shifts_df[shifts_df['Date'] == d_str] if not shifts_df.empty else pd.DataFrame()
+                    
+                    if st.button(f"{day}", key=f"d_{d_str}", use_container_width=True):
+                        st.session_state['roster_date'] = d_str; st.rerun()
+
+                    is_closed = False
+                    html = ""
+                    if not ds.empty:
+                        for _, r in ds.iterrows():
+                            if r['Staff']=="全店" and r['Type']=="公休": is_closed=True; break
+                    
+                    if is_closed: html = "<div class='store-closed'>店休</div>"
+                    elif not ds.empty:
+                        for _, r in ds.iterrows():
+                            bg = staff_color_map.get(r['Staff'], "#666") if r['Type']!="公休" else "#EF4444"
+                            stype = r['Type'].replace("早班","早").replace("晚班","晚").replace("全班","全")
+                            html += f"<span class='shift-pill' style='background:{bg}'>{r['Staff']}{stype}</span>"
+                    
+                    st.markdown(f"<div class='day-cell'><div class='day-num'>{day}</div>{html}</div>", unsafe_allow_html=True)
+                else: st.markdown("<div style='min-height:50px;'></div>", unsafe_allow_html=True)
+
+    st.markdown("---")
+    
+    c_edit, c_smart = st.columns([1, 1])
+    with c_edit:
+        if 'roster_date' in st.session_state:
+            t_date = st.session_state['roster_date']
+            st.markdown(f"#### ✏️ 編輯: {t_date}")
+            ds = shifts_df[shifts_df['Date'] == t_date] if not shifts_df.empty else pd.DataFrame()
+            
+            is_closed = False
+            if not ds.empty and ((ds['Staff']=="全店")&(ds['Type']=="公休")).any(): is_closed=True
+            
+            if is_closed:
+                st.error("🔴 全店公休")
+                if st.button("🔓 解除公休"):
+                    all_v = ws_shifts.get_all_values()
+                    for i, r in enumerate(all_v):
+                        if len(r)>1 and r[0]==t_date and r[1]=="全店": retry_action(ws_shifts.delete_rows, i+1); break
+                    st.success("已解除"); st.rerun()
+            else:
+                if not ds.empty:
+                    st.caption("點擊移除:")
+                    for _, r in ds.iterrows():
+                        if st.button(f"❌ {r['Staff']} ({r['Type']})", key=f"del_{r['Staff']}_{t_date}"):
+                            all_v = ws_shifts.get_all_values()
+                            for i, row in enumerate(all_v):
+                                if len(row)>1 and row[0]==t_date and row[1]==r['Staff']: retry_action(ws_shifts.delete_rows, i+1); break
+                            st.success("已移除"); st.rerun()
+                
+                with st.form("add_shift"):
+                    s = st.selectbox("人員", users_list)
+                    t = st.selectbox("班別", list(SHIFT_COLORS.keys()))
+                    n = st.text_input("備註")
+                    if st.form_submit_button("➕ 新增/更新"):
+                        all_v = ws_shifts.get_all_values()
+                        # Upsert Logic: 先刪除該人當天的舊紀錄
+                        for i, r in enumerate(all_v):
+                            if len(r)>1 and r[0]==t_date and r[1]==s: retry_action(ws_shifts.delete_rows, i+1); break
+                        retry_action(ws_shifts.append_row, [t_date, s, t, n, "FALSE", user_name])
+                        st.success("已更新"); st.rerun()
+                
+                if st.button("🔴 設定全店公休"):
+                    all_v = ws_shifts.get_all_values() # Clean day
+                    to_del = [i+1 for i, r in enumerate(all_v) if len(r)>0 and r[0]==t_date]
+                    for i in reversed(to_del): retry_action(ws_shifts.delete_rows, i)
+                    retry_action(ws_shifts.append_row, [t_date, "全店", "公休", "Store Closed", "FALSE", user_name])
+                    st.success("已設定"); st.rerun()
+        else: st.info("👈 點擊日期編輯")
+
+    with c_smart:
+        st.markdown("#### 🧠 智能工具")
+        with st.expander("📤 LINE / 存圖", expanded=True):
+            if st.button("生成 LINE 通告"):
+                txt = f"📅 【IFUKUK {sel_month}月班表公告】\n━━━━━━━━━━━━━━\n"
+                mp = f"{sel_year}-{str(sel_month).zfill(2)}"
+                md = shifts_df[shifts_df['Date'].str.startswith(mp)].sort_values(['Date','Staff'])
+                if not md.empty:
+                    last_d = ""
+                    for _, r in md.iterrows():
+                        if r['Date'] != last_d:
+                            wd = ["週一","週二","週三","週四","週五","週六","週日"][datetime.strptime(r['Date'],"%Y-%m-%d").weekday()]
+                            txt += f"\n【 {r['Date'][5:]} ({wd}) 】\n━━━━━━━━━━━━━━\n"; last_d = r['Date']
+                        if r['Staff']=="全店" and r['Type']=="公休": txt += "🔴 全店公休 (Store Closed)\n"
+                        else: txt += f"● {r['Staff']} : {r['Type']} {f'({r['Note']})' if r['Note'] else ''}\n"
+                    st.text_area("內容", txt, height=200)
+                else: st.warning("無資料")
+            
+            if st.button("班表存圖"):
+                with st.spinner("繪製中..."):
+                    ib = generate_roster_image_buffer(sel_year, sel_month, shifts_df, 30, staff_color_map)
+                    if ib: st.image(ib); st.download_button("下載圖片", ib, f"roster_{sel_year}_{sel_month}.png", "image/png")
+                    else: st.error("繪圖失敗")
+
+# --- 主程式 ---
+def main():
+    if 'logged_in' not in st.session_state: st.session_state['logged_in']=False
+    if 'pos_cart' not in st.session_state: st.session_state['pos_cart']=[]
+    
+    # [KEY FIX] 自動修復 KeyError: 移除不符合格式的舊購物車資料
+    if st.session_state['pos_cart']:
+        if 'Price' not in st.session_state['pos_cart'][0]:
+            st.session_state['pos_cart'] = []
+
+    if 'exchange_rate' not in st.session_state: st.session_state['exchange_rate'],_ = get_live_rate()
+    if 'inv_page' not in st.session_state: st.session_state['inv_page']=1
+
+    sh = init_db()
+    if not sh: st.error("Database Connection Error"); return
+
+    ws_items = get_worksheet_safe(sh, "Items", SHEET_HEADERS)
+    ws_logs = get_worksheet_safe(sh, "Logs", ["Timestamp", "User", "Action", "Details"])
+    ws_users = get_worksheet_safe(sh, "Users", ["Name", "Password", "Role", "Status"])
+
+    if not st.session_state['logged_in']:
+        c1,c2,c3=st.columns([1,2,1])
+        with c2:
+            st.markdown("<br><h1 style='text-align:center'>IFUKUK</h1>", unsafe_allow_html=True)
+            with st.form("login"):
+                u=st.text_input("ID"); p=st.text_input("PWD", type="password")
+                if st.form_submit_button("LOGIN"):
+                    udf = get_data_safe(ws_users, ["Name","Password","Role","Status"])
+                    if udf.empty and u=="Boss" and p=="1234": retry_action(ws_users.append_row, ["Boss", make_hash("1234"), "Admin", "Active"]); st.rerun()
+                    tgt = udf[(udf['Name']==u)&(udf['Status']=='Active')]
+                    if not tgt.empty and (check_hash(p, tgt.iloc[0]['Password']) or p==tgt.iloc[0]['Password']):
+                        st.session_state['logged_in']=True; st.session_state['user_name']=u; st.session_state['user_role']=tgt.iloc[0]['Role']; log_event(ws_logs, u, "Login", "Success"); st.rerun()
+                    else: st.error("Error")
+        return
+
+    render_navbar(st.session_state['user_name'][0])
+    
+    df = get_data_safe(ws_items, SHEET_HEADERS)
+    logs_df = get_data_safe(ws_logs, ["Timestamp", "User", "Action", "Details"])
+    udf = get_data_safe(ws_users, ["Name", "Role"])
+    staff_list = udf['Name'].tolist() if not udf.empty else []
+
+    cols = ["SKU", "Name", "Category", "Size", "Qty", "Price", "Cost", "Image_URL", "Qty_CN"]
+    for c in cols: 
+        if c not in df.columns: df[c]=""
+    for n in ['Qty','Price','Cost','Qty_CN']: df[n] = pd.to_numeric(df[n], errors='coerce').fillna(0).astype(int)
+    
+    df['SKU']=df['SKU'].astype(str); df['Style_Code']=df['SKU'].apply(get_style_code)
+    
+    # 復原數據儀表板
+    total_qty = df['Qty'].sum() + df['Qty_CN'].sum()
+    total_rev = (df['Qty'] * df['Price']).sum()
+    total_cost = ((df['Qty'] + df['Qty_CN']) * df['Cost']).sum()
+    profit = total_rev - (df['Qty'] * df['Cost']).sum()
+    realized = calculate_realized_revenue(logs_df)
+    
+    m1, m2, m3, m4, m5 = st.columns(5)
+    m1.markdown(f"<div class='metric-card'><div class='metric-label'>📦 總庫存</div><div class='metric-value'>{total_qty:,}</div></div>", unsafe_allow_html=True)
+    m2.markdown(f"<div class='metric-card'><div class='metric-label'>💎 預估營收</div><div class='metric-value'>${total_rev:,}</div></div>", unsafe_allow_html=True)
+    m3.markdown(f"<div class='metric-card'><div class='metric-label'>💰 總成本</div><div class='metric-value'>${total_cost:,}</div></div>", unsafe_allow_html=True)
+    m4.markdown(f"<div class='metric-card profit-card'><div class='metric-label'>📈 潛在毛利</div><div class='metric-value'>${profit:,}</div></div>", unsafe_allow_html=True)
+    m5.markdown(f"<div class='metric-card realized-card'><div class='metric-label'>💵 實際營收</div><div class='metric-value'>${realized:,}</div></div>", unsafe_allow_html=True)
+
+    with st.sidebar:
+        st.write(f"User: {st.session_state['user_name']}")
+        if st.button("Logout"): st.session_state['logged_in']=False; st.rerun()
+
+    tabs = st.tabs(["📊 庫存", "🛒 POS", "📈 戰情", "🎁 領用", "👔 管理", "📝 日誌", "👥 Admin", "🗓️ 排班"])
+
+    with tabs[0]: # 庫存 (Visual Restore)
+        st.subheader("📦 庫存總覽")
+        col_s1, col_s2 = st.columns([2, 1])
+        search_q = col_s1.text_input("🔍 搜尋商品", placeholder="輸入貨號或品名...")
+        filter_cat = col_s2.selectbox("📂 分類", ["全部"] + CAT_LIST)
+        
+        gallery_df = df.copy()
+        if search_q: gallery_df = gallery_df[gallery_df.apply(lambda x: search_q.lower() in str(x.values).lower(), axis=1)]
+        if filter_cat != "全部": gallery_df = gallery_df[gallery_df['Category'] == filter_cat]
+
+        if not gallery_df.empty:
+            items_per_page = 10
+            total_pages = math.ceil(len(gallery_df) / items_per_page)
+            curr_page = st.session_state['inv_page']
+            if curr_page > total_pages: curr_page = total_pages
+            if curr_page < 1: curr_page = 1
+            st.session_state['inv_page'] = curr_page
+            
+            c_p1, c_p2, c_p3 = st.columns([1, 2, 1])
+            if c_p1.button("◀", disabled=(curr_page==1)): st.session_state['inv_page']-=1; st.rerun()
+            c_p2.markdown(f"<div style='text-align:center;padding-top:10px;'>{curr_page} / {total_pages}</div>", unsafe_allow_html=True)
+            if c_p3.button("▶", disabled=(curr_page==total_pages)): st.session_state['inv_page']+=1; st.rerun()
+
+            start_idx = (curr_page - 1) * items_per_page
+            view_df = gallery_df.iloc[start_idx : start_idx + items_per_page]
+
+            grouped = view_df.groupby(['Style_Code', 'Name'])
+            for (style_code, name), group in grouped:
+                first = group.iloc[0]
+                img = render_image_url(first['Image_URL'])
+                
+                stock_badges = ""
+                group['size_sort'] = group['Size'].apply(get_size_sort_key)
+                for _, r in group.sort_values('size_sort').iterrows():
+                    cls = "has-stock" if r['Qty'] > 0 else "no-stock"
+                    stock_badges += f"<span class='stock-tag {cls}'>{r['Size']}:{r['Qty']}</span>"
+
+                with st.container(border=True):
+                    st.markdown(f"""
+                    <div class='inv-row'>
+                        <img src='{img}' class='inv-img'>
+                        <div class='inv-info'>
+                            <div class='inv-title'>{name}</div>
+                            <div class='inv-meta'>{style_code} | ${first['Price']}</div>
+                            <div class='stock-tag-row'>{stock_badges}</div>
+                        </div>
+                    </div>""", unsafe_allow_html=True)
+                    
+                    with st.expander("📝 調整庫存"):
+                        with st.form(f"f_{style_code}"):
+                            itw={}; icn={}
+                            cols = st.columns(4)
+                            for i, (_, row) in enumerate(group.sort_values('size_sort').iterrows()):
+                                with cols[i%4]:
+                                    itw[row['SKU']] = st.number_input(f"TW {row['Size']}", value=int(row['Qty']), key=f"t_{row['SKU']}")
+                                    icn[row['SKU']] = st.number_input(f"CN {row['Size']}", value=int(row['Qty_CN']), key=f"c_{row['SKU']}")
+                            if st.form_submit_button("💾 儲存"):
+                                for sku, qty in itw.items():
+                                    r = ws_items.find(sku).row
+                                    retry_action(ws_items.update_cell, r, 5, qty)
+                                    retry_action(ws_items.update_cell, r, 13, icn[sku])
+                                st.success("已更新"); time.sleep(0.5); st.rerun()
+
+    with tabs[1]: # POS (Visual Restore)
+        c1, c2 = st.columns([2,1])
+        with c1:
+            q = st.text_input("POS 搜尋", placeholder="關鍵字...")
+            pdf = df[df.apply(lambda x: q.lower() in str(x.values).lower(), axis=1)] if q else df.head(20)
+            
+            if not pdf.empty:
+                rows = [pdf.iloc[i:i+3] for i in range(0, len(pdf), 3)]
+                for r in rows:
+                    cols = st.columns(3)
+                    for i, (_, item) in enumerate(r.iterrows()):
+                        with cols[i]:
+                            st.markdown(f"""
+                            <div class='pos-card'>
+                                <div class='pos-img'><img src='{render_image_url(item['Image_URL'])}' style='width:100%;height:100%;object-fit:cover;'></div>
+                                <div class='pos-content'>
+                                    <div class='pos-title'>{item['Name']}</div>
+                                    <div class='pos-meta'>{item['Size']}</div>
+                                    <div class='pos-price'>{item['Price']}</div>
+                                </div>
+                            </div>""", unsafe_allow_html=True)
+                            if st.button("➕ 加入", key=f"add_{item['SKU']}", use_container_width=True):
+                                st.session_state['pos_cart'].append({
+                                    "SKU": item['SKU'], "Name": item['Name'], 
+                                    "Size": item['Size'], "Price": int(item['Price']), 
+                                    "Qty": 1
+                                })
+                                st.toast(f"已加入 {item['Name']}")
+
+        with c2:
+            st.markdown("##### 🛒 購物車")
+            with st.container():
+                st.markdown("<div class='cart-box'>", unsafe_allow_html=True)
+                if st.session_state['pos_cart']:
+                    # V110.1: 使用 .get 安全讀取，防止 KeyError
+                    total = sum(int(item.get('Price', 0)) for item in st.session_state['pos_cart'])
+                    
+                    for item in st.session_state['pos_cart']:
+                        p = item.get('Price', 0)
+                        st.markdown(f"<div class='cart-item'><span>{item['Name']} ({item['Size']})</span><b>${p}</b></div>", unsafe_allow_html=True)
+                    
+                    st.markdown(f"<div class='final-price-display'>${total}</div>", unsafe_allow_html=True)
+                    
+                    if st.button("✅ 結帳", type="primary", use_container_width=True):
+                        logs = []
+                        valid = True
+                        for item in st.session_state['pos_cart']:
+                            cell = ws_items.find(item['SKU'])
+                            if cell:
+                                curr = int(ws_items.cell(cell.row, 5).value)
+                                if curr >= 1:
+                                    retry_action(ws_items.update_cell, cell.row, 5, curr - 1)
+                                    logs.append(f"{item['SKU']} x1")
+                                else: st.error(f"{item['Name']} 庫存不足"); valid=False; break
+                        
+                        if valid:
+                            log_event(ws_logs, st.session_state['user_name'], "Sale", f"Total:${total} | Items:{','.join(logs)}")
+                            st.session_state['pos_cart'] = []
+                            st.success("完成"); time.sleep(1); st.rerun()
+                    
+                    if st.button("🗑️ 清空"): st.session_state['pos_cart']=[]; st.rerun()
+                else: st.info("購物車是空的")
+                st.markdown("</div>", unsafe_allow_html=True)
+
+    with tabs[3]: # 領用 (Pivot)
+        st.subheader("🎁 領用/稽核")
+        if not logs_df.empty:
+            int_df = logs_df[logs_df['Action']=="Internal_Use"].copy()
+            if not int_df.empty:
+                parsed = []
+                for _, r in int_df.iterrows():
+                    d = r['Details']
+                    try:
+                        pts = d.split(' | ')
+                        sku_pt = pts[0].split(' -')
+                        parsed.append({
+                            "日期": r['Timestamp'][:10], "SKU": sku_pt[0], "數量": int(sku_pt[1]),
+                            "人員": pts[1], "原因": pts[2], "備註": pts[3] if len(pts)>3 else "-"
+                        })
+                    except: pass
+                
+                pdf = pd.DataFrame(parsed)
+                if not pdf.empty:
+                    m1, m2, m3 = st.columns(3)
+                    m1.metric("本月領用", f"{pdf['數量'].sum()} 件")
+                    m2.metric("領用王", pdf.groupby('人員')['數量'].sum().idxmax())
+                    m3.metric("主因", pdf.groupby('原因')['數量'].sum().idxmax())
+                    
+                    t1, t2 = st.tabs(["依人員", "依備註"])
+                    with t1: st.dataframe(pdf.groupby(['人員','原因'])['數量'].sum().unstack(fill_value=0), use_container_width=True)
+                    with t2: st.dataframe(pdf.groupby(['備註','SKU'])['數量'].sum().unstack(fill_value=0), use_container_width=True)
+
+        with st.expander("新增領用"):
+            sel = st.selectbox("商品", df['SKU'].tolist())
+            q = st.number_input("數量", 1)
+            who = st.selectbox("人", staff_list)
+            rsn = st.selectbox("原因", ["公務","樣品","其他"])
+            note = st.text_input("備註")
+            if st.button("送出"):
+                r = ws_items.find(sel).row
+                retry_action(ws_items.update_cell, r, 5, int(ws_items.cell(r,5).value)-q)
+                log_event(ws_logs, st.session_state['user_name'], "Internal_Use", f"{sel} -{q} | {who} | {rsn} | {note}")
+                st.success("OK"); st.rerun()
+
+    with tabs[7]: # 排班 (Mobile Grid)
+        render_roster_system(sh, staff_list, st.session_state['user_name'])
+
+if __name__ == "__main__":
+    main()
