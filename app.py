@@ -19,14 +19,14 @@ import os
 
 # --- 1. 系統全域設定 ---
 st.set_page_config(
-    page_title="IFUKUK ERP V110.1 REBORN", 
+    page_title="IFUKUK ERP V110.1 RESTORE", 
     layout="wide", 
     page_icon="🌏",
     initial_sidebar_state="expanded"
 )
 
 # ==========================================
-# 🛑 【CSS 視覺核心：強制白底 & 卡片介面 & 手機 Grid】
+# 🛑 【CSS 視覺核心：強制白底 & 手機 Grid】
 # ==========================================
 st.markdown("""
     <style>
@@ -43,7 +43,7 @@ st.markdown("""
         div[data-baseweb="select"] > div { background-color: #FFFFFF !important; color: #000000 !important; }
         label, .stMarkdown, h1, h2, h3, h4, h5, h6, p, span { color: #0f172a !important; }
 
-        /* 卡片樣式 (視覺核心) */
+        /* 卡片樣式 */
         .pos-card, .inv-row, .finance-card, .metric-card, .cart-box, .mgmt-box {
             background-color: #FFFFFF !important; border: 1px solid #E2E8F0 !important;
             box-shadow: 0 2px 4px rgba(0,0,0,0.05) !important; color: #000000 !important;
@@ -53,7 +53,6 @@ st.markdown("""
         .pos-content { padding: 10px; flex-grow: 1; display: flex; flex-direction: column; }
         .pos-title { font-weight: bold; font-size: 1rem; margin-bottom: 4px; color: #111 !important; line-height: 1.3; }
         .pos-meta { font-size: 0.8rem; color: #666 !important; margin-bottom: 5px; }
-        .pos-price { font-weight: 900; color: #059669 !important; font-size: 1.1rem; }
         
         /* 庫存標籤 */
         .stock-tag-row { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; margin-bottom: 5px; }
@@ -61,21 +60,18 @@ st.markdown("""
         .stock-tag.has-stock { background-color: #dcfce7 !important; color: #166534 !important; border-color: #bbf7d0; }
         .stock-tag.no-stock { background-color: #f3f4f6 !important; color: #9ca3af !important; border-color: #e5e7eb; }
         
-        /* 庫存列表區塊 */
         .inv-row { display: flex; align-items: start; gap: 12px; padding: 12px; border-radius: 12px; margin-bottom: 10px; }
         .inv-img { width: 90px; height: 90px; object-fit: cover; border-radius: 8px; flex-shrink: 0; background: #f1f5f9; }
         .inv-info { flex-grow: 1; }
         .inv-title { font-size: 1.1rem; font-weight: bold; color: #0f172a !important; margin-bottom: 4px; }
         
-        /* 數據儀表板 */
-        .metric-card { background: linear-gradient(145deg, #ffffff, #f8fafc) !important; color: black !important; padding: 15px; text-align: center; border-radius: 12px; margin-bottom: 10px; }
-        .metric-value { font-size: 1.6rem; font-weight: 800; color: #0f172a !important; margin: 5px 0; }
-        
-        /* 手機 Grid Force (排班表專用) */
+        .finance-card { padding: 15px; text-align: center; border-radius: 10px; }
+        .finance-val { font-size: 1.4rem; font-weight: 900; color: #0f172a !important; }
+        .finance-lbl { font-size: 0.8rem; color: #64748b !important; font-weight: bold; }
+
+        /* V110.1 手機 Grid 優化 */
         [data-testid="column"] {
-            min-width: 0px !important; /* 允許無限縮小 */
-            flex: 1 1 0px !important;  /* 強制均分寬度 */
-            padding: 0px 2px !important; /* 減少間距 */
+            min-width: 0px !important; flex: 1 1 0px !important; padding: 0px 2px !important;
         }
         
         .roster-header { background: #f1f5f9 !important; padding: 10px; border-radius: 12px; margin-bottom: 10px; border: 1px solid #e2e8f0; text-align: center; }
@@ -83,11 +79,12 @@ st.markdown("""
 
         .day-cell { 
             border: 1px solid #e2e8f0; border-radius: 4px; 
-            padding: 2px; min-height: 60px; /* 手機高度減少 */
+            padding: 2px; min-height: 60px; 
             position: relative; margin-bottom: 2px; 
             background: #fff !important; 
             overflow: hidden;
         }
+        
         .day-num { font-size: 0.7rem !important; font-weight: bold; color: #64748b; margin-bottom: 1px; text-align: center; }
         
         .shift-pill { 
@@ -96,19 +93,25 @@ st.markdown("""
             text-align: center; font-weight: bold; line-height: 1.1;
             white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
         }
-        .store-closed { background-color: #EF4444 !important; color: white !important; font-weight: 900; font-size: 0.6rem !important; display: flex; align-items: center; justify-content: center; height: 100%; border-radius: 4px; min-height: 50px; writing-mode: vertical-rl; }
+
+        .store-closed {
+            background-color: #EF4444 !important; color: white !important;
+            font-weight: 900; font-size: 0.6rem !important;
+            display: flex; align-items: center; justify-content: center;
+            height: 100%; border-radius: 4px; min-height: 50px;
+            writing-mode: vertical-rl;
+        }
         
-        /* 隱形按鈕覆蓋優化 */
+        /* 隱形按鈕 */
         div.stButton > button:first-child {
             border-radius: 6px; height: 2.5em; font-weight: 700; 
             border: 1px solid #cbd5e1; background-color: #FFFFFF !important; 
             color: #0f172a !important; width: 100%; padding: 0px;
         }
         
-        /* 購物車與財務 */
-        .cart-box { background: #f8fafc !important; border: 1px solid #cbd5e1; padding: 15px; border-radius: 12px; margin-bottom: 15px; }
-        .cart-item { display: flex; justify-content: space-between; border-bottom: 1px dashed #cbd5e1; padding: 8px 0; font-size: 0.95rem; color: #333 !important; }
-        .final-price-display { font-size: 2rem; font-weight: 900; color: #15803d !important; text-align: center; background: #dcfce7 !important; padding: 10px; border-radius: 12px; margin-top: 15px; border: 1px solid #86efac; }
+        /* 儀表板 */
+        .metric-card { background: linear-gradient(145deg, #ffffff, #f8fafc) !important; color: black !important; padding: 10px; text-align: center; }
+        .metric-value { color: #0f172a !important; font-size: 1.5em; font-weight: 800; }
 
     </style>
 """, unsafe_allow_html=True)
@@ -225,18 +228,16 @@ def render_navbar(ui):
     d = (datetime.utcnow()+timedelta(hours=8)).strftime("%Y/%m/%d")
     r = st.session_state.get('exchange_rate', 4.5)
     st.markdown(f"""
-        <div class="navbar-container">
-            <div style="display:flex; justify-content:space-between; align-items:center; background:#fff; padding:15px; border-bottom:1px solid #eee; margin-bottom:15px;">
-                <div><span style="font-size:18px; font-weight:900; color:#111;">IFUKUK GLOBAL</span><br><span style="font-size:11px; color:#666; font-family:monospace;">{d} • Rate: {r}</span></div>
-                <div style="width:36px; height:36px; background:#111; color:#fff; border-radius:8px; display:flex; align-items:center; justify-content:center; font-weight:bold;">{ui}</div>
-            </div>
+        <div style="display:flex; justify-content:space-between; align-items:center; background:#fff; padding:15px; border-bottom:1px solid #eee; margin-bottom:15px;">
+            <div><span style="font-size:18px; font-weight:900; color:#111;">IFUKUK GLOBAL</span><br><span style="font-size:11px; color:#666; font-family:monospace;">{d} • Rate: {r}</span></div>
+            <div style="width:36px; height:36px; background:#111; color:#fff; border-radius:8px; display:flex; align-items:center; justify-content:center; font-weight:bold;">{ui}</div>
         </div>
     """, unsafe_allow_html=True)
 
 CAT_LIST = ["上衣(Top)", "褲子(Btm)", "外套(Out)", "套裝(Suit)", "鞋類(Shoe)", "包款(Bag)", "帽子(Hat)", "飾品(Acc)", "其他(Misc)"]
 
 # ==========================================
-# 🗓️ 排班系統 (V110.1 手機 Grid 完美還原)
+# 🗓️ 排班系統 ELITE (V110.1 Restore)
 # ==========================================
 
 SHIFT_COLORS = {
@@ -251,7 +252,7 @@ def get_staff_color_map(users):
     for i, u in enumerate(su): cm[u] = VP[i % len(VP)]
     return cm
 
-# 自動下載中文字型
+# V110.1: 字型下載修復 (存到 /tmp)
 def get_chinese_font_path():
     font_url = "https://github.com/googlefonts/noto-cjk/raw/main/Sans/OTF/TraditionalChinese/NotoSansCJKtc-Regular.otf"
     font_path = "/tmp/NotoSansCJKtc-Regular.otf"
@@ -338,7 +339,7 @@ def render_roster_system(sh, users_list, user_name):
     
     st.markdown("---")
 
-    # 手機強制 Grid 布局
+    # V110.1: 強制使用 Grid Layout (手機適配)
     cal = calendar.monthcalendar(sel_year, sel_month)
     cols = st.columns(7)
     days = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"]
@@ -352,6 +353,7 @@ def render_roster_system(sh, users_list, user_name):
                     d_str = f"{sel_year}-{str(sel_month).zfill(2)}-{str(day).zfill(2)}"
                     ds = shifts_df[shifts_df['Date'] == d_str] if not shifts_df.empty else pd.DataFrame()
                     
+                    # 隱形按鈕覆蓋
                     if st.button(f"{day}", key=f"d_{d_str}", use_container_width=True):
                         st.session_state['roster_date'] = d_str; st.rerun()
 
@@ -373,6 +375,7 @@ def render_roster_system(sh, users_list, user_name):
 
     st.markdown("---")
     
+    # 編輯區
     c_edit, c_smart = st.columns([1, 1])
     with c_edit:
         if 'roster_date' in st.session_state:
@@ -405,8 +408,7 @@ def render_roster_system(sh, users_list, user_name):
                     t = st.selectbox("班別", list(SHIFT_COLORS.keys()))
                     n = st.text_input("備註")
                     if st.form_submit_button("➕ 新增/更新"):
-                        all_v = ws_shifts.get_all_values()
-                        # Upsert Logic: 先刪除該人當天的舊紀錄
+                        all_v = ws_shifts.get_all_values() # Upsert Logic
                         for i, r in enumerate(all_v):
                             if len(r)>1 and r[0]==t_date and r[1]==s: retry_action(ws_shifts.delete_rows, i+1); break
                         retry_action(ws_shifts.append_row, [t_date, s, t, n, "FALSE", user_name])
@@ -449,7 +451,7 @@ def main():
     if 'logged_in' not in st.session_state: st.session_state['logged_in']=False
     if 'pos_cart' not in st.session_state: st.session_state['pos_cart']=[]
     
-    # [KEY FIX] 自動修復 KeyError: 移除不符合格式的舊購物車資料
+    # [V110.1 PATCH] 自動清理舊格式購物車，防止 KeyError
     if st.session_state['pos_cart']:
         if 'Price' not in st.session_state['pos_cart'][0]:
             st.session_state['pos_cart'] = []
@@ -493,7 +495,7 @@ def main():
     
     df['SKU']=df['SKU'].astype(str); df['Style_Code']=df['SKU'].apply(get_style_code)
     
-    # 復原數據儀表板
+    # 復原 V108 數據儀表板 (視覺核心)
     total_qty = df['Qty'].sum() + df['Qty_CN'].sum()
     total_rev = (df['Qty'] * df['Price']).sum()
     total_cost = ((df['Qty'] + df['Qty_CN']) * df['Cost']).sum()
@@ -550,7 +552,7 @@ def main():
                     cls = "has-stock" if r['Qty'] > 0 else "no-stock"
                     stock_badges += f"<span class='stock-tag {cls}'>{r['Size']}:{r['Qty']}</span>"
 
-                with st.container(border=True):
+                with st.container(border=True): # V110.1 卡片容器
                     st.markdown(f"""
                     <div class='inv-row'>
                         <img src='{img}' class='inv-img'>
@@ -588,29 +590,25 @@ def main():
                     cols = st.columns(3)
                     for i, (_, item) in enumerate(r.iterrows()):
                         with cols[i]:
-                            st.markdown(f"""
-                            <div class='pos-card'>
-                                <div class='pos-img'><img src='{render_image_url(item['Image_URL'])}' style='width:100%;height:100%;object-fit:cover;'></div>
-                                <div class='pos-content'>
-                                    <div class='pos-title'>{item['Name']}</div>
-                                    <div class='pos-meta'>{item['Size']}</div>
-                                    <div class='pos-price'>{item['Price']}</div>
-                                </div>
-                            </div>""", unsafe_allow_html=True)
-                            if st.button("➕ 加入", key=f"add_{item['SKU']}", use_container_width=True):
-                                st.session_state['pos_cart'].append({
-                                    "SKU": item['SKU'], "Name": item['Name'], 
-                                    "Size": item['Size'], "Price": int(item['Price']), 
-                                    "Qty": 1
-                                })
-                                st.toast(f"已加入 {item['Name']}")
+                            # 使用原生 Container 模擬卡片
+                            with st.container(border=True):
+                                st.image(render_image_url(item['Image_URL']), use_container_width=True)
+                                st.markdown(f"**{item['Name']}**")
+                                st.caption(f"{item['Size']} | ${item['Price']}")
+                                if st.button("➕ 加入", key=f"add_{item['SKU']}", use_container_width=True):
+                                    st.session_state['pos_cart'].append({
+                                        "SKU": item['SKU'], "Name": item['Name'], 
+                                        "Size": item['Size'], "Price": int(item['Price']), 
+                                        "Qty": 1
+                                    })
+                                    st.toast(f"已加入 {item['Name']}")
 
         with c2:
             st.markdown("##### 🛒 購物車")
             with st.container():
                 st.markdown("<div class='cart-box'>", unsafe_allow_html=True)
                 if st.session_state['pos_cart']:
-                    # V110.1: 使用 .get 安全讀取，防止 KeyError
+                    # V110.1 Patch: 防止 KeyError
                     total = sum(int(item.get('Price', 0)) for item in st.session_state['pos_cart'])
                     
                     for item in st.session_state['pos_cart']:
@@ -641,7 +639,7 @@ def main():
                 st.markdown("</div>", unsafe_allow_html=True)
 
     with tabs[3]: # 領用 (Pivot)
-        st.subheader("🎁 領用/稽核")
+        st.subheader("🎁 領用/稽核 (Pivot Analytics)")
         if not logs_df.empty:
             int_df = logs_df[logs_df['Action']=="Internal_Use"].copy()
             if not int_df.empty:
@@ -680,7 +678,7 @@ def main():
                 log_event(ws_logs, st.session_state['user_name'], "Internal_Use", f"{sel} -{q} | {who} | {rsn} | {note}")
                 st.success("OK"); st.rerun()
 
-    with tabs[7]: # 排班 (Mobile Grid)
+    with tabs[7]: # 排班 (V110.1 Grid)
         render_roster_system(sh, staff_list, st.session_state['user_name'])
 
 if __name__ == "__main__":
