@@ -19,7 +19,7 @@ import os
 
 # --- 1. 系統全域設定 ---
 st.set_page_config(
-    page_title="IFUKUK ERP V110.8 ULTIMATE", 
+    page_title="IFUKUK ERP V110.9 HOTFIX", 
     layout="wide", 
     page_icon="🌏",
     initial_sidebar_state="expanded"
@@ -204,7 +204,7 @@ def render_navbar(u_init):
 CAT_LIST = ["上衣(Top)", "褲子(Btm)", "外套(Out)", "套裝(Suit)", "鞋類(Shoe)", "包款(Bag)", "帽子(Hat)", "飾品(Acc)", "其他(Misc)"]
 
 # ==========================================
-# 🗓️ 排班系統 ELITE (V110.8 Rewrite)
+# 🗓️ 排班系統 ELITE (V110.9)
 # ==========================================
 SHIFT_COLORS = {"早班":"#3B82F6", "晚班":"#8B5CF6", "全班":"#10B981", "代班":"#F59E0B", "公休":"#EF4444", "特休":"#DB2777", "空班":"#6B7280", "事假":"#EC4899", "病假":"#14B8A6"}
 def get_staff_color_map(users):
@@ -472,7 +472,7 @@ def main():
 
     # LOGIN
     if not st.session_state['logged_in']:
-        st.markdown("<br><br><h1 style='text-align:center;'>IFUKUK V110.8</h1>", unsafe_allow_html=True)
+        st.markdown("<br><br><h1 style='text-align:center;'>IFUKUK V110.9</h1>", unsafe_allow_html=True)
         with st.form("login"):
             u = st.text_input("ID"); p = st.text_input("PWD", type="password")
             if st.form_submit_button("LOGIN", type="primary"):
@@ -516,7 +516,7 @@ def main():
     # Tabs
     tabs = st.tabs(["📊 庫存", "🛒 POS", "📈 戰情", "🎁 領用/稽核", "👔 管理", "📝 日誌", "👥 用戶", "🗓️ 排班"])
 
-    # 1. 庫存 (簡化顯示)
+    # 1. 庫存 (FIXED: 移除 'Color' 以防止崩潰)
     with tabs[0]:
         st.subheader("📦 庫存總覽")
         col1, col2 = st.columns([3, 1])
@@ -527,7 +527,8 @@ def main():
         if q: vdf = vdf[vdf.astype(str).apply(lambda x: x.str.contains(q, case=False)).any(axis=1)]
         if cat != "全部": vdf = vdf[vdf['Category'] == cat]
         
-        st.dataframe(vdf[['SKU','Name','Size','Color','Qty','Qty_CN','Price']], use_container_width=True, hide_index=True)
+        # 修正點：移除 'Color'
+        st.dataframe(vdf[['SKU','Name','Size','Qty','Qty_CN','Price']], use_container_width=True, hide_index=True)
 
     # 2. POS (核心邏輯保持)
     with tabs[1]:
