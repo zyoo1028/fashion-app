@@ -19,61 +19,48 @@ import os
 
 # --- 1. 系統全域設定 ---
 st.set_page_config(
-    page_title="IFUKUK ERP V112.0 OMNI-CORE", 
+    page_title="IFUKUK ERP V113.0 FINANCIAL OMNI-SYNC", 
     layout="wide", 
     page_icon="🌏",
     initial_sidebar_state="expanded"
 )
 
 # ==========================================
-# 🛑 【CSS 視覺核心：絕對對比覆蓋防護 (解決白字問題)】
+# 🛑 【CSS 視覺核心：絕對對比覆蓋防護】
 # ==========================================
 st.markdown("""
     <style>
-        /* 1. 終極全域背景與文字對比覆蓋 */
-        html, body, [class*="css"], [data-testid="stAppViewContainer"] { 
-            background-color: #FFFFFF !important; 
-            color: #0f172a !important; 
-        }
+        /* 全域背景與文字對比覆蓋 */
+        html, body, [class*="css"], [data-testid="stAppViewContainer"] { background-color: #FFFFFF !important; color: #0f172a !important; }
         [data-testid="stSidebar"] { background-color: #F8F9FA !important; }
         [data-testid="stHeader"] { background-color: #FFFFFF !important; }
         
-        /* 2. 強制所有文字呈現深色 (擊碎手機深色模式的白字) */
-        p, span, h1, h2, h3, h4, h5, h6, label, div, th, td, li, a { 
-            color: #0f172a !important; 
-        }
+        /* 強制文字呈現深色 */
+        p, span, h1, h2, h3, h4, h5, h6, label, div, th, td, li, a { color: #0f172a !important; }
         
-        /* 3. 保留需要反白(白字)的特殊元件 */
+        /* 保留特殊元件反白 */
         .shift-pill, .shift-pill span, .store-closed, .store-closed span { color: #ffffff !important; }
         button[data-testid="baseButton-primary"] p, button[kind="primary"] p { color: #ffffff !important; }
-        .st-emotion-cache-1n76uvr { color: #ffffff !important; } /* 特定 Streamlit 提示氣球 */
+        .st-emotion-cache-1n76uvr { color: #ffffff !important; }
         
-        /* 4. 輸入框與選單強制白底黑字 */
+        /* 輸入框與選單強制白底黑字 */
         .stTextInput input, .stNumberInput input, .stSelectbox div, .stDateInput input, textarea {
             color: #0f172a !important; background-color: #FFFFFF !important;
             -webkit-text-fill-color: #0f172a !important; caret-color: #0f172a !important;
             border-color: #E5E7EB !important;
         }
-        div[data-baseweb="select"] > div, div[data-baseweb="popover"] * { 
-            background-color: #FFFFFF !important; color: #0f172a !important; 
-        }
+        div[data-baseweb="select"] > div, div[data-baseweb="popover"] * { background-color: #FFFFFF !important; color: #0f172a !important; }
         
-        /* 5. 頁籤 (Tabs) 美化與強制深色 */
-        button[data-baseweb="tab"] { 
-            background-color: #f8fafc !important; 
-            border-bottom: 2px solid #e2e8f0 !important; 
-        }
-        button[data-baseweb="tab"][aria-selected="true"] { 
-            border-bottom: 2px solid #2563eb !important; 
-            background-color: #ffffff !important; 
-        }
+        /* 頁籤 (Tabs) 美化 */
+        button[data-baseweb="tab"] { background-color: #f8fafc !important; border-bottom: 2px solid #e2e8f0 !important; }
+        button[data-baseweb="tab"][aria-selected="true"] { border-bottom: 2px solid #2563eb !important; background-color: #ffffff !important; }
         button[data-baseweb="tab"] p { font-weight: 800 !important; font-size: 1rem !important; }
 
-        /* 6. 資料表 (DataFrame) 強制樣式 */
+        /* 資料表 (DataFrame) */
         [data-testid="stDataFrame"] { background-color: #FFFFFF !important; }
         [data-testid="stDataFrame"] * { color: #0f172a !important; }
 
-        /* 7. 優化卡片視覺 */
+        /* 卡片視覺 */
         .pos-card, .inv-row, .finance-card, .metric-card, .cart-box, .mgmt-box {
             background-color: #FFFFFF !important; border: 1px solid #E2E8F0 !important;
             box-shadow: 0 2px 4px rgba(0,0,0,0.05) !important; color: #0f172a !important;
@@ -110,7 +97,9 @@ st.markdown("""
         .store-closed { background-color: #EF4444 !important; font-weight: 900; font-size: 0.9rem; display: flex; align-items: center; justify-content: center; height: 100%; border-radius: 6px; min-height: 90px; }
         .store-closed-mobile { background-color: #FEF2F2 !important; border: 1px solid #FCA5A5; padding: 5px 10px; border-radius: 6px; font-weight: bold; display: inline-block; }
         
-        .metric-card { background: linear-gradient(145deg, #ffffff, #f8fafc) !important; border: 1px solid #e2e8f0 !important;}
+        .metric-card { background: linear-gradient(145deg, #ffffff, #f8fafc) !important; border: 1px solid #e2e8f0 !important; padding: 10px !important;}
+        .metric-label { font-size: 0.8rem !important; font-weight: bold !important; color: #64748b !important; }
+        .metric-value { color: #0f172a !important; font-size: 1.2rem !important; font-weight: 900 !important;}
         .stButton>button { border-radius: 8px; height: 3.2em; font-weight: 700; border: 1px solid #cbd5e1; background-color: #FFFFFF !important; width: 100%; transition: all 0.2s; }
         .stButton>button p { color: #0f172a !important; }
         .stButton>button:hover { border-color: #94a3b8; }
@@ -256,6 +245,29 @@ def calculate_realized_revenue(logs_df):
             if match: total += int(match.group(1))
         except: pass
     return total
+
+# V113.0 全域解析沉沒成本 (Sunk Cost)
+def calculate_sunk_cost(logs_df, cost_map):
+    sunk_total = 0
+    if logs_df.empty or 'Action' not in logs_df.columns: return 0
+    int_logs = logs_df[logs_df['Action'] == 'Internal_Use']
+    for _, row in int_logs.iterrows():
+        try:
+            parts = str(row['Details']).split(' | ')
+            sku = parts[0].split(' -')[0].strip()
+            qty = int(parts[0].split(' -')[1])
+            
+            # V113.0 成本快照讀取邏輯
+            # 如果日誌中有記錄 Cost:XXX，則使用快照成本；否則回退使用目前成本 (舊資料兼容)
+            unit_cost = 0
+            if len(parts) > 4 and "Cost:" in parts[4]:
+                unit_cost = int(parts[4].replace("Cost:", "").strip())
+            else:
+                unit_cost = cost_map.get(sku, 0)
+                
+            sunk_total += (unit_cost * qty)
+        except: pass
+    return sunk_total
 
 def render_navbar(user_initial):
     d_str = (datetime.utcnow() + timedelta(hours=8)).strftime("%Y/%m/%d")
@@ -574,7 +586,7 @@ def main():
         with c2:
             st.markdown("<br><br><br>", unsafe_allow_html=True)
             st.markdown("<div style='text-align:center; font-weight:900; font-size:2.5rem; margin-bottom:10px; color:#0f172a;'>IFUKUK</div>", unsafe_allow_html=True)
-            st.markdown("<div style='text-align:center; color:#64748b; font-size:0.9rem; margin-bottom:30px;'>OMEGA V112.0 OMNI-CORE</div>", unsafe_allow_html=True)
+            st.markdown("<div style='text-align:center; color:#64748b; font-size:0.9rem; margin-bottom:30px;'>OMEGA V113.0 FINANCIAL OMNI-SYNC</div>", unsafe_allow_html=True)
             with st.form("login"):
                 u = st.text_input("帳號 (ID)"); p = st.text_input("密碼 (Password)", type="password")
                 if st.form_submit_button("登入 (LOGIN)", type="primary"):
@@ -634,7 +646,7 @@ def main():
         st.markdown("---")
         if st.button("🚪 登出系統"): st.session_state['logged_in'] = False; st.rerun()
 
-    # Dashboard
+    # Dashboard Metrics
     total_qty_tw = df['Qty'].sum() if not df.empty else 0
     total_qty_cn = df['Qty_CN'].sum() if not df.empty else 0
     total_qty = total_qty_tw + total_qty_cn
@@ -642,17 +654,24 @@ def main():
     total_rev = (df['Qty'] * df['Price']).sum() if not df.empty else 0
     profit = total_rev - (df['Qty'] * df['Cost']).sum() if not df.empty else 0
     realized_revenue = calculate_realized_revenue(logs_df)
+    
+    # V113.0 Sunk Cost Calculation
+    sunk_cost = calculate_sunk_cost(logs_df, cost_map)
+    
     rmb_stock_value = 0
     if not df.empty and 'Orig_Currency' in df.columns:
         rmb_items = df[df['Orig_Currency'] == 'CNY']
         if not rmb_items.empty: rmb_stock_value = ((rmb_items['Qty'] + rmb_items['Qty_CN']) * rmb_items['Orig_Cost']).sum()
 
-    m1, m2, m3, m4, m5 = st.columns(5)
+    # V113.0 Expanded Dashboard (6 Metrics)
+    m1, m2, m3, m4, m5, m6 = st.columns(6)
     with m1: st.markdown(f"<div class='metric-card'><div class='metric-label'>📦 總庫存 (TW+CN)</div><div class='metric-value'>{total_qty:,}</div><div style='font-size:10px; color:#64748b;'>🇹🇼:{total_qty_tw} | 🇨🇳:{total_qty_cn}</div></div>", unsafe_allow_html=True)
     with m2: st.markdown(f"<div class='metric-card'><div class='metric-label'>💎 預估營收 (TW)</div><div class='metric-value'>${total_rev:,}</div></div>", unsafe_allow_html=True)
     with m3: st.markdown(f"<div class='metric-card'><div class='metric-label'>💰 總資產成本</div><div class='metric-value'>${total_cost:,}</div><div style='font-size:11px;color:#64748b;'>含RMB原幣: ¥{rmb_stock_value:,}</div></div>", unsafe_allow_html=True)
-    with m4: st.markdown(f"<div class='metric-card profit-card'><div class='metric-label'>📈 潛在毛利</div><div class='metric-value' style='color:#d97706 !important'>${profit:,}</div></div>", unsafe_allow_html=True)
-    with m5: st.markdown(f"<div class='metric-card realized-card'><div class='metric-label'>💵 實際營收 (已售)</div><div class='metric-value' style='color:#059669 !important'>${realized_revenue:,}</div></div>", unsafe_allow_html=True)
+    # V113.0 Sunk Cost Radar injected into main dashboard
+    with m4: st.markdown(f"<div class='metric-card' style='background:#fef2f2 !important; border-color:#fecaca !important;'><div class='metric-label' style='color:#991b1b !important;'>📉 內部消耗 (沉沒成本)</div><div class='metric-value' style='color:#b91c1c !important;'>${sunk_cost:,}</div></div>", unsafe_allow_html=True)
+    with m5: st.markdown(f"<div class='metric-card profit-card'><div class='metric-label'>📈 潛在毛利</div><div class='metric-value' style='color:#d97706 !important'>${profit:,}</div></div>", unsafe_allow_html=True)
+    with m6: st.markdown(f"<div class='metric-card realized-card'><div class='metric-label'>💵 實際營收 (已售)</div><div class='metric-value' style='color:#059669 !important'>${realized_revenue:,}</div></div>", unsafe_allow_html=True)
 
     st.markdown("---")
     tabs = st.tabs(["📊 視覺庫存", "🛒 POS", "📈 銷售戰情", "🎁 領用/稽核看板", "👔 矩陣管理", "📝 日誌", "👥 Admin", "🗓️ 排班"])
@@ -851,7 +870,6 @@ def main():
                     elif disc_mode == "8折": final_total = int(round(calc_base * 0.8)); note_arr.append("(8折)")
                     elif disc_mode == "自訂": final_total = int(round(calc_base * (cust_off/100))); note_arr.append(f"({cust_off}折)")
                     
-                    # 實時毛利計算
                     total_cart_cost = 0
                     for cart_item in st.session_state['pos_cart']:
                         match_item = df[df['SKU'] == cart_item['sku']]
@@ -1063,7 +1081,8 @@ def main():
                     if st.form_submit_button("✅ 送出並扣庫存", use_container_width=True):
                         if int(tr['Qty']) >= q:
                             r = ws_items.find(tsku).row; retry_action(ws_items.update_cell, r, 5, int(tr['Qty'])-q)
-                            log_event(ws_logs, st.session_state['user_name'], "Internal_Use", f"{tsku} -{q} | {who} | {rsn} | {n}")
+                            # V113.0 寫入成本快照
+                            log_event(ws_logs, st.session_state['user_name'], "Internal_Use", f"{tsku} -{q} | {who} | {rsn} | {n} | Cost:{tr['Cost']}")
                             st.cache_data.clear(); st.success("登記成功！庫存已同步減少。"); time.sleep(1); st.rerun()
                         else:
                             st.error("庫存不足，無法領用！")
@@ -1082,7 +1101,14 @@ def main():
                             user = parts[1].strip()
                             reason = parts[2].strip()
                             note = parts[3].strip() if len(parts) > 3 else ""
-                            unit_cost = cost_map.get(sku, 0)
+                            
+                            # V113.0 讀取成本快照
+                            unit_cost = 0
+                            if len(parts) > 4 and "Cost:" in parts[4]:
+                                unit_cost = int(parts[4].replace("Cost:", "").strip())
+                            else:
+                                unit_cost = cost_map.get(sku, 0)
+                                
                             total_cost = unit_cost * qty
                             item_name = product_map.get(sku, sku)
                             
@@ -1141,6 +1167,7 @@ def main():
                         orig_who = parts[1].strip()
                         orig_reason = parts[2].strip()
                         orig_note = parts[3].strip() if len(parts) > 3 else ""
+                        orig_cost_str = parts[4] if len(parts) > 4 else f"Cost:{cost_map.get(orig_sku, 0)}"
                     except: st.error("資料無法解析"); st.stop()
 
                     with st.form("edit_internal_log"):
@@ -1161,7 +1188,7 @@ def main():
                                 all_logs = ws_logs.get_all_values()
                                 for idx, row in enumerate(all_logs):
                                     if row[0] == target_ts: retry_action(ws_logs.delete_rows, idx + 1); break
-                                log_event(ws_logs, st.session_state['user_name'], "Internal_Use", f"{orig_sku} -{new_q} | {new_who} | {new_rsn} | {new_note} (Edited)")
+                                log_event(ws_logs, st.session_state['user_name'], "Internal_Use", f"{orig_sku} -{new_q} | {new_who} | {new_rsn} | {new_note} | {orig_cost_str}")
                                 st.success("紀錄已完美更新！"); time.sleep(1); st.rerun()
                             else: st.error("找不到該商品SKU")
 
