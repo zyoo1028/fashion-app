@@ -19,14 +19,14 @@ import os
 
 # --- 1. 系統全域設定 ---
 st.set_page_config(
-    page_title="IFUKUK ERP V119.0 OMNI-RESOLUTION", 
+    page_title="IFUKUK ERP V120.0 OMNI-MAXIMIZE", 
     layout="wide", 
     page_icon="🌏",
     initial_sidebar_state="expanded"
 )
 
 # ==========================================
-# 🛑 【CSS 視覺核心：絕對對比覆蓋防護】
+# 🛑 【CSS 視覺核心：絕對對比與滿版延展防護】
 # ==========================================
 st.markdown("""
     <style>
@@ -77,16 +77,23 @@ st.markdown("""
         .finance-val { font-size: 1.4rem; font-weight: 900; color: #0f172a !important; }
         .finance-lbl { font-size: 0.8rem; color: #64748b !important; font-weight: bold; }
 
+        /* 排班表 CSS 優化：V120.0 導入 Flexbox 空間滿版技術 */
         .roster-header { background: #f1f5f9 !important; padding: 15px; border-radius: 12px; margin-bottom: 20px; border: 1px solid #e2e8f0; text-align: center; }
-        .day-cell { border: 1px solid #e2e8f0; border-radius: 8px; padding: 4px; min-height: 100px; position: relative; margin-bottom: 5px; background: #fff !important; }
-        .day-num { font-size: 0.8rem; font-weight: bold; color: #64748b; margin-bottom: 2px; padding-left: 4px; }
         
+        /* 電腦版：讓格子本身變成 Flex 容器，並讓內部元素撐滿 */
+        .day-cell { border: 1px solid #e2e8f0; border-radius: 8px; padding: 5px; min-height: 110px; position: relative; margin-bottom: 5px; background: #fff !important; display: flex; flex-direction: column; gap: 4px; }
+        
+        /* 電腦版專用班別膠囊：巨型化、滿版化、絕對置中 */
+        .desktop-shift-pill { flex: 1; display: flex; align-items: center; justify-content: center; width: 100%; font-size: 1.05rem; font-weight: 900; border-radius: 6px; color: white !important; box-shadow: 0 1px 3px rgba(0,0,0,0.15); min-height: 35px; letter-spacing: 1px;}
+        
+        /* 手機版：維持原本最棒的列表視覺 */
         .mobile-day-row { background: #FFFFFF !important; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px; margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 1px 2px rgba(0,0,0,0.03); }
         .mobile-day-date { font-size: 1.1rem; font-weight: 900; color: #334155 !important; width: 50px; text-align: center; border-right: 2px solid #f1f5f9; margin-right: 10px; }
         .mobile-day-content { flex-grow: 1; }
+        .shift-pill { font-size: 0.8rem; padding: 4px 8px; border-radius: 6px; margin-bottom: 4px; display: inline-block; text-align: center; font-weight: bold; margin-right: 4px; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
         
-        .shift-pill { font-size: 0.75rem; padding: 4px 8px; border-radius: 6px; margin-bottom: 4px; display: inline-block; text-align: center; font-weight: bold; margin-right: 4px; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
-        .store-closed { background-color: #EF4444 !important; font-weight: 900; font-size: 0.9rem; display: flex; align-items: center; justify-content: center; height: 100%; border-radius: 6px; min-height: 90px; }
+        /* 滿版全店公休 */
+        .store-closed { flex: 1; width: 100%; background-color: #EF4444 !important; font-weight: 900; font-size: 1.1rem; display: flex; align-items: center; justify-content: center; border-radius: 6px; min-height: 40px; color: white !important;}
         .store-closed-mobile { background-color: #FEF2F2 !important; border: 1px solid #FCA5A5; padding: 5px 10px; border-radius: 6px; font-weight: bold; display: inline-block; }
         
         .metric-card { background: linear-gradient(145deg, #ffffff, #f8fafc) !important; border: 1px solid #e2e8f0 !important; padding: 10px !important;}
@@ -280,7 +287,7 @@ def render_navbar(user_initial):
 CAT_LIST = ["上衣(Top)", "褲子(Btm)", "外套(Out)", "套裝(Suit)", "鞋類(Shoe)", "包款(Bag)", "帽子(Hat)", "飾品(Acc)", "其他(Misc)"]
 
 # ==========================================
-# 🗓️ 排班系統 ELITE V119.0 (OMNI-RESOLUTION)
+# 🗓️ 排班系統 ELITE V120.0 (OMNI-MAXIMIZE)
 # ==========================================
 SHIFT_COLORS = { "早班": "#3B82F6", "晚班": "#8B5CF6", "全班": "#10B981", "代班": "#F59E0B", "公休": "#EF4444", "特休": "#DB2777", "空班": "#6B7280", "事假": "#EC4899", "病假": "#14B8A6" }
 
@@ -288,7 +295,7 @@ def get_staff_color_map(users_list):
     PALETTE = ["#2563EB", "#059669", "#7C3AED", "#DB2777", "#D97706", "#DC2626", "#0891B2", "#4F46E5", "#BE123C", "#B45309"]
     return {u: PALETTE[i % len(PALETTE)] for i, u in enumerate(sorted([x for x in users_list if x != "全店"]))}
 
-# V119.0: 終極字型掛載引擎 (強制寫入根目錄，確保 100% 存取)
+# V120.0 終極無敵字型掛載引擎
 @st.cache_resource(show_spinner=False)
 def get_chinese_font():
     font_path = "NotoSansTC.ttf"
@@ -305,14 +312,12 @@ def get_chinese_font():
 
 def generate_roster_image_buffer(year, month, shifts_df, days_in_month, color_map):
     try:
-        # 1. 取得字型檔 (直接注射法)
         font_path = get_chinese_font()
         prop = fm.FontProperties(fname=font_path) if font_path else fm.FontProperties()
         
         fig, ax = plt.subplots(figsize=(14, 10), facecolor='#f8fafc')
         ax.axis('off')
         
-        # 2. 標題：絕對禁止使用 weight='bold'，改用顏色加深 (#0f172a)
         ax.text(0.5, 0.95, f"IFUKUK 專業排班表 - {year}/{month}", ha='center', va='center', fontsize=26, fontproperties=prop, color='#0f172a')
         
         cols = ["週一 Mon", "週二 Tue", "週三 Wed", "週四 Thu", "週五 Fri", "週六 Sat", "週日 Sun"]
@@ -334,34 +339,31 @@ def generate_roster_image_buffer(year, month, shifts_df, days_in_month, color_ma
                     else:
                         for _, r in day_shifts.iterrows():
                             s_short = r['Type'].replace("早班","早").replace("晚班","晚").replace("全班","全").replace("公休","休")
-                            cell_text += f"● {r['Staff']} ({s_short})\n"
+                            cell_text += f"{r['Staff']} ({s_short})\n"
                     row_data.append(cell_text.strip())
             table_data.append(row_data)
 
-        table = ax.table(cellText=table_data, loc='center', cellLoc='left', bbox=[0, 0, 1, 0.9])
+        # 繪製高質感表格
+        table = ax.table(cellText=table_data, loc='center', cellLoc='center', bbox=[0, 0, 1, 0.9])
         table.auto_set_font_size(False)
-        table.set_fontsize(12)
+        table.set_fontsize(14) # 字體加大
         
-        # 3. 表格內容：絕對禁止使用 weight='bold'，所有文字強制綁定 fontproperties
         for (i, j), cell in table.get_celld().items():
             cell.set_edgecolor('#cbd5e1')
             
             if i == 0:
-                # 表頭列：不加粗，用深色背景與文字區分
                 cell.set_facecolor('#e2e8f0')
                 cell.set_height(0.06)
                 cell.set_text_props(fontproperties=prop, color='#0f172a') 
             else:
-                # 數據列
                 cell.set_height(0.16)
-                cell.get_text().set_verticalalignment('top') 
+                # V120.0: 移除靠上對齊，讓文字自動垂直/水平雙向絕對置中！
                 cell.set_facecolor('#ffffff')
                 cell.set_text_props(fontproperties=prop, color='#334155')
                 
                 txt = cell.get_text().get_text()
                 if "全店公休" in txt:
                     cell.set_facecolor('#fee2e2')
-                    # 絕對不加粗，改用紅色區分
                     cell.set_text_props(fontproperties=prop, color='#991b1b')
 
         buf = io.BytesIO()
@@ -424,11 +426,14 @@ def render_roster_system(sh, users_list, user_name):
                         is_store_closed = any((r['Staff'] == "全店" and r['Type'] == "公休") for _, r in day_shifts.iterrows())
 
                         html_content = ""
-                        if is_store_closed: html_content = "<div class='store-closed'><span style='color:white !important;'>🔴 全店公休</span></div>"
+                        if is_store_closed: 
+                            # V120.0 絕對滿版 Flex 佔據
+                            html_content = "<div class='store-closed'>🔴 全店公休</div>"
                         else:
                             for _, r in day_shifts.iterrows():
                                 bg_color = "#EF4444" if r['Type'] == "公休" else staff_color_map.get(r['Staff'], "#6B7280")
-                                html_content += f"<span class='shift-pill' style='background-color:{bg_color};'><span style='color:white !important;'>{r['Staff']} - {r['Type']}</span></span>"
+                                # V120.0 巨型化個人排班區塊 (desktop-shift-pill)
+                                html_content += f"<div class='desktop-shift-pill' style='background-color:{bg_color};'>{r['Staff']} - {r['Type']}</div>"
                         st.markdown(f"<div class='day-cell'>{html_content}</div>", unsafe_allow_html=True)
                     else:
                         st.markdown("<div style='min-height:90px;'></div>", unsafe_allow_html=True)
@@ -447,6 +452,7 @@ def render_roster_system(sh, users_list, user_name):
                     elif not day_shifts.empty:
                         for _, r in day_shifts.iterrows():
                             bg_color = "#EF4444" if r['Type'] == "公休" else staff_color_map.get(r['Staff'], "#6B7280")
+                            # 手機版維持小膠囊
                             content_html += f"<span class='shift-pill' style='background-color:{bg_color};'><span style='color:white !important;'>{r['Staff']} {r['Type']}</span></span>"
                     else: content_html = "<span style='color:#94a3b8;font-size:0.8rem;'>尚無排班</span>"
 
@@ -544,12 +550,12 @@ def render_roster_system(sh, users_list, user_name):
                 else: st.warning("本月尚無任何排班資料")
 
             if st.button("📸 一鍵生成班表截圖 (Image)", use_container_width=True):
-                with st.spinner("字型防禦引擎已啟動，正在渲染圖片 (請稍候 3 秒)..."):
+                with st.spinner("字型防禦引擎已啟動，正在渲染滿版圖片 (請稍候 3 秒)..."):
                     img_buf = generate_roster_image_buffer(sel_year, sel_month, shifts_df, calendar.monthrange(sel_year, sel_month)[1], staff_color_map)
                     
                     if isinstance(img_buf, io.BytesIO):
                         st.image(img_buf, caption=f"IFUKUK_{sel_year}_{sel_month}_Roster", use_container_width=True)
-                        st.download_button("💾 下載高清 PNG 圖片", data=img_buf, file_name=f"IFUKUK_{sel_year}_{sel_month}_Roster.png", mime="image/png", use_container_width=True)
+                        st.download_button("💾 下載滿版高清 PNG", data=img_buf, file_name=f"IFUKUK_{sel_year}_{sel_month}_Roster.png", mime="image/png", use_container_width=True)
                     else: 
                         st.error(f"❌ 發生未預期的系統錯誤：\n`{img_buf}`")
 
@@ -621,7 +627,7 @@ def main():
         with c2:
             st.markdown("<br><br><br>", unsafe_allow_html=True)
             st.markdown("<div style='text-align:center; font-weight:900; font-size:2.5rem; margin-bottom:10px; color:#0f172a;'>IFUKUK</div>", unsafe_allow_html=True)
-            st.markdown("<div style='text-align:center; color:#64748b; font-size:0.9rem; margin-bottom:30px;'>OMEGA V119.0 OMNI-RESOLUTION</div>", unsafe_allow_html=True)
+            st.markdown("<div style='text-align:center; color:#64748b; font-size:0.9rem; margin-bottom:30px;'>OMEGA V120.0 OMNI-MAXIMIZE</div>", unsafe_allow_html=True)
             with st.form("login"):
                 u = st.text_input("帳號 (ID)"); p = st.text_input("密碼 (Password)", type="password")
                 if st.form_submit_button("登入 (LOGIN)", type="primary"):
