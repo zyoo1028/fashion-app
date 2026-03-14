@@ -19,7 +19,7 @@ import os
 
 # --- 1. 系統全域設定 ---
 st.set_page_config(
-    page_title="IFUKUK ERP V116.0 OMNI-ROSTER", 
+    page_title="IFUKUK ERP V117.0 OMNI-ROSTER APEX", 
     layout="wide", 
     page_icon="🌏",
     initial_sidebar_state="expanded"
@@ -280,7 +280,7 @@ def render_navbar(user_initial):
 CAT_LIST = ["上衣(Top)", "褲子(Btm)", "外套(Out)", "套裝(Suit)", "鞋類(Shoe)", "包款(Bag)", "帽子(Hat)", "飾品(Acc)", "其他(Misc)"]
 
 # ==========================================
-# 🗓️ 排班系統 ELITE V116.0 (OMNI-ROSTER)
+# 🗓️ 排班系統 ELITE V117.0 (ROSTER APEX)
 # ==========================================
 SHIFT_COLORS = { "早班": "#3B82F6", "晚班": "#8B5CF6", "全班": "#10B981", "代班": "#F59E0B", "公休": "#EF4444", "特休": "#DB2777", "空班": "#6B7280", "事假": "#EC4899", "病假": "#14B8A6" }
 
@@ -288,14 +288,11 @@ def get_staff_color_map(users_list):
     PALETTE = ["#2563EB", "#059669", "#7C3AED", "#DB2777", "#D97706", "#DC2626", "#0891B2", "#4F46E5", "#BE123C", "#B45309"]
     return {u: PALETTE[i % len(PALETTE)] for i, u in enumerate(sorted([x for x in users_list if x != "全店"]))}
 
-# V116.0: 伺服器繞過與快取掛載 (解決繪圖失敗)
 @st.cache_resource(show_spinner=False)
 def get_cached_font():
-    # 改寫入當前目錄，避開 Streamlit Cloud 對 /tmp/ 的權限清洗
     font_name = "NotoSansTC-Regular.ttf" 
     if not os.path.exists(font_name):
         try:
-            # 使用更穩定的 Google Fonts raw link
             url = "https://github.com/google/fonts/raw/main/ofl/notosanstc/NotoSansTC-Regular.ttf"
             r = requests.get(url, timeout=20)
             if r.status_code == 200:
@@ -312,7 +309,6 @@ def generate_roster_image_buffer(year, month, shifts_df, days_in_month, color_ma
         font_path = get_cached_font()
         prop = fm.FontProperties(fname=font_path) if font_path else fm.FontProperties()
         
-        # 優化畫布比例與背景色，逼近真實 UI 介面
         fig, ax = plt.subplots(figsize=(14, 10), facecolor='#f8fafc')
         ax.axis('off')
         
@@ -336,13 +332,12 @@ def generate_roster_image_buffer(year, month, shifts_df, days_in_month, color_ma
                     if is_closed: cell_text += "\n[全店公休]"
                     else:
                         for _, r in day_shifts.iterrows():
-                            # 縮寫保持畫面整潔
                             s_short = r['Type'].replace("早班","早").replace("晚班","晚").replace("全班","全").replace("公休","休")
                             cell_text += f"● {r['Staff']} ({s_short})\n"
                     row_data.append(cell_text.strip())
             table_data.append(row_data)
 
-        # 繪製高質感表格
+        # V117.0: 移除 set_valign 徹底解決崩潰問題，改採最穩定的繪圖邏輯
         table = ax.table(cellText=table_data, loc='center', cellLoc='left', bbox=[0, 0, 1, 0.9])
         table.auto_set_font_size(False)
         table.set_fontsize(12)
@@ -356,7 +351,7 @@ def generate_roster_image_buffer(year, month, shifts_df, days_in_month, color_ma
                 cell.set_height(0.06)
             else:
                 cell.set_height(0.16)
-                cell.set_valign('top')
+                cell.get_text().set_verticalalignment('top') # V117.0: 使用無敵相容的屬性設定法
                 cell.set_facecolor('#ffffff')
                 txt = cell.get_text().get_text()
                 if "全店公休" in txt:
@@ -369,7 +364,7 @@ def generate_roster_image_buffer(year, month, shifts_df, days_in_month, color_ma
         buf.seek(0); plt.close(fig)
         return buf
     except Exception as e: 
-        return str(e) # 回傳精準錯誤碼給前端
+        return str(e)
 
 def render_roster_system(sh, users_list, user_name):
     ws_shifts = get_worksheet_safe(sh, "Shifts", ["Date", "Staff", "Shift_Type", "Note", "Notify", "Updated_By"])
@@ -516,7 +511,6 @@ def render_roster_system(sh, users_list, user_name):
         st.markdown("#### 🧠 智能工具 & 輸出")
         with st.expander("📤 生成 LINE 通告 & 存圖", expanded=True):
             
-            # V116.0 徹底解決手機排版雜亂的終極方案 (Emoji Block Formatting)
             if st.button("📤 生成 LINE 通告文字 (行動端優化版)", use_container_width=True):
                 line_txt = f"📅 【IFUKUK {sel_month}月班表公告】\n"
                 line_txt += "━━━━━━━━━━━━━━\n"
@@ -544,7 +538,6 @@ def render_roster_system(sh, users_list, user_name):
                     st.text_area("請複製下方文字，貼上至 LINE 絕對整齊：", value=line_txt, height=250)
                 else: st.warning("本月尚無任何排班資料")
 
-            # V116.0 強固型伺服器繞過繪圖機制
             if st.button("📸 一鍵生成班表截圖 (Image)", use_container_width=True):
                 with st.spinner("量子繪圖引擎啟動中 (首次需時3秒)..."):
                     img_buf = generate_roster_image_buffer(sel_year, sel_month, shifts_df, calendar.monthrange(sel_year, sel_month)[1], staff_color_map)
@@ -553,40 +546,56 @@ def render_roster_system(sh, users_list, user_name):
                         st.image(img_buf, caption=f"IFUKUK_{sel_year}_{sel_month}_Roster", use_container_width=True)
                         st.download_button("💾 下載高清 PNG 圖片", data=img_buf, file_name=f"IFUKUK_{sel_year}_{sel_month}_Roster.png", mime="image/png", use_container_width=True)
                     else: 
-                        st.error(f"❌ 伺服器繪圖引擎阻擋。偵錯碼：\n`{img_buf}`\n(請截圖此訊息給工程師，通常是雲端主機封鎖了外部字型連線)")
+                        st.error(f"❌ 伺服器繪圖引擎阻擋。偵錯碼：\n`{img_buf}`\n(問題已繞過，若仍失敗為雲端主機嚴格封鎖外部字型連線)")
 
-        with st.expander("🔄 循環排班 & 複製", expanded=False):
-            wc_tab1, wc_tab2 = st.tabs(["👤 人員", "🔴 公休"])
-            week_map = {"週一":0, "週二":1, "週三":2, "週四":3, "週五":4, "週六":5, "週日":6}
+        # V117.0 🎯 精準日期多選排班引擎
+        with st.expander("🎯 精準排班與公休設定 (日期多選)", expanded=False):
+            wc_tab1, wc_tab2 = st.tabs(["👤 人員精準排班", "🔴 精準全店公休"])
+            
+            # 產生當前月份的所有日期清單，供多選使用
+            cal_dates = []
+            for d in range(1, calendar.monthrange(sel_year, sel_month)[1] + 1):
+                d_obj = datetime(sel_year, sel_month, d)
+                w_str = ["一","二","三","四","五","六","日"][d_obj.weekday()]
+                cal_dates.append(f"{sel_year}-{str(sel_month).zfill(2)}-{str(d).zfill(2)} (週{w_str})")
+
             with wc_tab1:
-                p_staff = st.selectbox("對象", users_list, key="p_st")
-                p_day_cn = st.selectbox("每週幾?", list(week_map.keys()), key="p_wd")
-                p_type = st.selectbox("班別", list(SHIFT_COLORS.keys()), key="p_ty")
-                if st.button("🚀 執行"):
-                    target_weekday = week_map[p_day_cn]
-                    all_vals = ws_shifts.get_all_values() 
-                    added = 0
-                    for week in calendar.monthcalendar(sel_year, sel_month):
-                        day = week[target_weekday]
-                        if day != 0:
-                            d_str = f"{sel_year}-{str(sel_month).zfill(2)}-{str(day).zfill(2)}"
+                st.markdown("##### 選擇特定日期一次性寫入排班")
+                p_staff = st.selectbox("安排對象", users_list, key="p_st_micro")
+                p_type = st.selectbox("班別", list(SHIFT_COLORS.keys()), key="p_ty_micro")
+                selected_dates = st.multiselect("點選日期 (可複選多天)", cal_dates, placeholder="請選擇要排班的日期...")
+                
+                if st.button("🚀 執行精準排班寫入", use_container_width=True):
+                    if selected_dates:
+                        all_vals = ws_shifts.get_all_values() 
+                        added = 0
+                        for d_full in selected_dates:
+                            d_str = d_full.split(" ")[0] # 提取純日期 YYYY-MM-DD
                             rows_to_del = [idx+1 for idx, row in enumerate(all_vals) if len(row)>1 and row[0]==d_str and row[1]==p_staff]
                             for r_idx in reversed(rows_to_del): retry_action(ws_shifts.delete_rows, r_idx)
                             retry_action(ws_shifts.append_row, [d_str, p_staff, p_type, "Auto", "FALSE", user_name])
                             added += 1
-                    st.cache_data.clear(); st.success(f"完成 {added} 筆"); st.rerun()
+                        st.cache_data.clear(); st.success(f"完美寫入！共新增 {added} 筆排班紀錄"); st.rerun()
+                    else:
+                        st.warning("⚠️ 請至少選擇一天日期")
 
             with wc_tab2:
-                sc_day_cn = st.selectbox("每週幾?", list(week_map.keys()), key="sc_wd")
-                if st.button("🔴 執行"):
-                    target_weekday = week_map[sc_day_cn]
-                    target_dates = [f"{sel_year}-{str(sel_month).zfill(2)}-{str(day).zfill(2)}" for week in calendar.monthcalendar(sel_year, sel_month) for day in week if day!=0 and week.index(day) == target_weekday]
-                    if target_dates:
+                st.markdown("##### 選擇特定日期設定為全店公休")
+                selected_closed_dates = st.multiselect("點選全店公休日期 (可複選多天)", cal_dates, key="sc_dates_micro", placeholder="請選擇公休日...")
+                if st.button("🔴 執行全店公休設定", use_container_width=True):
+                    if selected_closed_dates:
                         all_vals = ws_shifts.get_all_values()
-                        rows_to_del = [idx+1 for idx, row in enumerate(all_vals) if len(row)>0 and row[0] in target_dates]
-                        for r_idx in reversed(rows_to_del): retry_action(ws_shifts.delete_rows, r_idx)
-                        for d in target_dates: retry_action(ws_shifts.append_row, [d, "全店", "公休", "Store Closed", "FALSE", user_name])
-                        st.cache_data.clear(); st.success("完成"); st.rerun()
+                        added = 0
+                        for d_full in selected_closed_dates:
+                            d_str = d_full.split(" ")[0]
+                            # 刪除該日所有排班紀錄以防衝突
+                            rows_to_del = [idx+1 for idx, row in enumerate(all_vals) if len(row)>0 and row[0] == d_str]
+                            for r_idx in reversed(rows_to_del): retry_action(ws_shifts.delete_rows, r_idx)
+                            retry_action(ws_shifts.append_row, [d_str, "全店", "公休", "Store Closed", "FALSE", user_name])
+                            added += 1
+                        st.cache_data.clear(); st.success(f"完成！共設定 {added} 天全店公休"); st.rerun()
+                    else:
+                        st.warning("⚠️ 請至少選擇一天日期")
 
 # --- 主程式 ---
 def main():
@@ -610,7 +619,7 @@ def main():
         with c2:
             st.markdown("<br><br><br>", unsafe_allow_html=True)
             st.markdown("<div style='text-align:center; font-weight:900; font-size:2.5rem; margin-bottom:10px; color:#0f172a;'>IFUKUK</div>", unsafe_allow_html=True)
-            st.markdown("<div style='text-align:center; color:#64748b; font-size:0.9rem; margin-bottom:30px;'>OMEGA V116.0 OMNI-ROSTER</div>", unsafe_allow_html=True)
+            st.markdown("<div style='text-align:center; color:#64748b; font-size:0.9rem; margin-bottom:30px;'>OMEGA V117.0 OMNI-ROSTER APEX</div>", unsafe_allow_html=True)
             with st.form("login"):
                 u = st.text_input("帳號 (ID)"); p = st.text_input("密碼 (Password)", type="password")
                 if st.form_submit_button("登入 (LOGIN)", type="primary"):
