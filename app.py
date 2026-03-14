@@ -19,7 +19,7 @@ import os
 
 # --- 1. 系統全域設定 ---
 st.set_page_config(
-    page_title="IFUKUK ERP V114.0 QUANTUM APEX", 
+    page_title="IFUKUK ERP V115.0 OMNI-EDIT", 
     layout="wide", 
     page_icon="🌏",
     initial_sidebar_state="expanded"
@@ -105,7 +105,6 @@ st.markdown("""
         .stButton>button:hover { border-color: #94a3b8; }
         .stButton>button[data-testid="baseButton-primary"] p { color: #ffffff !important; }
         
-        /* V114.0 Barcode Input styling */
         .barcode-form { background: #f8fafc; border: 2px dashed #cbd5e1; padding: 10px; border-radius: 10px; margin-bottom: 15px;}
     </style>
 """, unsafe_allow_html=True)
@@ -116,7 +115,7 @@ IMGBB_API_KEY = "c2f93d2a1a62bd3a6da15f477d2bb88a"
 SHEET_HEADERS = ["SKU", "Name", "Category", "Size", "Qty", "Price", "Cost", "Last_Updated", "Image_URL", "Safety_Stock", "Orig_Currency", "Orig_Cost", "Qty_CN"]
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
 
-# --- OMEGA 雙重防禦層 ---
+# --- OMEGA 防禦層 ---
 def retry_action(func, *args, **kwargs):
     max_retries = 15
     for i in range(max_retries):
@@ -586,7 +585,7 @@ def main():
         with c2:
             st.markdown("<br><br><br>", unsafe_allow_html=True)
             st.markdown("<div style='text-align:center; font-weight:900; font-size:2.5rem; margin-bottom:10px; color:#0f172a;'>IFUKUK</div>", unsafe_allow_html=True)
-            st.markdown("<div style='text-align:center; color:#64748b; font-size:0.9rem; margin-bottom:30px;'>OMEGA V114.0 QUANTUM APEX</div>", unsafe_allow_html=True)
+            st.markdown("<div style='text-align:center; color:#64748b; font-size:0.9rem; margin-bottom:30px;'>OMEGA V115.0 OMNI-EDIT</div>", unsafe_allow_html=True)
             with st.form("login"):
                 u = st.text_input("帳號 (ID)"); p = st.text_input("密碼 (Password)", type="password")
                 if st.form_submit_button("登入 (LOGIN)", type="primary"):
@@ -681,12 +680,12 @@ def main():
                 with c1:
                     fig_pie = px.pie(df, names='Category', values='Qty', hole=0.5, color_discrete_sequence=px.colors.qualitative.Pastel)
                     fig_pie.update_traces(textposition='inside', textinfo='percent+label')
-                    fig_pie.update_layout(paper_bgcolor='white', plot_bgcolor='white', font_color='#0f172a')
+                    fig_pie.update_layout(paper_bgcolor='white', plot_bgcolor='white', font_color='#0f172a', margin=dict(t=0, b=0, l=0, r=0))
                     st.plotly_chart(fig_pie, use_container_width=True)
                 with c2:
                     top = df.groupby(['Style_Code', 'Name']).agg({'Qty':'sum'}).reset_index().sort_values(by='Qty', ascending=False).head(10)
                     fig_bar = px.bar(top, x='Qty', y='Name', orientation='h', text='Qty', color='Qty', color_continuous_scale=px.colors.qualitative.Pastel)
-                    fig_bar.update_layout(paper_bgcolor='white', plot_bgcolor='white', font_color='#0f172a')
+                    fig_bar.update_layout(paper_bgcolor='white', plot_bgcolor='white', font_color='#0f172a', margin=dict(t=0, b=0, l=0, r=0))
                     st.plotly_chart(fig_bar, use_container_width=True)
                     
             st.divider()
@@ -732,8 +731,6 @@ def main():
                     
                     stock_badges = ""
                     has_warning = False
-                    
-                    # V114.0 🤖 智能補貨計算
                     restock_advice = 0
                     
                     for _, r in sorted_group.iterrows():
@@ -761,22 +758,72 @@ def main():
                         </div>
                         """, unsafe_allow_html=True)
 
-                        with st.expander("📝 庫存調整"):
-                            with st.form(f"form_{style_code}_{name}"):
-                                i_tw = {}; i_cn = {}; g_cols = st.columns(4)
-                                for idx, r_data in enumerate(sorted_group.iterrows()):
-                                    _, row = r_data
-                                    with g_cols[idx%4]: 
-                                        lbl = row['Size']; i_tw[row['SKU']] = st.number_input(f"TW {lbl}", value=int(row['Qty']), key=f"t_{row['SKU']}"); i_cn[row['SKU']] = st.number_input(f"CN {lbl}", value=int(row['Qty_CN']), key=f"c_{row['SKU']}")
-                                if st.form_submit_button("💾 儲存變更", use_container_width=True):
-                                    for tsku, n_tw in i_tw.items():
-                                        if tsku in df['SKU'].tolist():
-                                            n_cn = i_cn[tsku]; r = ws_items.find(tsku).row
-                                            retry_action(ws_items.update_cell, r, 5, n_tw)
-                                            retry_action(ws_items.update_cell, r, 13, n_cn)
-                                            retry_action(ws_items.update_cell, r, 8, get_taiwan_time_str())
-                                    st.cache_data.clear(); st.success("已更新"); time.sleep(0.5); st.rerun()
-                
+                        # V115.0 上帝編輯器 (God-Mode Editor)
+                        with st.expander("⚙️ 進階編輯與庫存管理"):
+                            tab_qty, tab_info, tab_del = st.tabs(["📦 數量微調", "✏️ 基礎資訊修改 (全尺寸套用)", "🗑️ 徹底刪除此款"])
+                            
+                            with tab_qty:
+                                with st.form(f"qty_{style_code}"):
+                                    i_tw = {}; i_cn = {}; g_cols = st.columns(4)
+                                    for idx, r_data in enumerate(sorted_group.iterrows()):
+                                        _, row = r_data
+                                        with g_cols[idx%4]: 
+                                            lbl = row['Size']; i_tw[row['SKU']] = st.number_input(f"TW {lbl}", value=int(row['Qty']), key=f"t_{row['SKU']}"); i_cn[row['SKU']] = st.number_input(f"CN {lbl}", value=int(row['Qty_CN']), key=f"c_{row['SKU']}")
+                                    if st.form_submit_button("💾 儲存庫存變更", use_container_width=True):
+                                        for tsku, n_tw in i_tw.items():
+                                            if tsku in df['SKU'].tolist():
+                                                n_cn = i_cn[tsku]; r = ws_items.find(tsku).row
+                                                retry_action(ws_items.update_cell, r, 5, n_tw)
+                                                retry_action(ws_items.update_cell, r, 13, n_cn)
+                                                retry_action(ws_items.update_cell, r, 8, get_taiwan_time_str())
+                                        st.cache_data.clear(); st.success("數量已更新"); time.sleep(0.5); st.rerun()
+
+                            with tab_info:
+                                with st.form(f"info_{style_code}"):
+                                    st.caption(f"修改此處資訊將同步套用於 {style_code} 的所有尺寸。")
+                                    c_i1, c_i2 = st.columns(2)
+                                    new_name = c_i1.text_input("品名", value=name)
+                                    new_cat = c_i2.selectbox("分類", CAT_LIST, index=CAT_LIST.index(first_row['Category']) if first_row['Category'] in CAT_LIST else 0)
+                                    
+                                    c_i3, c_i4 = st.columns(2)
+                                    new_price = c_i3.number_input("終端售價", value=int(first_row['Price']))
+                                    new_orig_curr = c_i4.selectbox("原幣別", ["TWD", "CNY"], index=["TWD", "CNY"].index(first_row['Orig_Currency']) if first_row['Orig_Currency'] in ["TWD", "CNY"] else 0)
+                                    
+                                    c_i5, c_i6 = st.columns(2)
+                                    new_orig_cost = c_i5.number_input("原幣成本", value=int(first_row['Orig_Cost']))
+                                    new_safe = c_i6.number_input("安全庫存警告線", value=int(first_row['Safety_Stock']))
+                                    
+                                    new_img_url = st.text_input("直接輸入圖片網址 (若有)", value=first_row['Image_URL'])
+                                    new_img_file = st.file_uploader("或上傳新圖片覆蓋", key=f"img_{style_code}")
+                                    
+                                    if st.form_submit_button("✅ 儲存商品資訊覆蓋", type="primary", use_container_width=True):
+                                        final_img = upload_image_to_imgbb(new_img_file) if new_img_file else new_img_url
+                                        final_cost = int(new_orig_cost * st.session_state['exchange_rate']) if new_orig_curr == "CNY" else new_orig_cost
+                                        
+                                        all_vals = ws_items.get_all_values()
+                                        for idx, r_data in enumerate(all_vals):
+                                            if idx == 0: continue
+                                            if get_style_code(r_data[0]) == style_code:
+                                                row_num = idx + 1
+                                                retry_action(ws_items.update_cell, row_num, 2, new_name)
+                                                retry_action(ws_items.update_cell, row_num, 3, new_cat)
+                                                retry_action(ws_items.update_cell, row_num, 6, new_price)
+                                                retry_action(ws_items.update_cell, row_num, 7, final_cost)
+                                                retry_action(ws_items.update_cell, row_num, 8, get_taiwan_time_str())
+                                                retry_action(ws_items.update_cell, row_num, 9, final_img)
+                                                retry_action(ws_items.update_cell, row_num, 10, new_safe)
+                                                retry_action(ws_items.update_cell, row_num, 11, new_orig_curr)
+                                                retry_action(ws_items.update_cell, row_num, 12, new_orig_cost)
+                                        st.cache_data.clear(); st.success("商品資訊已全數同步更新！"); time.sleep(1); st.rerun()
+
+                            with tab_del:
+                                st.warning("🔴 警告：按下此按鈕將永久刪除此款式的所有庫存資料。")
+                                if st.button(f"🗑️ 確認刪除 {style_code}", key=f"del_{style_code}", use_container_width=True):
+                                    all_vals = ws_items.get_all_values()
+                                    rows_to_del = [idx + 1 for idx, r in enumerate(all_vals) if idx > 0 and get_style_code(r[0]) == style_code]
+                                    for r_idx in reversed(rows_to_del): retry_action(ws_items.delete_rows, r_idx)
+                                    st.cache_data.clear(); st.success(f"{style_code} 已徹底刪除"); time.sleep(1); st.rerun()
+
                 c_p4, c_p5, c_p6 = st.columns([1, 2, 1])
                 with c_p4: 
                     if st.button("◀", key="p_dn_prev", use_container_width=True, disabled=(curr_page==1)): st.session_state['inv_page'] -= 1; st.rerun()
@@ -803,7 +850,6 @@ def main():
         with c_l:
             st.markdown("##### 🛍️ POS 快速結帳區")
             
-            # V114.0 🎯 條碼掃描引擎 (支援實體掃描槍)
             st.markdown("<div class='barcode-form'>", unsafe_allow_html=True)
             with st.form("barcode_scanner", clear_on_submit=True):
                 bc_input = st.text_input("🎯 條碼/貨號快速掃描 (支援掃描槍，按 Enter 直接加入)")
@@ -911,11 +957,9 @@ def main():
                     if st.button("✅ 確認結帳 (防超賣雙重驗證)", type="primary", use_container_width=True):
                         logs = []
                         valid = True
-                        # V114.0 🛡️ Double-Check Lock (雙重防禦防超賣)
                         for item in st.session_state['pos_cart']:
                             cell = ws_items.find(item['sku'])
                             if cell:
-                                # 結帳瞬間向伺服器拉取最即時的單元格數據
                                 live_stock = int(ws_items.cell(cell.row, 5).value)
                                 if live_stock >= item['qty']:
                                     retry_action(ws_items.update_cell, cell.row, 5, live_stock - item['qty'])
@@ -1006,11 +1050,11 @@ def main():
             with c1: 
                 fig = px.pie(sdf, names='通路', values='金額', hole=0.4, title="📊 通路營收佔比", color_discrete_sequence=px.colors.qualitative.Pastel)
                 fig.update_traces(textposition='inside', textinfo='percent+label')
-                fig.update_layout(paper_bgcolor='white', plot_bgcolor='white', font_color='#0f172a')
+                fig.update_layout(paper_bgcolor='white', plot_bgcolor='white', font_color='#0f172a', margin=dict(t=0, b=0, l=0, r=0))
                 st.plotly_chart(fig, use_container_width=True)
             with c2: 
                 fig2 = px.bar(sdf.groupby('銷售員')['金額'].sum().reset_index(), x='銷售員', y='金額', title="🏆 人員業績排行", color='金額', color_continuous_scale=px.colors.sequential.Teal)
-                fig2.update_layout(paper_bgcolor='white', plot_bgcolor='white', font_color='#0f172a')
+                fig2.update_layout(paper_bgcolor='white', plot_bgcolor='white', font_color='#0f172a', margin=dict(t=0, b=0, l=0, r=0))
                 st.plotly_chart(fig2, use_container_width=True)
             
             st.markdown("##### 📝 銷售明細總表 (含售後管理)")
@@ -1090,7 +1134,6 @@ def main():
 
     with tabs[3]:
         st.markdown("### 🎁 領用與稽核戰情中心 (Audit Command Center)")
-        st.markdown("這是一個專門用於監控公司內部資源消耗的視覺化雷達。所有的內部領用、報廢都會聯動商品成本，並在此轉化為可視數據。")
         
         c_add, c_board = st.columns([1, 2.5])
         
@@ -1103,7 +1146,6 @@ def main():
                 with st.form("internal"):
                     q = st.number_input("申請數量", 1); who = st.selectbox("領用人員", staff_list); rsn = st.selectbox("事由", ["公務", "公關", "福利", "報廢", "樣品", "遺失", "其他"]); n = st.text_input("專案/詳細備註")
                     if st.form_submit_button("✅ 送出並扣庫存", use_container_width=True):
-                        # V114.0 雙重防禦檢查領用庫存
                         cell = ws_items.find(tsku)
                         live_stock = int(ws_items.cell(cell.row, 5).value)
                         if live_stock >= q:
@@ -1157,12 +1199,12 @@ def main():
                         c_chart1, c_chart2 = st.columns(2)
                         with c_chart1:
                             fig_r = px.pie(audit_df, names='原因', values='數量', title="📊 領用原因佔比 (數量)", hole=0.3, color_discrete_sequence=px.colors.qualitative.Set2)
-                            fig_r.update_layout(paper_bgcolor='white', plot_bgcolor='white', font_color='#0f172a')
+                            fig_r.update_layout(paper_bgcolor='white', plot_bgcolor='white', font_color='#0f172a', margin=dict(t=0, b=0, l=0, r=0))
                             st.plotly_chart(fig_r, use_container_width=True)
                         with c_chart2:
                             user_cost = audit_df.groupby('領用人')['總消耗成本'].sum().reset_index()
                             fig_u = px.bar(user_cost, x='領用人', y='總消耗成本', title="👤 人員消耗成本排行", color='總消耗成本', color_continuous_scale='Reds')
-                            fig_u.update_layout(paper_bgcolor='white', plot_bgcolor='white', font_color='#0f172a')
+                            fig_u.update_layout(paper_bgcolor='white', plot_bgcolor='white', font_color='#0f172a', margin=dict(t=0, b=0, l=0, r=0))
                             st.plotly_chart(fig_u, use_container_width=True)
 
                         st.markdown("#### 📜 領用流水帳與細節 (可點擊表頭排序)")
@@ -1230,7 +1272,8 @@ def main():
     with tabs[4]:
         st.markdown("<div class='mgmt-box'>", unsafe_allow_html=True)
         st.markdown("<div class='mgmt-title'>矩陣管理中心</div>", unsafe_allow_html=True)
-        mt1, mt2, mt3 = st.tabs(["✨ 商品新增 (自動換算成本)", "⚡ 雙向調撥", "🗑️ 商品刪除"])
+        st.info("💡 提醒：庫存區的卡片已支援【單一商品的修改與刪除】，此處用於大批量的全域操作。")
+        mt1, mt2 = st.tabs(["✨ 批量衍生商品", "⚡ 雙向調撥"])
         
         with mt1:
             mode = st.radio("模式", ["新系列", "衍生"], horizontal=True)
@@ -1281,16 +1324,6 @@ def main():
                     retry_action(ws_items.update_cell, row_idx, 13, int(r['Qty_CN'])-q)
                     log_event(ws_logs, st.session_state['user_name'], "Transfer", f"{sel_sku} CN to TW qty:{q}")
                     st.cache_data.clear(); st.success("調撥完成"); st.rerun()
-
-        with mt3:
-            st.warning("⚠️ 警告：刪除後無法復原，連同圖表統計一併消失，請謹慎操作。")
-            d_opts = df.apply(lambda x: f"{x['SKU']} | {x['Name']} {x['Size']}", axis=1).tolist()
-            d = st.selectbox("選擇要刪除的商品", ["..."] + d_opts)
-            if d != "..." and st.button("🔴 確認永久刪除"): 
-                d_sku = d.split(" | ")[0]
-                retry_action(ws_items.delete_rows, ws_items.find(d_sku).row)
-                st.cache_data.clear(); st.success("已從系統抹除"); st.rerun()
-        st.markdown("</div>", unsafe_allow_html=True)
 
     with tabs[5]: 
         st.subheader("📝 系統全域日誌 (Log System)")
