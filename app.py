@@ -19,7 +19,7 @@ import os
 
 # --- 1. 系統全域設定 ---
 st.set_page_config(
-    page_title="IFUKUK ERP V117.0 OMNI-ROSTER APEX", 
+    page_title="IFUKUK ERP V118.0 OMNI-PERFECTION", 
     layout="wide", 
     page_icon="🌏",
     initial_sidebar_state="expanded"
@@ -280,7 +280,7 @@ def render_navbar(user_initial):
 CAT_LIST = ["上衣(Top)", "褲子(Btm)", "外套(Out)", "套裝(Suit)", "鞋類(Shoe)", "包款(Bag)", "帽子(Hat)", "飾品(Acc)", "其他(Misc)"]
 
 # ==========================================
-# 🗓️ 排班系統 ELITE V117.0 (ROSTER APEX)
+# 🗓️ 排班系統 ELITE V118.0 (OMNI-PERFECTION)
 # ==========================================
 SHIFT_COLORS = { "早班": "#3B82F6", "晚班": "#8B5CF6", "全班": "#10B981", "代班": "#F59E0B", "公休": "#EF4444", "特休": "#DB2777", "空班": "#6B7280", "事假": "#EC4899", "病假": "#14B8A6" }
 
@@ -288,31 +288,38 @@ def get_staff_color_map(users_list):
     PALETTE = ["#2563EB", "#059669", "#7C3AED", "#DB2777", "#D97706", "#DC2626", "#0891B2", "#4F46E5", "#BE123C", "#B45309"]
     return {u: PALETTE[i % len(PALETTE)] for i, u in enumerate(sorted([x for x in users_list if x != "全店"]))}
 
+# V118.0 終極無敵字型掛載引擎
 @st.cache_resource(show_spinner=False)
-def get_cached_font():
-    font_name = "NotoSansTC-Regular.ttf" 
-    if not os.path.exists(font_name):
+def setup_matplotlib_chinese():
+    font_path = "NotoSansTC.ttf" # 直接寫入根目錄最安全
+    if not os.path.exists(font_path):
         try:
             url = "https://github.com/google/fonts/raw/main/ofl/notosanstc/NotoSansTC-Regular.ttf"
             r = requests.get(url, timeout=20)
             if r.status_code == 200:
-                with open(font_name, 'wb') as f:
+                with open(font_path, 'wb') as f:
                     f.write(r.content)
-            else: return None
-        except Exception as e: 
-            print(f"Font Error: {e}")
-            return None
-    return font_name
+        except:
+            pass
+            
+    if os.path.exists(font_path):
+        fm.fontManager.addfont(font_path)
+        prop = fm.FontProperties(fname=font_path)
+        # 強制注射入 matplotlib 全域變數，絕對防止回退
+        plt.rcParams['font.family'] = prop.get_name()
+        return True
+    return False
 
 def generate_roster_image_buffer(year, month, shifts_df, days_in_month, color_map):
     try:
-        font_path = get_cached_font()
-        prop = fm.FontProperties(fname=font_path) if font_path else fm.FontProperties()
+        # 啟動字型環境
+        setup_matplotlib_chinese()
         
         fig, ax = plt.subplots(figsize=(14, 10), facecolor='#f8fafc')
         ax.axis('off')
         
-        ax.text(0.5, 0.95, f"IFUKUK 專業排班表 - {year}/{month}", ha='center', va='center', fontsize=26, weight='bold', fontproperties=prop, color='#0f172a')
+        # V118.0: 徹底移除 weight='bold'，防止 Matplotlib 找不到粗體而引發亂碼(豆腐塊)
+        ax.text(0.5, 0.95, f"IFUKUK 專業排班表 - {year}/{month}", ha='center', va='center', fontsize=26, color='#0f172a')
         
         cols = ["週一 Mon", "週二 Tue", "週三 Wed", "週四 Thu", "週五 Fri", "週六 Sat", "週日 Sun"]
         cal = calendar.monthcalendar(year, month)
@@ -337,34 +344,36 @@ def generate_roster_image_buffer(year, month, shifts_df, days_in_month, color_ma
                     row_data.append(cell_text.strip())
             table_data.append(row_data)
 
-        # V117.0: 移除 set_valign 徹底解決崩潰問題，改採最穩定的繪圖邏輯
+        # 繪製高質感表格
         table = ax.table(cellText=table_data, loc='center', cellLoc='left', bbox=[0, 0, 1, 0.9])
         table.auto_set_font_size(False)
         table.set_fontsize(12)
         
         for (i, j), cell in table.get_celld().items():
             cell.set_edgecolor('#cbd5e1')
-            cell.set_text_props(fontproperties=prop, color='#334155')
+            
+            # V118.0: 不再使用 fontproperties 參數覆蓋，完全信任 rcParams 的全域設定
             if i == 0:
-                cell.set_text_props(weight='bold', fontproperties=prop, color='#475569')
                 cell.set_facecolor('#e2e8f0')
                 cell.set_height(0.06)
+                cell.get_text().set_color('#475569')
             else:
                 cell.set_height(0.16)
-                cell.get_text().set_verticalalignment('top') # V117.0: 使用無敵相容的屬性設定法
+                cell.get_text().set_verticalalignment('top') 
                 cell.set_facecolor('#ffffff')
+                cell.get_text().set_color('#334155')
+                
                 txt = cell.get_text().get_text()
                 if "全店公休" in txt:
                     cell.set_facecolor('#fee2e2')
                     cell.get_text().set_color('#991b1b')
-                    cell.get_text().set_weight('bold')
 
         buf = io.BytesIO()
         plt.savefig(buf, format='png', dpi=200, bbox_inches='tight', facecolor=fig.get_facecolor())
         buf.seek(0); plt.close(fig)
         return buf
     except Exception as e: 
-        return str(e)
+        return str(e) 
 
 def render_roster_system(sh, users_list, user_name):
     ws_shifts = get_worksheet_safe(sh, "Shifts", ["Date", "Staff", "Shift_Type", "Note", "Notify", "Updated_By"])
@@ -546,13 +555,11 @@ def render_roster_system(sh, users_list, user_name):
                         st.image(img_buf, caption=f"IFUKUK_{sel_year}_{sel_month}_Roster", use_container_width=True)
                         st.download_button("💾 下載高清 PNG 圖片", data=img_buf, file_name=f"IFUKUK_{sel_year}_{sel_month}_Roster.png", mime="image/png", use_container_width=True)
                     else: 
-                        st.error(f"❌ 伺服器繪圖引擎阻擋。偵錯碼：\n`{img_buf}`\n(問題已繞過，若仍失敗為雲端主機嚴格封鎖外部字型連線)")
+                        st.error(f"❌ 伺服器繪圖引擎阻擋。偵錯碼：\n`{img_buf}`")
 
-        # V117.0 🎯 精準日期多選排班引擎
         with st.expander("🎯 精準排班與公休設定 (日期多選)", expanded=False):
             wc_tab1, wc_tab2 = st.tabs(["👤 人員精準排班", "🔴 精準全店公休"])
             
-            # 產生當前月份的所有日期清單，供多選使用
             cal_dates = []
             for d in range(1, calendar.monthrange(sel_year, sel_month)[1] + 1):
                 d_obj = datetime(sel_year, sel_month, d)
@@ -570,7 +577,7 @@ def render_roster_system(sh, users_list, user_name):
                         all_vals = ws_shifts.get_all_values() 
                         added = 0
                         for d_full in selected_dates:
-                            d_str = d_full.split(" ")[0] # 提取純日期 YYYY-MM-DD
+                            d_str = d_full.split(" ")[0] 
                             rows_to_del = [idx+1 for idx, row in enumerate(all_vals) if len(row)>1 and row[0]==d_str and row[1]==p_staff]
                             for r_idx in reversed(rows_to_del): retry_action(ws_shifts.delete_rows, r_idx)
                             retry_action(ws_shifts.append_row, [d_str, p_staff, p_type, "Auto", "FALSE", user_name])
@@ -588,7 +595,6 @@ def render_roster_system(sh, users_list, user_name):
                         added = 0
                         for d_full in selected_closed_dates:
                             d_str = d_full.split(" ")[0]
-                            # 刪除該日所有排班紀錄以防衝突
                             rows_to_del = [idx+1 for idx, row in enumerate(all_vals) if len(row)>0 and row[0] == d_str]
                             for r_idx in reversed(rows_to_del): retry_action(ws_shifts.delete_rows, r_idx)
                             retry_action(ws_shifts.append_row, [d_str, "全店", "公休", "Store Closed", "FALSE", user_name])
@@ -619,7 +625,7 @@ def main():
         with c2:
             st.markdown("<br><br><br>", unsafe_allow_html=True)
             st.markdown("<div style='text-align:center; font-weight:900; font-size:2.5rem; margin-bottom:10px; color:#0f172a;'>IFUKUK</div>", unsafe_allow_html=True)
-            st.markdown("<div style='text-align:center; color:#64748b; font-size:0.9rem; margin-bottom:30px;'>OMEGA V117.0 OMNI-ROSTER APEX</div>", unsafe_allow_html=True)
+            st.markdown("<div style='text-align:center; color:#64748b; font-size:0.9rem; margin-bottom:30px;'>OMEGA V118.0 OMNI-PERFECTION</div>", unsafe_allow_html=True)
             with st.form("login"):
                 u = st.text_input("帳號 (ID)"); p = st.text_input("密碼 (Password)", type="password")
                 if st.form_submit_button("登入 (LOGIN)", type="primary"):
