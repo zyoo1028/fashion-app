@@ -19,7 +19,7 @@ import os
 
 # --- 1. 系統全域設定 ---
 st.set_page_config(
-    page_title="IFUKUK ERP V113.0 FINANCIAL OMNI-SYNC", 
+    page_title="IFUKUK ERP V114.0 QUANTUM APEX", 
     layout="wide", 
     page_icon="🌏",
     initial_sidebar_state="expanded"
@@ -104,6 +104,9 @@ st.markdown("""
         .stButton>button p { color: #0f172a !important; }
         .stButton>button:hover { border-color: #94a3b8; }
         .stButton>button[data-testid="baseButton-primary"] p { color: #ffffff !important; }
+        
+        /* V114.0 Barcode Input styling */
+        .barcode-form { background: #f8fafc; border: 2px dashed #cbd5e1; padding: 10px; border-radius: 10px; margin-bottom: 15px;}
     </style>
 """, unsafe_allow_html=True)
 
@@ -113,7 +116,7 @@ IMGBB_API_KEY = "c2f93d2a1a62bd3a6da15f477d2bb88a"
 SHEET_HEADERS = ["SKU", "Name", "Category", "Size", "Qty", "Price", "Cost", "Last_Updated", "Image_URL", "Safety_Stock", "Orig_Currency", "Orig_Cost", "Qty_CN"]
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
 
-# --- OMEGA 防禦層 ---
+# --- OMEGA 雙重防禦層 ---
 def retry_action(func, *args, **kwargs):
     max_retries = 15
     for i in range(max_retries):
@@ -246,7 +249,6 @@ def calculate_realized_revenue(logs_df):
         except: pass
     return total
 
-# V113.0 全域解析沉沒成本 (Sunk Cost)
 def calculate_sunk_cost(logs_df, cost_map):
     sunk_total = 0
     if logs_df.empty or 'Action' not in logs_df.columns: return 0
@@ -257,8 +259,6 @@ def calculate_sunk_cost(logs_df, cost_map):
             sku = parts[0].split(' -')[0].strip()
             qty = int(parts[0].split(' -')[1])
             
-            # V113.0 成本快照讀取邏輯
-            # 如果日誌中有記錄 Cost:XXX，則使用快照成本；否則回退使用目前成本 (舊資料兼容)
             unit_cost = 0
             if len(parts) > 4 and "Cost:" in parts[4]:
                 unit_cost = int(parts[4].replace("Cost:", "").strip())
@@ -528,7 +528,7 @@ def render_roster_system(sh, users_list, user_name):
                     img_buf = generate_roster_image_buffer(sel_year, sel_month, shifts_df, calendar.monthrange(sel_year, sel_month)[1], staff_color_map)
                     if img_buf:
                         st.image(img_buf, caption=f"{sel_year}/{sel_month}")
-                        st.download_button("💾 下載", data=img_buf, file_name=f"roster_{sel_year}_{sel_month}.png", mime="image/png", use_container_width=True)
+                        st.download_button("💾 下載 PNG", data=img_buf, file_name=f"roster_{sel_year}_{sel_month}.png", mime="image/png", use_container_width=True)
                     else: st.error("繪圖失敗 (請檢查伺服器權限或網路)")
 
         with st.expander("🔄 循環排班 & 複製", expanded=False):
@@ -586,7 +586,7 @@ def main():
         with c2:
             st.markdown("<br><br><br>", unsafe_allow_html=True)
             st.markdown("<div style='text-align:center; font-weight:900; font-size:2.5rem; margin-bottom:10px; color:#0f172a;'>IFUKUK</div>", unsafe_allow_html=True)
-            st.markdown("<div style='text-align:center; color:#64748b; font-size:0.9rem; margin-bottom:30px;'>OMEGA V113.0 FINANCIAL OMNI-SYNC</div>", unsafe_allow_html=True)
+            st.markdown("<div style='text-align:center; color:#64748b; font-size:0.9rem; margin-bottom:30px;'>OMEGA V114.0 QUANTUM APEX</div>", unsafe_allow_html=True)
             with st.form("login"):
                 u = st.text_input("帳號 (ID)"); p = st.text_input("密碼 (Password)", type="password")
                 if st.form_submit_button("登入 (LOGIN)", type="primary"):
@@ -654,8 +654,6 @@ def main():
     total_rev = (df['Qty'] * df['Price']).sum() if not df.empty else 0
     profit = total_rev - (df['Qty'] * df['Cost']).sum() if not df.empty else 0
     realized_revenue = calculate_realized_revenue(logs_df)
-    
-    # V113.0 Sunk Cost Calculation
     sunk_cost = calculate_sunk_cost(logs_df, cost_map)
     
     rmb_stock_value = 0
@@ -663,12 +661,10 @@ def main():
         rmb_items = df[df['Orig_Currency'] == 'CNY']
         if not rmb_items.empty: rmb_stock_value = ((rmb_items['Qty'] + rmb_items['Qty_CN']) * rmb_items['Orig_Cost']).sum()
 
-    # V113.0 Expanded Dashboard (6 Metrics)
     m1, m2, m3, m4, m5, m6 = st.columns(6)
     with m1: st.markdown(f"<div class='metric-card'><div class='metric-label'>📦 總庫存 (TW+CN)</div><div class='metric-value'>{total_qty:,}</div><div style='font-size:10px; color:#64748b;'>🇹🇼:{total_qty_tw} | 🇨🇳:{total_qty_cn}</div></div>", unsafe_allow_html=True)
     with m2: st.markdown(f"<div class='metric-card'><div class='metric-label'>💎 預估營收 (TW)</div><div class='metric-value'>${total_rev:,}</div></div>", unsafe_allow_html=True)
     with m3: st.markdown(f"<div class='metric-card'><div class='metric-label'>💰 總資產成本</div><div class='metric-value'>${total_cost:,}</div><div style='font-size:11px;color:#64748b;'>含RMB原幣: ¥{rmb_stock_value:,}</div></div>", unsafe_allow_html=True)
-    # V113.0 Sunk Cost Radar injected into main dashboard
     with m4: st.markdown(f"<div class='metric-card' style='background:#fef2f2 !important; border-color:#fecaca !important;'><div class='metric-label' style='color:#991b1b !important;'>📉 內部消耗 (沉沒成本)</div><div class='metric-value' style='color:#b91c1c !important;'>${sunk_cost:,}</div></div>", unsafe_allow_html=True)
     with m5: st.markdown(f"<div class='metric-card profit-card'><div class='metric-label'>📈 潛在毛利</div><div class='metric-value' style='color:#d97706 !important'>${profit:,}</div></div>", unsafe_allow_html=True)
     with m6: st.markdown(f"<div class='metric-card realized-card'><div class='metric-label'>💵 實際營收 (已售)</div><div class='metric-value' style='color:#059669 !important'>${realized_revenue:,}</div></div>", unsafe_allow_html=True)
@@ -736,14 +732,19 @@ def main():
                     
                     stock_badges = ""
                     has_warning = False
+                    
+                    # V114.0 🤖 智能補貨計算
+                    restock_advice = 0
+                    
                     for _, r in sorted_group.iterrows():
                         cls = "has-stock" if r['Qty'] > 0 else "no-stock"
                         if r['Qty'] < r['Safe_Level']: 
                             cls = "no-stock"
                             has_warning = True
+                            restock_advice += (r['Safe_Level'] - r['Qty'])
                         stock_badges += f"<span class='stock-tag {cls}'><span>{r['Size']}:{r['Qty']}</span></span>"
 
-                    warning_html = "<span style='color:#ef4444; font-weight:bold; font-size:0.8rem;'>⚠️ 需補貨</span>" if has_warning else ""
+                    warning_html = f"<span style='color:#ef4444; font-weight:bold; font-size:0.8rem; margin-left:10px;'>⚠️ 需補貨 (建議補 {restock_advice} 件)</span>" if has_warning else ""
 
                     with st.container(border=True):
                         st.markdown(f"""
@@ -801,10 +802,29 @@ def main():
         c_l, c_r = st.columns([3, 2])
         with c_l:
             st.markdown("##### 🛍️ POS 快速結帳區")
+            
+            # V114.0 🎯 條碼掃描引擎 (支援實體掃描槍)
+            st.markdown("<div class='barcode-form'>", unsafe_allow_html=True)
+            with st.form("barcode_scanner", clear_on_submit=True):
+                bc_input = st.text_input("🎯 條碼/貨號快速掃描 (支援掃描槍，按 Enter 直接加入)")
+                bc_submit = st.form_submit_button("掃描")
+                if bc_submit and bc_input:
+                    bc_match = df[df['SKU'] == bc_input.strip()]
+                    if not bc_match.empty:
+                        bc_item = bc_match.iloc[0]
+                        if bc_item['Qty'] > 0:
+                            st.session_state['pos_cart'].append({"sku":bc_item['SKU'],"name":bc_item['Name'],"size":bc_item['Size'],"price":bc_item['Price'],"qty":1,"subtotal":bc_item['Price']})
+                            st.success(f"✅ 已掃描加入: {bc_item['Name']} ({bc_item['Size']})")
+                        else:
+                            st.error(f"❌ 庫存不足: {bc_item['Name']} 已售完")
+                    else:
+                        st.error(f"⚠️ 找不到條碼: {bc_input}")
+            st.markdown("</div>", unsafe_allow_html=True)
+
             cats_available = list(df['Category'].unique()) if not df.empty else []
             all_cats = sorted(list(set(CAT_LIST + cats_available)))
             col_s1, col_s2 = st.columns([2,1])
-            q = col_s1.text_input("POS搜尋", placeholder="輸入關鍵字/條碼...", label_visibility="collapsed")
+            q = col_s1.text_input("手動搜尋 (品名/貨號)", placeholder="輸入關鍵字...", label_visibility="collapsed")
             cat = col_s2.selectbox("POS分類", ["全部"] + all_cats, label_visibility="collapsed")
             
             vdf = df.copy()
@@ -888,17 +908,21 @@ def main():
                     pay = st.selectbox("付款方式", ["現金","刷卡","轉帳","禮券","其他"])
                     note = st.text_input("備註說明")
                     
-                    if st.button("✅ 確認結帳 (自動扣庫存)", type="primary", use_container_width=True):
+                    if st.button("✅ 確認結帳 (防超賣雙重驗證)", type="primary", use_container_width=True):
                         logs = []
                         valid = True
+                        # V114.0 🛡️ Double-Check Lock (雙重防禦防超賣)
                         for item in st.session_state['pos_cart']:
                             cell = ws_items.find(item['sku'])
                             if cell:
-                                curr = int(ws_items.cell(cell.row, 5).value)
-                                if curr >= item['qty']:
-                                    retry_action(ws_items.update_cell, cell.row, 5, curr - item['qty'])
+                                # 結帳瞬間向伺服器拉取最即時的單元格數據
+                                live_stock = int(ws_items.cell(cell.row, 5).value)
+                                if live_stock >= item['qty']:
+                                    retry_action(ws_items.update_cell, cell.row, 5, live_stock - item['qty'])
                                     logs.append(f"{item['sku']} x{item['qty']}")
-                                else: st.error(f"{item['name']} 庫存不足，無法結帳"); valid=False; break
+                                else: 
+                                    st.error(f"❌ 防禦攔截：{item['name']} 雲端庫存已被其他人買走，目前剩餘 {live_stock} 件。請重試。")
+                                    valid = False; break
                         
                         if valid:
                             content = f"Sale | Total:${final_total} | Items:{','.join(logs)} | Note:{note} {note_str} | Pay:{pay} | Channel:{sale_ch} | By:{sale_who}"
@@ -1079,13 +1103,15 @@ def main():
                 with st.form("internal"):
                     q = st.number_input("申請數量", 1); who = st.selectbox("領用人員", staff_list); rsn = st.selectbox("事由", ["公務", "公關", "福利", "報廢", "樣品", "遺失", "其他"]); n = st.text_input("專案/詳細備註")
                     if st.form_submit_button("✅ 送出並扣庫存", use_container_width=True):
-                        if int(tr['Qty']) >= q:
-                            r = ws_items.find(tsku).row; retry_action(ws_items.update_cell, r, 5, int(tr['Qty'])-q)
-                            # V113.0 寫入成本快照
+                        # V114.0 雙重防禦檢查領用庫存
+                        cell = ws_items.find(tsku)
+                        live_stock = int(ws_items.cell(cell.row, 5).value)
+                        if live_stock >= q:
+                            retry_action(ws_items.update_cell, cell.row, 5, live_stock - q)
                             log_event(ws_logs, st.session_state['user_name'], "Internal_Use", f"{tsku} -{q} | {who} | {rsn} | {n} | Cost:{tr['Cost']}")
                             st.cache_data.clear(); st.success("登記成功！庫存已同步減少。"); time.sleep(1); st.rerun()
                         else:
-                            st.error("庫存不足，無法領用！")
+                            st.error(f"庫存不足，無法領用！(雲端即時庫存剩餘: {live_stock})")
 
         with c_board:
             if not logs_df.empty:
@@ -1102,7 +1128,6 @@ def main():
                             reason = parts[2].strip()
                             note = parts[3].strip() if len(parts) > 3 else ""
                             
-                            # V113.0 讀取成本快照
                             unit_cost = 0
                             if len(parts) > 4 and "Cost:" in parts[4]:
                                 unit_cost = int(parts[4].replace("Cost:", "").strip())
