@@ -19,7 +19,7 @@ import os
 
 # --- 1. 系統全域設定 ---
 st.set_page_config(
-    page_title="IFUKUK ERP V115.0 OMNI-EDIT", 
+    page_title="IFUKUK ERP V116.0 OMNI-ROSTER", 
     layout="wide", 
     page_icon="🌏",
     initial_sidebar_state="expanded"
@@ -30,20 +30,15 @@ st.set_page_config(
 # ==========================================
 st.markdown("""
     <style>
-        /* 全域背景與文字對比覆蓋 */
         html, body, [class*="css"], [data-testid="stAppViewContainer"] { background-color: #FFFFFF !important; color: #0f172a !important; }
         [data-testid="stSidebar"] { background-color: #F8F9FA !important; }
         [data-testid="stHeader"] { background-color: #FFFFFF !important; }
-        
-        /* 強制文字呈現深色 */
         p, span, h1, h2, h3, h4, h5, h6, label, div, th, td, li, a { color: #0f172a !important; }
         
-        /* 保留特殊元件反白 */
         .shift-pill, .shift-pill span, .store-closed, .store-closed span { color: #ffffff !important; }
         button[data-testid="baseButton-primary"] p, button[kind="primary"] p { color: #ffffff !important; }
         .st-emotion-cache-1n76uvr { color: #ffffff !important; }
         
-        /* 輸入框與選單強制白底黑字 */
         .stTextInput input, .stNumberInput input, .stSelectbox div, .stDateInput input, textarea {
             color: #0f172a !important; background-color: #FFFFFF !important;
             -webkit-text-fill-color: #0f172a !important; caret-color: #0f172a !important;
@@ -51,16 +46,13 @@ st.markdown("""
         }
         div[data-baseweb="select"] > div, div[data-baseweb="popover"] * { background-color: #FFFFFF !important; color: #0f172a !important; }
         
-        /* 頁籤 (Tabs) 美化 */
         button[data-baseweb="tab"] { background-color: #f8fafc !important; border-bottom: 2px solid #e2e8f0 !important; }
         button[data-baseweb="tab"][aria-selected="true"] { border-bottom: 2px solid #2563eb !important; background-color: #ffffff !important; }
         button[data-baseweb="tab"] p { font-weight: 800 !important; font-size: 1rem !important; }
 
-        /* 資料表 (DataFrame) */
         [data-testid="stDataFrame"] { background-color: #FFFFFF !important; }
         [data-testid="stDataFrame"] * { color: #0f172a !important; }
 
-        /* 卡片視覺 */
         .pos-card, .inv-row, .finance-card, .metric-card, .cart-box, .mgmt-box {
             background-color: #FFFFFF !important; border: 1px solid #E2E8F0 !important;
             box-shadow: 0 2px 4px rgba(0,0,0,0.05) !important; color: #0f172a !important;
@@ -288,7 +280,7 @@ def render_navbar(user_initial):
 CAT_LIST = ["上衣(Top)", "褲子(Btm)", "外套(Out)", "套裝(Suit)", "鞋類(Shoe)", "包款(Bag)", "帽子(Hat)", "飾品(Acc)", "其他(Misc)"]
 
 # ==========================================
-# 🗓️ 排班系統 ELITE
+# 🗓️ 排班系統 ELITE V116.0 (OMNI-ROSTER)
 # ==========================================
 SHIFT_COLORS = { "早班": "#3B82F6", "晚班": "#8B5CF6", "全班": "#10B981", "代班": "#F59E0B", "公休": "#EF4444", "特休": "#DB2777", "空班": "#6B7280", "事假": "#EC4899", "病假": "#14B8A6" }
 
@@ -296,27 +288,37 @@ def get_staff_color_map(users_list):
     PALETTE = ["#2563EB", "#059669", "#7C3AED", "#DB2777", "#D97706", "#DC2626", "#0891B2", "#4F46E5", "#BE123C", "#B45309"]
     return {u: PALETTE[i % len(PALETTE)] for i, u in enumerate(sorted([x for x in users_list if x != "全店"]))}
 
-def get_chinese_font_path():
-    font_filename = "/tmp/NotoSansTC-Regular.otf"
-    if not os.path.exists(font_filename):
-        url = "https://github.com/googlefonts/noto-cjk/raw/main/Sans/OTF/TraditionalChinese/NotoSansCJKtc-Regular.otf"
+# V116.0: 伺服器繞過與快取掛載 (解決繪圖失敗)
+@st.cache_resource(show_spinner=False)
+def get_cached_font():
+    # 改寫入當前目錄，避開 Streamlit Cloud 對 /tmp/ 的權限清洗
+    font_name = "NotoSansTC-Regular.ttf" 
+    if not os.path.exists(font_name):
         try:
-            r = requests.get(url, timeout=10)
-            with open(font_filename, 'wb') as f: f.write(r.content)
-        except: return None
-    return font_filename
+            # 使用更穩定的 Google Fonts raw link
+            url = "https://github.com/google/fonts/raw/main/ofl/notosanstc/NotoSansTC-Regular.ttf"
+            r = requests.get(url, timeout=20)
+            if r.status_code == 200:
+                with open(font_name, 'wb') as f:
+                    f.write(r.content)
+            else: return None
+        except Exception as e: 
+            print(f"Font Error: {e}")
+            return None
+    return font_name
 
 def generate_roster_image_buffer(year, month, shifts_df, days_in_month, color_map):
     try:
-        font_path = get_chinese_font_path()
+        font_path = get_cached_font()
         prop = fm.FontProperties(fname=font_path) if font_path else fm.FontProperties()
         
-        fig, ax = plt.subplots(figsize=(12, 10))
+        # 優化畫布比例與背景色，逼近真實 UI 介面
+        fig, ax = plt.subplots(figsize=(14, 10), facecolor='#f8fafc')
         ax.axis('off')
         
-        ax.text(0.5, 0.96, f"IFUKUK Roster - {year}/{month}", ha='center', va='center', fontsize=22, weight='bold', fontproperties=prop)
+        ax.text(0.5, 0.95, f"IFUKUK 專業排班表 - {year}/{month}", ha='center', va='center', fontsize=26, weight='bold', fontproperties=prop, color='#0f172a')
         
-        cols = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+        cols = ["週一 Mon", "週二 Tue", "週三 Wed", "週四 Thu", "週五 Fri", "週六 Sat", "週日 Sun"]
         cal = calendar.monthcalendar(year, month)
         table_data = [cols]
         
@@ -331,36 +333,43 @@ def generate_roster_image_buffer(year, month, shifts_df, days_in_month, color_ma
                     is_closed = any((r['Staff'] == "全店" and r['Type'] == "公休") for _, r in day_shifts.iterrows())
                     
                     cell_text = f"{day}\n"
-                    if is_closed: cell_text += "\n[全店公休]\nStore Closed"
+                    if is_closed: cell_text += "\n[全店公休]"
                     else:
                         for _, r in day_shifts.iterrows():
+                            # 縮寫保持畫面整潔
                             s_short = r['Type'].replace("早班","早").replace("晚班","晚").replace("全班","全").replace("公休","休")
-                            cell_text += f"{r['Staff']} ({s_short})\n"
-                    row_data.append(cell_text)
+                            cell_text += f"● {r['Staff']} ({s_short})\n"
+                    row_data.append(cell_text.strip())
             table_data.append(row_data)
 
+        # 繪製高質感表格
         table = ax.table(cellText=table_data, loc='center', cellLoc='left', bbox=[0, 0, 1, 0.9])
         table.auto_set_font_size(False)
-        table.set_fontsize(11)
+        table.set_fontsize(12)
         
         for (i, j), cell in table.get_celld().items():
+            cell.set_edgecolor('#cbd5e1')
+            cell.set_text_props(fontproperties=prop, color='#334155')
             if i == 0:
-                cell.set_text_props(weight='bold', fontproperties=prop)
-                cell.set_facecolor('#f3f4f6')
-                cell.set_height(0.05)
+                cell.set_text_props(weight='bold', fontproperties=prop, color='#475569')
+                cell.set_facecolor('#e2e8f0')
+                cell.set_height(0.06)
             else:
-                cell.set_height(0.15)
+                cell.set_height(0.16)
                 cell.set_valign('top')
-                cell.set_text_props(fontproperties=prop)
-                if "全店公休" in cell.get_text().get_text():
-                    cell.set_facecolor('#FECACA')
-                    cell.get_text().set_color('#991B1B')
+                cell.set_facecolor('#ffffff')
+                txt = cell.get_text().get_text()
+                if "全店公休" in txt:
+                    cell.set_facecolor('#fee2e2')
+                    cell.get_text().set_color('#991b1b')
+                    cell.get_text().set_weight('bold')
 
         buf = io.BytesIO()
-        plt.savefig(buf, format='png', dpi=150, bbox_inches='tight')
+        plt.savefig(buf, format='png', dpi=200, bbox_inches='tight', facecolor=fig.get_facecolor())
         buf.seek(0); plt.close(fig)
         return buf
-    except Exception as e: return None
+    except Exception as e: 
+        return str(e) # 回傳精準錯誤碼給前端
 
 def render_roster_system(sh, users_list, user_name):
     ws_shifts = get_worksheet_safe(sh, "Shifts", ["Date", "Staff", "Shift_Type", "Note", "Notify", "Updated_By"])
@@ -506,29 +515,45 @@ def render_roster_system(sh, users_list, user_name):
     with c_smart:
         st.markdown("#### 🧠 智能工具 & 輸出")
         with st.expander("📤 生成 LINE 通告 & 存圖", expanded=True):
-            if st.button("📤 生成 LINE 通告文字", use_container_width=True):
-                line_txt = f"📅 【IFUKUK {sel_month}月班表公告】\n------------------------\n"
+            
+            # V116.0 徹底解決手機排版雜亂的終極方案 (Emoji Block Formatting)
+            if st.button("📤 生成 LINE 通告文字 (行動端優化版)", use_container_width=True):
+                line_txt = f"📅 【IFUKUK {sel_month}月班表公告】\n"
+                line_txt += "━━━━━━━━━━━━━━\n"
+                
                 m_prefix = f"{sel_year}-{str(sel_month).zfill(2)}"
                 m_data = shifts_df[shifts_df['Date'].str.startswith(m_prefix)].sort_values(['Date', 'Staff'])
+                
                 if not m_data.empty:
                     last_date = ""
                     for _, r in m_data.iterrows():
-                        d_short = r['Date'][5:]
+                        d_obj = datetime.strptime(r['Date'], "%Y-%m-%d")
+                        weekday_str = ["一","二","三","四","五","六","日"][d_obj.weekday()]
+                        d_short = f"{d_obj.month}/{d_obj.day} (週{weekday_str})"
+                        
                         if d_short != last_date: 
-                            line_txt += f"\n🗓️ {d_short} ({calendar.day_name[datetime.strptime(r['Date'], '%Y-%m-%d').weekday()][:3]})\n"
+                            line_txt += f"\n🔹 {d_short}\n"
                             last_date = d_short
-                        if r['Staff'] == "全店" and r['Type'] == "公休": line_txt += f"   ⛔ 全店公休 (Store Closed)\n"
-                        else: line_txt += f"   👤 {r['Staff']}：{r['Type']} {f'({r['Note']})' if r['Note'] else ''}\n"
-                    st.text_area("內容", value=line_txt, height=150)
-                else: st.warning("無資料")
+                            
+                        if r['Staff'] == "全店" and r['Type'] == "公休": 
+                            line_txt += f"🔴 全店公休\n"
+                        else: 
+                            note_str = f" ({r['Note']})" if pd.notna(r['Note']) and r['Note'].strip() != "" else ""
+                            line_txt += f"👤 {r['Staff']} ({r['Type']}){note_str}\n"
+                    
+                    st.text_area("請複製下方文字，貼上至 LINE 絕對整齊：", value=line_txt, height=250)
+                else: st.warning("本月尚無任何排班資料")
 
-            if st.button("📸 班表存圖 (Image)", use_container_width=True):
-                with st.spinner("下載字型與繪圖中..."):
+            # V116.0 強固型伺服器繞過繪圖機制
+            if st.button("📸 一鍵生成班表截圖 (Image)", use_container_width=True):
+                with st.spinner("量子繪圖引擎啟動中 (首次需時3秒)..."):
                     img_buf = generate_roster_image_buffer(sel_year, sel_month, shifts_df, calendar.monthrange(sel_year, sel_month)[1], staff_color_map)
-                    if img_buf:
-                        st.image(img_buf, caption=f"{sel_year}/{sel_month}")
-                        st.download_button("💾 下載 PNG", data=img_buf, file_name=f"roster_{sel_year}_{sel_month}.png", mime="image/png", use_container_width=True)
-                    else: st.error("繪圖失敗 (請檢查伺服器權限或網路)")
+                    
+                    if isinstance(img_buf, io.BytesIO):
+                        st.image(img_buf, caption=f"IFUKUK_{sel_year}_{sel_month}_Roster", use_container_width=True)
+                        st.download_button("💾 下載高清 PNG 圖片", data=img_buf, file_name=f"IFUKUK_{sel_year}_{sel_month}_Roster.png", mime="image/png", use_container_width=True)
+                    else: 
+                        st.error(f"❌ 伺服器繪圖引擎阻擋。偵錯碼：\n`{img_buf}`\n(請截圖此訊息給工程師，通常是雲端主機封鎖了外部字型連線)")
 
         with st.expander("🔄 循環排班 & 複製", expanded=False):
             wc_tab1, wc_tab2 = st.tabs(["👤 人員", "🔴 公休"])
@@ -585,7 +610,7 @@ def main():
         with c2:
             st.markdown("<br><br><br>", unsafe_allow_html=True)
             st.markdown("<div style='text-align:center; font-weight:900; font-size:2.5rem; margin-bottom:10px; color:#0f172a;'>IFUKUK</div>", unsafe_allow_html=True)
-            st.markdown("<div style='text-align:center; color:#64748b; font-size:0.9rem; margin-bottom:30px;'>OMEGA V115.0 OMNI-EDIT</div>", unsafe_allow_html=True)
+            st.markdown("<div style='text-align:center; color:#64748b; font-size:0.9rem; margin-bottom:30px;'>OMEGA V116.0 OMNI-ROSTER</div>", unsafe_allow_html=True)
             with st.form("login"):
                 u = st.text_input("帳號 (ID)"); p = st.text_input("密碼 (Password)", type="password")
                 if st.form_submit_button("登入 (LOGIN)", type="primary"):
@@ -758,7 +783,6 @@ def main():
                         </div>
                         """, unsafe_allow_html=True)
 
-                        # V115.0 上帝編輯器 (God-Mode Editor)
                         with st.expander("⚙️ 進階編輯與庫存管理"):
                             tab_qty, tab_info, tab_del = st.tabs(["📦 數量微調", "✏️ 基礎資訊修改 (全尺寸套用)", "🗑️ 徹底刪除此款"])
                             
