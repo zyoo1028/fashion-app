@@ -16,11 +16,11 @@ import matplotlib.pyplot as plt
 import io
 import matplotlib.font_manager as fm
 import os
-from PIL import Image # V124.0 導入影像處理引擎
+from PIL import Image
 
 # --- 1. 系統全域設定 ---
 st.set_page_config(
-    page_title="IFUKUK ERP V124.0 OMNI-RELIANCE", 
+    page_title="IFUKUK ERP V125.0 OMNI-INDEPENDENT", 
     layout="wide", 
     page_icon="🌏",
     initial_sidebar_state="expanded"
@@ -90,6 +90,7 @@ st.markdown("""
         .mobile-day-content { flex-grow: 1; }
         
         .shift-pill { font-size: 0.75rem; padding: 4px 8px; border-radius: 6px; margin-bottom: 4px; display: inline-block; text-align: center; font-weight: bold; margin-right: 4px; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
+        .desktop-shift-pill { flex: 1; display: flex; align-items: center; justify-content: center; width: 100%; font-size: 1.05rem; font-weight: 900; border-radius: 6px; color: white !important; box-shadow: 0 1px 3px rgba(0,0,0,0.15); min-height: 35px; letter-spacing: 1px;}
         .store-closed { background-color: #EF4444 !important; font-weight: 900; font-size: 0.9rem; display: flex; align-items: center; justify-content: center; height: 100%; border-radius: 6px; min-height: 90px; }
         .store-closed-mobile { background-color: #FEF2F2 !important; border: 1px solid #FCA5A5; padding: 5px 10px; border-radius: 6px; font-weight: bold; display: inline-block; }
         
@@ -107,7 +108,6 @@ st.markdown("""
 
 # --- 設定區 ---
 GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/1oCdUsYy8AGp8slJyrlYw2Qy2POgL2eaIp7_8aTVcX3w/edit?gid=1626161493#gid=1626161493"
-IMGBB_API_KEY = "c2f93d2a1a62bd3a6da15f477d2bb88a"
 SHEET_HEADERS = ["SKU", "Name", "Category", "Size", "Qty", "Price", "Cost", "Last_Updated", "Image_URL", "Safety_Stock", "Orig_Currency", "Orig_Cost", "Qty_CN"]
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
 
@@ -192,6 +192,7 @@ def get_worksheet_safe(sh, title, headers):
 
 # --- 工具模組 ---
 def get_taiwan_time_str(): return (datetime.utcnow() + timedelta(hours=8)).strftime("%Y-%m-%d %H:%M:%S")
+
 @st.cache_data(ttl=3600)
 def get_live_rate():
     try:
@@ -203,53 +204,29 @@ def get_live_rate():
 def make_hash(password): return hashlib.sha256(str(password).encode()).hexdigest()
 def check_hash(password, hashed_text): return make_hash(password) == hashed_text
 
+# V125.0 相容 Base64 字串渲染
 def render_image_url(url_input):
     if not url_input or pd.isna(url_input): return "https://i.ibb.co/W31w56W/placeholder.png"
     s = str(url_input).strip()
-    return s if len(s) > 10 and s.startswith("http") else "https://i.ibb.co/W31w56W/placeholder.png"
+    if s.startswith("http") or s.startswith("data:image"): return s
+    return "https://i.ibb.co/W31w56W/placeholder.png"
 
-# V124.0 終極 AI 影像壓縮引擎 + 匿蹤偽裝上傳機制
-def upload_image_to_imgbb(image_file):
-    if not IMGBB_API_KEY or not image_file: return None
+# V125.0 終極自建圖床引擎 (斷開 ImgBB，直存資料庫)
+def process_image_to_base64(image_file):
+    if not image_file: return None
     try:
-        # 1. 啟動 Pillow 壓縮引擎
         img = Image.open(image_file)
-        # 如果是去背圖或特殊色域，強轉為標準 RGB 格式 (防止 Base64 編碼異常)
         if img.mode in ('RGBA', 'P'): img = img.convert('RGB')
         
-        # 限制圖片最大寬高，大幅縮減檔案容量，提升系統載入速度
-        img.thumbnail((1024, 1024))
-        
-        # 將壓縮後的圖片存入暫存記憶體
+        # 極限智慧壓縮 (350x350)，確保 Base64 字串夠短，Google Sheets 寫入無壓力
+        img.thumbnail((350, 350))
         output_buffer = io.BytesIO()
-        img.save(output_buffer, format="JPEG", quality=85)
-        compressed_bytes = output_buffer.getvalue()
-
-        # 2. 匿蹤偽裝協議 (模擬真人瀏覽器，繞過 ImgBB 的 Code 103 封鎖)
-        url = "https://api.imgbb.com/1/upload"
-        payload = {"key": IMGBB_API_KEY}
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"
-        }
+        img.save(output_buffer, format="JPEG", quality=70) 
         
-        # 3. 雙軌上傳機制
-        # 嘗試一：安全二進制上傳
-        files = {"image": ("image.jpg", compressed_bytes, "image/jpeg")}
-        r = requests.post(url, data=payload, files=files, headers=headers, timeout=20)
-        
-        if r.status_code == 200: 
-            return r.json()["data"]["url"]
-        else:
-            # 嘗試二：如果二進制仍被拒絕，自動降級嘗試 Base64
-            payload["image"] = base64.b64encode(compressed_bytes).decode('utf-8')
-            r_b64 = requests.post(url, data=payload, headers=headers, timeout=20)
-            if r_b64.status_code == 200:
-                return r_b64.json()["data"]["url"]
-            else:
-                st.error(f"❌ 雙重上傳皆遭圖床伺服器拒絕 (可能 API 額度耗盡): {r_b64.text}")
-                return None
+        b64_str = base64.b64encode(output_buffer.getvalue()).decode('utf-8')
+        return f"data:image/jpeg;base64,{b64_str}"
     except Exception as e:
-        st.error(f"❌ 影像壓縮或上傳發生異常: {e}")
+        st.error(f"❌ 圖片壓縮與編碼失敗: {e}")
         return None
 
 def log_event(ws_logs, user, action, detail):
@@ -321,7 +298,7 @@ def render_navbar(user_initial):
 CAT_LIST = ["上衣(Top)", "褲子(Btm)", "外套(Out)", "套裝(Suit)", "鞋類(Shoe)", "包款(Bag)", "帽子(Hat)", "飾品(Acc)", "其他(Misc)"]
 
 # ==========================================
-# 🗓️ 排班系統 ELITE V124.0
+# 🗓️ 排班系統 ELITE V125.0
 # ==========================================
 SHIFT_COLORS = { "早班": "#3B82F6", "晚班": "#8B5CF6", "全班": "#10B981", "代班": "#F59E0B", "公休": "#EF4444", "特休": "#DB2777", "空班": "#6B7280", "事假": "#EC4899", "病假": "#14B8A6" }
 
@@ -640,7 +617,7 @@ def main():
         with c2:
             st.markdown("<br><br><br>", unsafe_allow_html=True)
             st.markdown("<div style='text-align:center; font-weight:900; font-size:2.5rem; margin-bottom:10px; color:#0f172a;'>IFUKUK</div>", unsafe_allow_html=True)
-            st.markdown("<div style='text-align:center; color:#64748b; font-size:0.9rem; margin-bottom:30px;'>OMEGA V124.0 OMNI-RELIANCE</div>", unsafe_allow_html=True)
+            st.markdown("<div style='text-align:center; color:#64748b; font-size:0.9rem; margin-bottom:30px;'>OMEGA V125.0 OMNI-INDEPENDENT</div>", unsafe_allow_html=True)
             with st.form("login"):
                 u = st.text_input("帳號 (ID)"); p = st.text_input("密碼 (Password)", type="password")
                 if st.form_submit_button("登入 (LOGIN)", type="primary"):
@@ -859,12 +836,14 @@ def main():
                                     new_safe = c_i6.number_input("安全庫存警告線", value=int(first_row['Safety_Stock']))
                                     
                                     new_img_url = st.text_input("直接輸入圖片網址 (若有)", value=first_row['Image_URL'])
-                                    new_img_file = st.file_uploader("或上傳新圖片覆蓋 (V124 雙軌壓縮圖床防護版)", key=f"img_{style_code}")
+                                    # V125.0 無第三方依賴上傳區
+                                    new_img_file = st.file_uploader("或上傳新圖片覆蓋 (V125 斷開圖床，直存資料庫)", key=f"img_{style_code}")
                                     
                                     if st.form_submit_button("✅ 儲存商品資訊覆蓋", type="primary", use_container_width=True):
-                                        with st.spinner("圖片 AI 壓縮與雲端寫入中..."):
-                                            uploaded_url = upload_image_to_imgbb(new_img_file) if new_img_file else None
-                                            final_img = uploaded_url if uploaded_url else new_img_url
+                                        with st.spinner("圖片壓縮與雲端寫入中..."):
+                                            # V125.0 執行 Base64 資料庫直接寫入
+                                            uploaded_b64 = process_image_to_base64(new_img_file) if new_img_file else None
+                                            final_img = uploaded_b64 if uploaded_b64 else new_img_url
                                             
                                             final_cost = int(new_orig_cost * st.session_state['exchange_rate']) if new_orig_curr == "CNY" else new_orig_cost
                                             
@@ -1227,6 +1206,7 @@ def main():
                                     all_item_vals = ws_items.get_all_values()
                                     live_df = pd.DataFrame(all_item_vals[1:], columns=all_item_vals[0])
                                     cell_list = []
+                                    # 補回庫存
                                     for part in curr_items_str.split(','):
                                         clean_part = re.sub(r'\s*\(\$.*?\)', '', part).strip()
                                         if ' x' in clean_part:
@@ -1239,6 +1219,7 @@ def main():
                                             except: pass
                                     
                                     new_items_list = []
+                                    # 扣除新庫存
                                     for part in e_items.split(','):
                                         clean_part = re.sub(r'\s*\(\$.*?\)', '', part).strip()
                                         if ' x' in clean_part:
@@ -1441,12 +1422,15 @@ def main():
             with st.form("add_m"):
                 c1, c2 = st.columns(2); bs = c1.text_input("Base SKU", value=a_sku); nm = c2.text_input("品名", value=a_name)
                 c3, c4 = st.columns(2); pr = c3.number_input("售價", 0); co = c4.number_input("原幣成本", 0)
-                cur = st.selectbox("幣別 (若選 CNY 系統將依左側匯率自動換算台幣成本)", ["TWD", "CNY"]); img = st.file_uploader("上傳圖片 (選填)")
+                cur = st.selectbox("幣別 (若選 CNY 系統將依左側匯率自動換算台幣成本)", ["TWD", "CNY"])
+                
+                # V125.0 斷開圖床，使用自建 Base64 引擎
+                img = st.file_uploader("上傳圖片 (V125 自建圖床引擎)")
                 sz = {}; cols = st.columns(5)
                 for i, s in enumerate(SIZE_ORDER): sz[s] = cols[i%5].number_input(s, min_value=0)
                 if st.form_submit_button("寫入資料庫"):
                     with st.spinner("建立商品與寫入資料中..."):
-                        url = upload_image_to_imgbb(img) if img else ""
+                        url = process_image_to_base64(img) if img else ""
                         fc = int(co * st.session_state['exchange_rate']) if cur == "CNY" else co
                         rows_to_add = []
                         for s, q in sz.items():
