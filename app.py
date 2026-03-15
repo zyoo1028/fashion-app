@@ -16,10 +16,11 @@ import matplotlib.pyplot as plt
 import io
 import matplotlib.font_manager as fm
 import os
+from PIL import Image # V124.0 導入影像處理引擎
 
 # --- 1. 系統全域設定 ---
 st.set_page_config(
-    page_title="IFUKUK ERP V123.0 OMNI-UPLOADER", 
+    page_title="IFUKUK ERP V124.0 OMNI-RELIANCE", 
     layout="wide", 
     page_icon="🌏",
     initial_sidebar_state="expanded"
@@ -80,29 +81,27 @@ st.markdown("""
         .finance-val { font-size: 1.6rem; font-weight: 900; color: #0f172a !important; margin-top: 5px; }
         .finance-lbl { font-size: 0.85rem; color: #64748b !important; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
 
-        .roster-header { background: #ffffff !important; padding: 20px; border-radius: 12px; margin-bottom: 20px; border: 1px solid #e2e8f0; box-shadow: 0 2px 4px rgba(0,0,0,0.02); text-align: center; }
-        .day-cell { border: 1px solid #e2e8f0; border-radius: 8px; padding: 5px; min-height: 110px; position: relative; margin-bottom: 5px; background: #ffffff !important; display: flex; flex-direction: column; gap: 4px; }
-        .day-num { font-size: 0.85rem; font-weight: 900; color: #64748b; margin-bottom: 2px; padding-left: 4px; }
+        .roster-header { background: #f1f5f9 !important; padding: 15px; border-radius: 12px; margin-bottom: 20px; border: 1px solid #e2e8f0; text-align: center; }
+        .day-cell { border: 1px solid #e2e8f0; border-radius: 8px; padding: 4px; min-height: 100px; position: relative; margin-bottom: 5px; background: #fff !important; }
+        .day-num { font-size: 0.8rem; font-weight: bold; color: #64748b; margin-bottom: 2px; padding-left: 4px; }
         
         .mobile-day-row { background: #FFFFFF !important; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px; margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 1px 2px rgba(0,0,0,0.03); }
         .mobile-day-date { font-size: 1.1rem; font-weight: 900; color: #334155 !important; width: 50px; text-align: center; border-right: 2px solid #f1f5f9; margin-right: 10px; }
         .mobile-day-content { flex-grow: 1; }
         
-        .shift-pill { font-size: 0.8rem; padding: 4px 8px; border-radius: 6px; margin-bottom: 4px; display: inline-block; text-align: center; font-weight: bold; margin-right: 4px; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
-        .desktop-shift-pill { flex: 1; display: flex; align-items: center; justify-content: center; width: 100%; font-size: 1.05rem; font-weight: 900; border-radius: 6px; color: white !important; box-shadow: 0 1px 3px rgba(0,0,0,0.15); min-height: 35px; letter-spacing: 1px;}
-        .store-closed { flex: 1; width: 100%; background-color: #EF4444 !important; font-weight: 900; font-size: 1.1rem; display: flex; align-items: center; justify-content: center; border-radius: 6px; min-height: 40px; color: white !important; box-shadow: 0 2px 4px rgba(239, 68, 68, 0.3);}
+        .shift-pill { font-size: 0.75rem; padding: 4px 8px; border-radius: 6px; margin-bottom: 4px; display: inline-block; text-align: center; font-weight: bold; margin-right: 4px; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
+        .store-closed { background-color: #EF4444 !important; font-weight: 900; font-size: 0.9rem; display: flex; align-items: center; justify-content: center; height: 100%; border-radius: 6px; min-height: 90px; }
         .store-closed-mobile { background-color: #FEF2F2 !important; border: 1px solid #FCA5A5; padding: 5px 10px; border-radius: 6px; font-weight: bold; display: inline-block; }
         
-        .metric-card { background: #ffffff !important; border: 1px solid #e2e8f0 !important; padding: 15px !important; border-radius: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.02);}
-        .metric-label { font-size: 0.85rem !important; font-weight: 800 !important; color: #64748b !important; margin-bottom: 5px; }
-        .metric-value { color: #0f172a !important; font-size: 1.4rem !important; font-weight: 900 !important;}
-        
-        .stButton>button { border-radius: 8px; height: 3.2em; font-weight: 800; border: 1px solid #cbd5e1; background-color: #FFFFFF !important; width: 100%; transition: all 0.2s ease; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+        .metric-card { background: linear-gradient(145deg, #ffffff, #f8fafc) !important; border: 1px solid #e2e8f0 !important; padding: 10px !important;}
+        .metric-label { font-size: 0.8rem !important; font-weight: bold !important; color: #64748b !important; }
+        .metric-value { color: #0f172a !important; font-size: 1.2rem !important; font-weight: 900 !important;}
+        .stButton>button { border-radius: 8px; height: 3.2em; font-weight: 700; border: 1px solid #cbd5e1; background-color: #FFFFFF !important; width: 100%; transition: all 0.2s; }
         .stButton>button p { color: #0f172a !important; }
-        .stButton>button:hover { border-color: #94a3b8; transform: translateY(-1px); box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+        .stButton>button:hover { border-color: #94a3b8; }
         .stButton>button[data-testid="baseButton-primary"] p { color: #ffffff !important; }
         
-        .barcode-form { background: #ffffff; border: 2px dashed #94a3b8; padding: 15px; border-radius: 12px; margin-bottom: 20px; box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);}
+        .barcode-form { background: #f8fafc; border: 2px dashed #cbd5e1; padding: 10px; border-radius: 10px; margin-bottom: 15px;}
     </style>
 """, unsafe_allow_html=True)
 
@@ -209,23 +208,48 @@ def render_image_url(url_input):
     s = str(url_input).strip()
     return s if len(s) > 10 and s.startswith("http") else "https://i.ibb.co/W31w56W/placeholder.png"
 
-# V123.0 終極二進制圖片上傳引擎 (杜絕 Base64 破圖)
+# V124.0 終極 AI 影像壓縮引擎 + 匿蹤偽裝上傳機制
 def upload_image_to_imgbb(image_file):
-    if not IMGBB_API_KEY: return None
+    if not IMGBB_API_KEY or not image_file: return None
     try:
+        # 1. 啟動 Pillow 壓縮引擎
+        img = Image.open(image_file)
+        # 如果是去背圖或特殊色域，強轉為標準 RGB 格式 (防止 Base64 編碼異常)
+        if img.mode in ('RGBA', 'P'): img = img.convert('RGB')
+        
+        # 限制圖片最大寬高，大幅縮減檔案容量，提升系統載入速度
+        img.thumbnail((1024, 1024))
+        
+        # 將壓縮後的圖片存入暫存記憶體
+        output_buffer = io.BytesIO()
+        img.save(output_buffer, format="JPEG", quality=85)
+        compressed_bytes = output_buffer.getvalue()
+
+        # 2. 匿蹤偽裝協議 (模擬真人瀏覽器，繞過 ImgBB 的 Code 103 封鎖)
         url = "https://api.imgbb.com/1/upload"
         payload = {"key": IMGBB_API_KEY}
-        # 使用 files 參數發送 multipart/form-data，完全繞過編碼錯誤
-        files = {"image": (image_file.name, image_file.getvalue(), image_file.type)}
-        r = requests.post(url, data=payload, files=files, timeout=20)
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"
+        }
+        
+        # 3. 雙軌上傳機制
+        # 嘗試一：安全二進制上傳
+        files = {"image": ("image.jpg", compressed_bytes, "image/jpeg")}
+        r = requests.post(url, data=payload, files=files, headers=headers, timeout=20)
         
         if r.status_code == 200: 
             return r.json()["data"]["url"]
         else:
-            st.error(f"❌ 圖片上傳伺服器拒絕: {r.text}")
-            return None
+            # 嘗試二：如果二進制仍被拒絕，自動降級嘗試 Base64
+            payload["image"] = base64.b64encode(compressed_bytes).decode('utf-8')
+            r_b64 = requests.post(url, data=payload, headers=headers, timeout=20)
+            if r_b64.status_code == 200:
+                return r_b64.json()["data"]["url"]
+            else:
+                st.error(f"❌ 雙重上傳皆遭圖床伺服器拒絕 (可能 API 額度耗盡): {r_b64.text}")
+                return None
     except Exception as e:
-        st.error(f"❌ 圖片上傳發生網路斷線: {e}")
+        st.error(f"❌ 影像壓縮或上傳發生異常: {e}")
         return None
 
 def log_event(ws_logs, user, action, detail):
@@ -297,7 +321,7 @@ def render_navbar(user_initial):
 CAT_LIST = ["上衣(Top)", "褲子(Btm)", "外套(Out)", "套裝(Suit)", "鞋類(Shoe)", "包款(Bag)", "帽子(Hat)", "飾品(Acc)", "其他(Misc)"]
 
 # ==========================================
-# 🗓️ 排班系統 ELITE V123.0
+# 🗓️ 排班系統 ELITE V124.0
 # ==========================================
 SHIFT_COLORS = { "早班": "#3B82F6", "晚班": "#8B5CF6", "全班": "#10B981", "代班": "#F59E0B", "公休": "#EF4444", "特休": "#DB2777", "空班": "#6B7280", "事假": "#EC4899", "病假": "#14B8A6" }
 
@@ -616,7 +640,7 @@ def main():
         with c2:
             st.markdown("<br><br><br>", unsafe_allow_html=True)
             st.markdown("<div style='text-align:center; font-weight:900; font-size:2.5rem; margin-bottom:10px; color:#0f172a;'>IFUKUK</div>", unsafe_allow_html=True)
-            st.markdown("<div style='text-align:center; color:#64748b; font-size:0.9rem; margin-bottom:30px;'>OMEGA V123.0 OMNI-UPLOADER</div>", unsafe_allow_html=True)
+            st.markdown("<div style='text-align:center; color:#64748b; font-size:0.9rem; margin-bottom:30px;'>OMEGA V124.0 OMNI-RELIANCE</div>", unsafe_allow_html=True)
             with st.form("login"):
                 u = st.text_input("帳號 (ID)"); p = st.text_input("密碼 (Password)", type="password")
                 if st.form_submit_button("登入 (LOGIN)", type="primary"):
@@ -835,11 +859,10 @@ def main():
                                     new_safe = c_i6.number_input("安全庫存警告線", value=int(first_row['Safety_Stock']))
                                     
                                     new_img_url = st.text_input("直接輸入圖片網址 (若有)", value=first_row['Image_URL'])
-                                    new_img_file = st.file_uploader("或上傳新圖片覆蓋 (V123 破圖修復版)", key=f"img_{style_code}")
+                                    new_img_file = st.file_uploader("或上傳新圖片覆蓋 (V124 雙軌壓縮圖床防護版)", key=f"img_{style_code}")
                                     
                                     if st.form_submit_button("✅ 儲存商品資訊覆蓋", type="primary", use_container_width=True):
-                                        with st.spinner("圖片上傳與雲端寫入中..."):
-                                            # V123.0 強固型圖片二進制上傳
+                                        with st.spinner("圖片 AI 壓縮與雲端寫入中..."):
                                             uploaded_url = upload_image_to_imgbb(new_img_file) if new_img_file else None
                                             final_img = uploaded_url if uploaded_url else new_img_url
                                             
