@@ -19,14 +19,14 @@ import os
 
 # --- 1. 系統全域設定 ---
 st.set_page_config(
-    page_title="IFUKUK ERP V122.0 OMNI-SYNAPSE", 
+    page_title="IFUKUK ERP V123.0 OMNI-UPLOADER", 
     layout="wide", 
     page_icon="🌏",
     initial_sidebar_state="expanded"
 )
 
 # ==========================================
-# 🛑 【CSS 視覺核心：極致對比與流暢體驗】
+# 🛑 【CSS 視覺核心：絕對對比覆蓋防護】
 # ==========================================
 st.markdown("""
     <style>
@@ -209,20 +209,24 @@ def render_image_url(url_input):
     s = str(url_input).strip()
     return s if len(s) > 10 and s.startswith("http") else "https://i.ibb.co/W31w56W/placeholder.png"
 
-# V122.0 ImgBB 上傳強固修復
+# V123.0 終極二進制圖片上傳引擎 (杜絕 Base64 破圖)
 def upload_image_to_imgbb(image_file):
     if not IMGBB_API_KEY: return None
     try:
         url = "https://api.imgbb.com/1/upload"
-        payload = {
-            "key": IMGBB_API_KEY,
-            "image": base64.b64encode(image_file.getvalue()).decode('utf-8')
-        }
-        r = requests.post(url, data=payload, timeout=15)
-        if r.status_code == 200: return r.json()["data"]["url"]
-    except Exception as e: 
-        print(f"ImgBB Upload Error: {e}")
-    return None
+        payload = {"key": IMGBB_API_KEY}
+        # 使用 files 參數發送 multipart/form-data，完全繞過編碼錯誤
+        files = {"image": (image_file.name, image_file.getvalue(), image_file.type)}
+        r = requests.post(url, data=payload, files=files, timeout=20)
+        
+        if r.status_code == 200: 
+            return r.json()["data"]["url"]
+        else:
+            st.error(f"❌ 圖片上傳伺服器拒絕: {r.text}")
+            return None
+    except Exception as e:
+        st.error(f"❌ 圖片上傳發生網路斷線: {e}")
+        return None
 
 def log_event(ws_logs, user, action, detail):
     try: retry_action(ws_logs.append_row, [get_taiwan_time_str(), user, action, detail])
@@ -293,7 +297,7 @@ def render_navbar(user_initial):
 CAT_LIST = ["上衣(Top)", "褲子(Btm)", "外套(Out)", "套裝(Suit)", "鞋類(Shoe)", "包款(Bag)", "帽子(Hat)", "飾品(Acc)", "其他(Misc)"]
 
 # ==========================================
-# 🗓️ 排班系統 ELITE V122.0
+# 🗓️ 排班系統 ELITE V123.0
 # ==========================================
 SHIFT_COLORS = { "早班": "#3B82F6", "晚班": "#8B5CF6", "全班": "#10B981", "代班": "#F59E0B", "公休": "#EF4444", "特休": "#DB2777", "空班": "#6B7280", "事假": "#EC4899", "病假": "#14B8A6" }
 
@@ -612,7 +616,7 @@ def main():
         with c2:
             st.markdown("<br><br><br>", unsafe_allow_html=True)
             st.markdown("<div style='text-align:center; font-weight:900; font-size:2.5rem; margin-bottom:10px; color:#0f172a;'>IFUKUK</div>", unsafe_allow_html=True)
-            st.markdown("<div style='text-align:center; color:#64748b; font-size:0.9rem; margin-bottom:30px;'>OMEGA V122.0 OMNI-SYNAPSE</div>", unsafe_allow_html=True)
+            st.markdown("<div style='text-align:center; color:#64748b; font-size:0.9rem; margin-bottom:30px;'>OMEGA V123.0 OMNI-UPLOADER</div>", unsafe_allow_html=True)
             with st.form("login"):
                 u = st.text_input("帳號 (ID)"); p = st.text_input("密碼 (Password)", type="password")
                 if st.form_submit_button("登入 (LOGIN)", type="primary"):
@@ -638,13 +642,13 @@ def main():
     user_initial = st.session_state['user_name'][0].upper()
     render_navbar(user_initial)
 
-    # V122.0 取得全域資料快照
+    # QUANTUM DATA FETCH
     df = get_data_safe(ws_items, SHEET_HEADERS)
     logs_df = get_data_safe(ws_logs, ["Timestamp", "User", "Action", "Details"]) 
     users_df = get_data_safe(ws_users, ["Name", "Password", "Role", "Status", "Created_At"])
     staff_list = users_df['Name'].tolist() if not users_df.empty and 'Name' in users_df.columns else []
 
-    # 型別轉換與安全處理
+    # QUANTUM TYPE CASTING
     for c in ["SKU", "Name", "Category", "Size", "Last_Updated", "Image_URL", "Orig_Currency"]: 
         if c not in df.columns: df[c] = ""
     for num in ['Qty', 'Price', 'Cost', 'Safety_Stock', 'Orig_Cost', 'Qty_CN']:
@@ -785,7 +789,6 @@ def main():
                         </div>
                         """, unsafe_allow_html=True)
 
-                        # V122.0 批次更新引擎 (Batch Update Engine) 植入
                         with st.expander("⚙️ 進階編輯與庫存管理"):
                             tab_qty, tab_info, tab_del = st.tabs(["📦 數量微調", "✏️ 基礎資訊修改 (全尺寸套用)", "🗑️ 徹底刪除此款"])
                             
@@ -798,17 +801,20 @@ def main():
                                             lbl = row['Size']; i_tw[row['SKU']] = st.number_input(f"TW {lbl}", value=int(row['Qty']), key=f"t_{row['SKU']}"); i_cn[row['SKU']] = st.number_input(f"CN {lbl}", value=int(row['Qty_CN']), key=f"c_{row['SKU']}")
                                     if st.form_submit_button("💾 儲存庫存變更", use_container_width=True):
                                         with st.spinner("雲端聯動中..."):
+                                            all_item_vals = ws_items.get_all_values()
+                                            live_df = pd.DataFrame(all_item_vals[1:], columns=all_item_vals[0])
                                             cell_list = []
                                             for tsku, n_tw in i_tw.items():
                                                 if tsku in df['SKU'].tolist():
-                                                    # V122.0: 利用 Pandas 索引定位行號，避免使用 find 浪費效能
-                                                    row_idx = df.index[df['SKU'] == tsku].tolist()[0] + 2 
-                                                    n_cn = i_cn[tsku]
-                                                    cell_list.extend([
-                                                        gspread.Cell(row_idx, 5, n_tw),
-                                                        gspread.Cell(row_idx, 13, n_cn),
-                                                        gspread.Cell(row_idx, 8, get_taiwan_time_str())
-                                                    ])
+                                                    try:
+                                                        row_idx = live_df.index[live_df['SKU'] == tsku].tolist()[0] + 2 
+                                                        n_cn = i_cn[tsku]
+                                                        cell_list.extend([
+                                                            gspread.Cell(row_idx, 5, n_tw),
+                                                            gspread.Cell(row_idx, 13, n_cn),
+                                                            gspread.Cell(row_idx, 8, get_taiwan_time_str())
+                                                        ])
+                                                    except: pass
                                             if cell_list:
                                                 retry_action(ws_items.update_cells, cell_list)
                                                 st.cache_data.clear(); st.success("數量已瞬間更新！"); time.sleep(0.5); st.rerun()
@@ -829,17 +835,16 @@ def main():
                                     new_safe = c_i6.number_input("安全庫存警告線", value=int(first_row['Safety_Stock']))
                                     
                                     new_img_url = st.text_input("直接輸入圖片網址 (若有)", value=first_row['Image_URL'])
-                                    new_img_file = st.file_uploader("或上傳新圖片覆蓋 (V122 修復失效問題)", key=f"img_{style_code}")
+                                    new_img_file = st.file_uploader("或上傳新圖片覆蓋 (V123 破圖修復版)", key=f"img_{style_code}")
                                     
                                     if st.form_submit_button("✅ 儲存商品資訊覆蓋", type="primary", use_container_width=True):
                                         with st.spinner("圖片上傳與雲端寫入中..."):
-                                            # V122.0 圖片失效防禦
+                                            # V123.0 強固型圖片二進制上傳
                                             uploaded_url = upload_image_to_imgbb(new_img_file) if new_img_file else None
                                             final_img = uploaded_url if uploaded_url else new_img_url
                                             
                                             final_cost = int(new_orig_cost * st.session_state['exchange_rate']) if new_orig_curr == "CNY" else new_orig_cost
                                             
-                                            # V122.0 終極批次更新，將數十次請求壓縮為 1 次
                                             cell_list = []
                                             for idx, r_data in enumerate(ws_items.get_all_values()):
                                                 if idx == 0: continue
@@ -1052,9 +1057,8 @@ def main():
                             valid = True
                             cell_list = []
                             
-                            # V122.0 取得結帳瞬間的最新資料防超賣
-                            live_vals = ws_items.get_all_values()
-                            live_df = pd.DataFrame(live_vals[1:], columns=live_vals[0])
+                            all_item_vals = ws_items.get_all_values()
+                            live_df = pd.DataFrame(all_item_vals[1:], columns=all_item_vals[0])
                             
                             for item in st.session_state['pos_cart']:
                                 try:
@@ -1197,9 +1201,9 @@ def main():
                                 for idx, row in enumerate(all_logs):
                                     if row[0] == target_ts and "Sale" in row[2]: log_idx = idx + 1; break
                                 if log_idx != -1:
-                                    live_df = pd.DataFrame(ws_items.get_all_values()[1:], columns=ws_items.get_all_values()[0])
+                                    all_item_vals = ws_items.get_all_values()
+                                    live_df = pd.DataFrame(all_item_vals[1:], columns=all_item_vals[0])
                                     cell_list = []
-                                    # 補回庫存
                                     for part in curr_items_str.split(','):
                                         clean_part = re.sub(r'\s*\(\$.*?\)', '', part).strip()
                                         if ' x' in clean_part:
@@ -1208,11 +1212,10 @@ def main():
                                                 curr_q = int(live_df.loc[live_df['SKU'] == p_sku, 'Qty'].values[0])
                                                 row_i = live_df.index[live_df['SKU'] == p_sku].tolist()[0] + 2
                                                 cell_list.append(gspread.Cell(row_i, 5, curr_q + p_qty))
-                                                live_df.loc[live_df['SKU'] == p_sku, 'Qty'] = curr_q + p_qty # 更新記憶體給下一步扣除
+                                                live_df.loc[live_df['SKU'] == p_sku, 'Qty'] = curr_q + p_qty 
                                             except: pass
                                     
                                     new_items_list = []
-                                    # 扣除新庫存
                                     for part in e_items.split(','):
                                         clean_part = re.sub(r'\s*\(\$.*?\)', '', part).strip()
                                         if ' x' in clean_part:
@@ -1233,7 +1236,8 @@ def main():
 
                         if c_act2.form_submit_button("🗑️ 整筆作廢 (全數退回庫存)"):
                             try:
-                                live_df = pd.DataFrame(ws_items.get_all_values()[1:], columns=ws_items.get_all_values()[0])
+                                all_item_vals = ws_items.get_all_values()
+                                live_df = pd.DataFrame(all_item_vals[1:], columns=all_item_vals[0])
                                 cell_list = []
                                 for part in curr_items_str.split(','):
                                     clean_part = re.sub(r'\s*\(\$.*?\)', '', part).strip()
@@ -1421,9 +1425,6 @@ def main():
                     with st.spinner("建立商品與寫入資料中..."):
                         url = upload_image_to_imgbb(img) if img else ""
                         fc = int(co * st.session_state['exchange_rate']) if cur == "CNY" else co
-                        cell_list = []
-                        # 在這裡因為是新增 row，沒辦法用 update_cells，用 append_row 是唯一的路
-                        # 但是可以考慮用 append_rows 來批次！
                         rows_to_add = []
                         for s, q in sz.items():
                             if q > 0:
