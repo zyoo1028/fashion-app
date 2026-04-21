@@ -20,7 +20,7 @@ from PIL import Image
 
 # --- 1. 系統全域設定 ---
 st.set_page_config(
-    page_title="IFUKUK ERP V125.0 OMNI-INDEPENDENT", 
+    page_title="IFUKUK ERP V126.0 OMNI-EXPORT", 
     layout="wide", 
     page_icon="🌏",
     initial_sidebar_state="expanded"
@@ -192,7 +192,6 @@ def get_worksheet_safe(sh, title, headers):
 
 # --- 工具模組 ---
 def get_taiwan_time_str(): return (datetime.utcnow() + timedelta(hours=8)).strftime("%Y-%m-%d %H:%M:%S")
-
 @st.cache_data(ttl=3600)
 def get_live_rate():
     try:
@@ -204,25 +203,21 @@ def get_live_rate():
 def make_hash(password): return hashlib.sha256(str(password).encode()).hexdigest()
 def check_hash(password, hashed_text): return make_hash(password) == hashed_text
 
-# V125.0 相容 Base64 字串渲染
 def render_image_url(url_input):
     if not url_input or pd.isna(url_input): return "https://i.ibb.co/W31w56W/placeholder.png"
     s = str(url_input).strip()
     if s.startswith("http") or s.startswith("data:image"): return s
     return "https://i.ibb.co/W31w56W/placeholder.png"
 
-# V125.0 終極自建圖床引擎 (斷開 ImgBB，直存資料庫)
+# 自建圖床引擎 (斷開 ImgBB，直存資料庫)
 def process_image_to_base64(image_file):
     if not image_file: return None
     try:
         img = Image.open(image_file)
         if img.mode in ('RGBA', 'P'): img = img.convert('RGB')
-        
-        # 極限智慧壓縮 (350x350)，確保 Base64 字串夠短，Google Sheets 寫入無壓力
         img.thumbnail((350, 350))
         output_buffer = io.BytesIO()
         img.save(output_buffer, format="JPEG", quality=70) 
-        
         b64_str = base64.b64encode(output_buffer.getvalue()).decode('utf-8')
         return f"data:image/jpeg;base64,{b64_str}"
     except Exception as e:
@@ -298,7 +293,7 @@ def render_navbar(user_initial):
 CAT_LIST = ["上衣(Top)", "褲子(Btm)", "外套(Out)", "套裝(Suit)", "鞋類(Shoe)", "包款(Bag)", "帽子(Hat)", "飾品(Acc)", "其他(Misc)"]
 
 # ==========================================
-# 🗓️ 排班系統 ELITE V125.0
+# 🗓️ 排班系統 ELITE 
 # ==========================================
 SHIFT_COLORS = { "早班": "#3B82F6", "晚班": "#8B5CF6", "全班": "#10B981", "代班": "#F59E0B", "公休": "#EF4444", "特休": "#DB2777", "空班": "#6B7280", "事假": "#EC4899", "病假": "#14B8A6" }
 
@@ -617,7 +612,7 @@ def main():
         with c2:
             st.markdown("<br><br><br>", unsafe_allow_html=True)
             st.markdown("<div style='text-align:center; font-weight:900; font-size:2.5rem; margin-bottom:10px; color:#0f172a;'>IFUKUK</div>", unsafe_allow_html=True)
-            st.markdown("<div style='text-align:center; color:#64748b; font-size:0.9rem; margin-bottom:30px;'>OMEGA V125.0 OMNI-INDEPENDENT</div>", unsafe_allow_html=True)
+            st.markdown("<div style='text-align:center; color:#64748b; font-size:0.9rem; margin-bottom:30px;'>OMEGA V126.0 OMNI-EXPORT</div>", unsafe_allow_html=True)
             with st.form("login"):
                 u = st.text_input("帳號 (ID)"); p = st.text_input("密碼 (Password)", type="password")
                 if st.form_submit_button("登入 (LOGIN)", type="primary"):
@@ -836,12 +831,10 @@ def main():
                                     new_safe = c_i6.number_input("安全庫存警告線", value=int(first_row['Safety_Stock']))
                                     
                                     new_img_url = st.text_input("直接輸入圖片網址 (若有)", value=first_row['Image_URL'])
-                                    # V125.0 無第三方依賴上傳區
-                                    new_img_file = st.file_uploader("或上傳新圖片覆蓋 (V125 斷開圖床，直存資料庫)", key=f"img_{style_code}")
+                                    new_img_file = st.file_uploader("或上傳新圖片覆蓋 (V125 自建圖床引擎)", key=f"img_{style_code}")
                                     
                                     if st.form_submit_button("✅ 儲存商品資訊覆蓋", type="primary", use_container_width=True):
                                         with st.spinner("圖片壓縮與雲端寫入中..."):
-                                            # V125.0 執行 Base64 資料庫直接寫入
                                             uploaded_b64 = process_image_to_base64(new_img_file) if new_img_file else None
                                             final_img = uploaded_b64 if uploaded_b64 else new_img_url
                                             
@@ -893,6 +886,15 @@ def main():
                 cost_df['毛利率 (%)'] = (cost_df['毛利 (TWD)'] / cost_df['Price'] * 100).fillna(0).round(1).astype(str) + "%"
                 cost_df.columns = ['貨號 (SKU)', '品名', '分類', '原幣別', '原幣成本(¥/NT$)', '台幣成本($)', '終端定價($)', 'TW現貨', 'CN現貨', '單件毛利($)', '毛利率(%)']
                 st.dataframe(cost_df, use_container_width=True, hide_index=True)
+                
+                # V126.0 新增防亂碼下載與一鍵防跑版複製功能
+                st.markdown("<br>", unsafe_allow_html=True)
+                c_dl1, c_dl2 = st.columns([1, 1])
+                with c_dl1:
+                    st.download_button("📥 下載完整 Excel 報表 (防亂碼)", data=cost_df.to_csv(index=False).encode('utf-8-sig'), file_name=f"Cost_Matrix_{date.today()}.csv", mime="text/csv", use_container_width=True)
+                with st.expander("📋 手機/電腦 一鍵複製表格數據 (防跑版)"):
+                    st.caption("💡 點擊下方黑框【右上角的複製圖示】，即可完美貼上至 Excel、Google Sheets 或 LINE，欄位絕對對齊。")
+                    st.code(cost_df.to_csv(index=False, sep='\t'), language="text")
                 
                 st.divider()
                 st.markdown("#### ✏️ 快速成本與定價修正 (Quick Financial Edit)")
@@ -1168,7 +1170,16 @@ def main():
                 st.plotly_chart(fig2, use_container_width=True)
             
             st.markdown("##### 📝 銷售明細總表 (含售後管理)")
-            st.dataframe(sdf.drop(columns=['原始Log']), use_container_width=True)
+            clean_sdf = sdf.drop(columns=['原始Log'])
+            st.dataframe(clean_sdf, use_container_width=True)
+
+            # V126.0 防亂碼下載與一鍵複製輸出
+            c_dl1, c_dl2 = st.columns([1, 1])
+            with c_dl1:
+                st.download_button("📥 下載銷售明細 (防亂碼)", data=clean_sdf.to_csv(index=False).encode('utf-8-sig'), file_name=f"Sales_{date.today()}.csv", mime="text/csv", use_container_width=True)
+            with st.expander("📋 手機/電腦 一鍵複製表格數據 (防跑版)"):
+                st.caption("💡 點擊下方黑框【右上角的複製圖示】，即可完美貼上至 Excel、Google Sheets 或 LINE，欄位絕對對齊。")
+                st.code(clean_sdf.to_csv(index=False, sep='\t'), language="text")
 
             with st.expander("🛠️ 編輯/作廢訂單 (自動回補庫存系統聯動)"):
                 sale_opts = sdf.apply(lambda x: f"{x['日期']} | ${x['金額']} | {x['明細'][:20]}...", axis=1).tolist()
@@ -1338,7 +1349,16 @@ def main():
                             st.plotly_chart(fig_u, use_container_width=True)
 
                         st.markdown("#### 📜 領用流水帳與細節 (可點擊表頭排序)")
-                        st.dataframe(audit_df[['時間', '商品', '數量', '領用人', '原因', '總消耗成本', '備註']], use_container_width=True)
+                        clean_audit_df = audit_df[['時間', '商品', '數量', '領用人', '原因', '總消耗成本', '備註']]
+                        st.dataframe(clean_audit_df, use_container_width=True)
+
+                        # V126.0 防亂碼下載與一鍵複製輸出
+                        c_dl1, c_dl2 = st.columns([1, 1])
+                        with c_dl1:
+                            st.download_button("📥 下載領用稽核表 (防亂碼)", data=clean_audit_df.to_csv(index=False).encode('utf-8-sig'), file_name=f"Audit_{date.today()}.csv", mime="text/csv", use_container_width=True)
+                        with st.expander("📋 手機/電腦 一鍵複製表格數據 (防跑版)"):
+                            st.caption("💡 點擊下方黑框【右上角的複製圖示】，即可完美貼上至 Excel、Google Sheets 或 LINE，欄位絕對對齊。")
+                            st.code(clean_audit_df.to_csv(index=False, sep='\t'), language="text")
 
                     else:
                         st.info("資料格式舊版，無法生成圖表。未來的領用將以新格式完美呈現。")
@@ -1422,9 +1442,7 @@ def main():
             with st.form("add_m"):
                 c1, c2 = st.columns(2); bs = c1.text_input("Base SKU", value=a_sku); nm = c2.text_input("品名", value=a_name)
                 c3, c4 = st.columns(2); pr = c3.number_input("售價", 0); co = c4.number_input("原幣成本", 0)
-                cur = st.selectbox("幣別 (若選 CNY 系統將依左側匯率自動換算台幣成本)", ["TWD", "CNY"])
-                
-                # V125.0 斷開圖床，使用自建 Base64 引擎
+                cur = st.selectbox("幣別 (若選 CNY 系統將依左側匯率自動換算台幣成本)", ["TWD", "CNY"]); 
                 img = st.file_uploader("上傳圖片 (V125 自建圖床引擎)")
                 sz = {}; cols = st.columns(5)
                 for i, s in enumerate(SIZE_ORDER): sz[s] = cols[i%5].number_input(s, min_value=0)
