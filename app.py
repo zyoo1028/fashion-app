@@ -20,7 +20,7 @@ from PIL import Image
 
 # --- 1. 系統全域設定 ---
 st.set_page_config(
-    page_title="IFUKUK ERP V129.0 OMNI-SUPREME", 
+    page_title="IFUKUK ERP V130.0 OMNI-TRACE", 
     layout="wide", 
     page_icon="🌏",
     initial_sidebar_state="expanded"
@@ -209,17 +209,15 @@ def render_image_url(url_input):
     if s.startswith("http") or s.startswith("data:image"): return s
     return "https://i.ibb.co/W31w56W/placeholder.png"
 
-# V129.0 終極防護：自動去背圖補白底壓縮
 def process_image_to_base64(image_file):
     if not image_file: return None
     try:
         img = Image.open(image_file)
         if img.mode in ('RGBA', 'P'): 
-            # 建立純白背景，將去背 PNG 貼上去，防止壓縮後變黑底
             background = Image.new('RGB', img.size, (255, 255, 255))
             background.paste(img, mask=img.split()[3] if len(img.split()) >= 4 else None)
             img = background
-        img.thumbnail((350, 350)) # 控制在 350px 確保寫入極快且不超載
+        img.thumbnail((350, 350))
         output_buffer = io.BytesIO()
         img.save(output_buffer, format="JPEG", quality=75) 
         b64_str = base64.b64encode(output_buffer.getvalue()).decode('utf-8')
@@ -352,22 +350,20 @@ def generate_roster_image_buffer(year, month, shifts_df, days_in_month, color_ma
                     row_data.append(cell_text.strip())
             table_data.append(row_data)
 
-        table = ax.table(cellText=table_data, loc='center', cellLoc='left', bbox=[0, 0, 1, 0.9])
+        table = ax.table(cellText=table_data, loc='center', cellLoc='center', bbox=[0, 0, 1, 0.9])
         table.auto_set_font_size(False)
-        table.set_fontsize(12)
+        table.set_fontsize(14) 
         
         for (i, j), cell in table.get_celld().items():
             cell.set_edgecolor('#cbd5e1')
             if i == 0:
                 cell.set_facecolor('#e2e8f0')
                 cell.set_height(0.06)
-                cell.get_text().set_color('#475569')
+                cell.get_text().set_color('#0f172a') 
             else:
                 cell.set_height(0.16)
-                cell.get_text().set_verticalalignment('top') 
                 cell.set_facecolor('#ffffff')
                 cell.get_text().set_color('#334155')
-                
                 txt = cell.get_text().get_text()
                 if "全店公休" in txt:
                     cell.set_facecolor('#fee2e2')
@@ -377,7 +373,7 @@ def generate_roster_image_buffer(year, month, shifts_df, days_in_month, color_ma
         plt.savefig(buf, format='png', dpi=200, bbox_inches='tight', facecolor=fig.get_facecolor())
         buf.seek(0); plt.close(fig)
         return buf
-    except Exception as e: return str(e) 
+    except Exception as e: return str(e)
 
 def render_roster_system(sh, users_list, user_name):
     ws_shifts = get_worksheet_safe(sh, "Shifts", ["Date", "Staff", "Shift_Type", "Note", "Notify", "Updated_By"])
@@ -615,7 +611,7 @@ def main():
         with c2:
             st.markdown("<br><br><br>", unsafe_allow_html=True)
             st.markdown("<div style='text-align:center; font-weight:900; font-size:2.5rem; margin-bottom:10px; color:#0f172a;'>IFUKUK</div>", unsafe_allow_html=True)
-            st.markdown("<div style='text-align:center; color:#64748b; font-size:0.9rem; margin-bottom:30px;'>OMEGA V129.0 OMNI-SUPREME</div>", unsafe_allow_html=True)
+            st.markdown("<div style='text-align:center; color:#64748b; font-size:0.9rem; margin-bottom:30px;'>OMEGA V130.0 OMNI-TRACE</div>", unsafe_allow_html=True)
             with st.form("login"):
                 u = st.text_input("帳號 (ID)"); p = st.text_input("密碼 (Password)", type="password")
                 if st.form_submit_button("登入 (LOGIN)", type="primary"):
@@ -641,7 +637,7 @@ def main():
     user_initial = st.session_state['user_name'][0].upper()
     render_navbar(user_initial)
 
-    # QUANTUM DATA FETCH 
+    # QUANTUM DATA FETCH (V126.0 純淨基底無 _RowIdx)
     df = get_data_safe(ws_items, SHEET_HEADERS)
     logs_df = get_data_safe(ws_logs, ["Timestamp", "User", "Action", "Details"]) 
     users_df = get_data_safe(ws_users, ["Name", "Password", "Role", "Status", "Created_At"])
@@ -656,7 +652,6 @@ def main():
     
     df['Safe_Level'] = df['Safety_Stock'].apply(lambda x: 5 if x == 0 else x)
     df['SKU'] = df['SKU'].astype(str)
-    # V129.0 移除脆弱的 Style_Code 切割邏輯，絕對不再引發圖片與屬性跨款覆蓋
     
     product_map = {r['SKU']: f"{r['Name']} ({r['Size']})" for _, r in df.iterrows()} if not df.empty else {}
     cost_map = {r['SKU']: r['Cost'] for _, r in df.iterrows()} if not df.empty else {}
@@ -733,7 +728,6 @@ def main():
             
             if not gallery_df.empty:
                 items_per_page = 10
-                # V129.0 改為絕對精準的 Name Grouping
                 grouped_names = list(gallery_df.groupby('Name').groups.keys())
                 total_pages = math.ceil(len(grouped_names) / items_per_page)
                 curr_page = st.session_state.get('inv_page', 1)
@@ -837,7 +831,7 @@ def main():
                                     new_safe = c_i6.number_input("安全庫存警告線", value=int(first_row['Safety_Stock']))
                                     
                                     new_img_url = st.text_input("直接輸入圖片網址 (若有)", value=first_row['Image_URL'])
-                                    new_img_file = st.file_uploader("或上傳新圖片覆蓋 (V129 黑底去背修復版)", key=f"img_{name}")
+                                    new_img_file = st.file_uploader("或上傳新圖片覆蓋 (內建快取圖床引擎)", key=f"img_{name}")
                                     
                                     if st.form_submit_button("✅ 儲存商品資訊覆蓋", type="primary", use_container_width=True):
                                         with st.spinner("圖片壓縮與雲端寫入中..."):
@@ -847,7 +841,6 @@ def main():
                                             final_cost = int(new_orig_cost * st.session_state['exchange_rate']) if new_orig_curr == "CNY" else new_orig_cost
                                             
                                             cell_list = []
-                                            # V129.0 絕對綁定品名 (Name) 進行更新，防圖檔錯亂
                                             for idx, r_data in enumerate(ws_items.get_all_values()):
                                                 if idx == 0: continue
                                                 if r_data[1] == name: # 精準比對
@@ -902,8 +895,8 @@ def main():
                     st.code(cost_df.to_csv(index=False, sep='\t'), language="text")
                 
                 st.divider()
-                st.markdown("#### ⚡ 全域庫存與財務極速控制台")
-                st.info("💡 在此直接選擇單一 SKU，即可瞬間修改數量與成本，並自動聯動計算毛利與營收。")
+                st.markdown("#### ⚡ 全域庫存與財務極速控制台 (Omni-Data Hub)")
+                st.info("💡 在此直接選擇單一 SKU，即可瞬間修改該尺寸的所有核心數據，並自動聯動計算毛利與營收。")
                 
                 c_sel, c_blank = st.columns([2, 2])
                 edit_sku = c_sel.selectbox("選擇要獨立修正的商品 (單一 SKU)", ["..."] + df['SKU'].tolist())
@@ -926,7 +919,6 @@ def main():
                         n_ocost = c5.number_input("原幣成本", value=int(tgt_row['Orig_Cost']), min_value=0)
                         n_price = c6.number_input("終端定價", value=int(tgt_row['Price']), min_value=0)
                         
-                        # V129.0 防呆：精準綁定同品名
                         apply_style = st.checkbox(f"✅ 同步套用【成本與定價】至所有品名為 ({tgt_name}) 的尺寸 (庫存數量不會同步)", value=True)
                         
                         if st.form_submit_button("💾 確認更新全域數據", type="primary", use_container_width=True):
@@ -1048,7 +1040,6 @@ def main():
                     
                     st.markdown("---")
                     col_disc1, col_disc2 = st.columns(2)
-                    # V129.0 導入自訂結帳總額
                     disc_mode = col_disc1.radio("優惠方式", ["無", "7折", "8折", "自訂折數%", "直接輸入結帳總額"], horizontal=True)
                     
                     final_total = calc_base
@@ -1160,7 +1151,9 @@ def main():
                         if "Pay:" in d: pay_m = re.search(r'Pay:(.*?) \|', d + " |"); pay_v = pay_m.group(1).strip() if pay_m else "未分類"
 
                         by_v = str(row['User'])
-                        if "By:" in d: by_m = re.search(r'By:(\w+)', d); by_v = by_m.group(1) if by_m else str(row['User'])
+                        if "By:" in d: 
+                            by_m = re.search(r'By:([a-zA-Z0-9_\u4e00-\u9fa5]+)', d)
+                            by_v = by_m.group(1) if by_m else str(row['User'])
                         
                         items_v = "-"
                         if "Items:" in d: 
@@ -1174,6 +1167,7 @@ def main():
                             items_v = ", ".join(parsed_items)
 
                         if total_v > 0: 
+                            # 使用 DataFrame 的真實 Index + 2 對應到 Google Sheet 行號
                             sales_data.append({"_SheetRow": idx + 2, "日期":row['Timestamp'],"金額":total_v,"通路":ch_v,"付款":pay_v,"銷售員":by_v,"明細":items_v, "原始Log": d})
                 except Exception as ex: 
                     pass
@@ -1210,8 +1204,9 @@ def main():
                 st.caption("💡 點擊下方黑框【右上角的複製圖示】，即可完美貼上至 Excel、Google Sheets 或 LINE，欄位絕對對齊。")
                 st.code(clean_sdf.to_csv(index=False, sep='\t'), language="text")
 
-            with st.expander("🛠️ 編輯/刪除作廢訂單 (自動回補庫存與聯動)"):
-                st.info("💡 系統已注入絕對行號鎖定技術。即使遇到連點產生的「同分同秒完全重複訂單」，系統也能精準刪除，絕不錯殺！")
+            # V130.0 單點狙擊刪除與業績自由轉移
+            with st.expander("🛠️ 編輯/刪除作廢訂單 (自動回補庫存與業績轉移)"):
+                st.info("💡 系統已注入絕對行號鎖定技術，防範同分同秒重複訂單錯殺。更可直接修改銷售員歸屬，重算業績。")
                 sale_opts = sdf.apply(lambda x: f"[單號: {x['_SheetRow']}] {x['日期']} | ${x['金額']} | {x['明細'][:30]}...", axis=1).tolist()
                 sel_sale = st.selectbox("選擇要處理的歷史訂單", ["..."] + sale_opts)
                 
@@ -1227,13 +1222,16 @@ def main():
                         if "Channel:" in raw_log: curr_ch = re.search(r'Channel:(.*?) \|', raw_log + " |").group(1).strip()
                         if "Pay:" in raw_log: curr_pay = re.search(r'Pay:(.*?) \|', raw_log + " |").group(1).strip()
                     except: pass
+                    
+                    curr_who = target_row['銷售員']
 
                     with st.form("edit_sale_form"):
                         e_items = st.text_area("商品內容 (請保持原本的「SKU x數量」格式，逗號分隔)", value=curr_items_str)
-                        c_e1, c_e2, c_e3 = st.columns(3)
+                        c_e1, c_e2, c_e3, c_e4 = st.columns(4)
                         e_total = c_e1.number_input("總金額", value=int(target_row['金額']))
                         e_ch = c_e2.selectbox("通路", ["門市","官網","直播","網路","其他"], index=["門市","官網","直播","網路","其他"].index(curr_ch) if curr_ch in ["門市","官網","直播","網路","其他"] else 0)
                         e_pay = c_e3.selectbox("付款", ["現金","刷卡","轉帳","禮券","其他"], index=["現金","刷卡","轉帳","禮券","其他"].index(curr_pay) if curr_pay in ["現金","刷卡","轉帳","禮券","其他"] else 0)
+                        e_who = c_e4.selectbox("銷售人員 (修改將轉移業績)", staff_list, index=staff_list.index(curr_who) if curr_who in staff_list else 0)
                         e_note = st.text_input("備註", value=curr_note)
                         
                         c_act1, c_act2 = st.columns(2)
@@ -1268,8 +1266,9 @@ def main():
                                         except: pass
                                 
                                 if cell_list: retry_action(ws_items.update_cells, cell_list)
+                                # 絕對行號刪除
                                 retry_action(ws_logs.delete_rows, target_row_idx)
-                                new_content = f"Sale | Total:${int(e_total)} | Items:{','.join(new_items_list)} | Note:{e_note} | Pay:{e_pay} | Channel:{e_ch} | By:{st.session_state['user_name']} (Edited)"
+                                new_content = f"Sale | Total:${int(e_total)} | Items:{','.join(new_items_list)} | Note:{e_note} | Pay:{e_pay} | Channel:{e_ch} | By:{e_who} (Edited)"
                                 log_event(ws_logs, st.session_state['user_name'], "Sale", new_content)
                                 st.success("✅ 訂單已修正且庫存聯動完畢！"); time.sleep(1.5); st.rerun()
                             except Exception as e: st.error(f"系統錯誤: {e}")
@@ -1290,6 +1289,7 @@ def main():
                                         except: pass
                                 if cell_list: retry_action(ws_items.update_cells, cell_list)
                                 
+                                # 絕對行號刪除，秒殺重複資料
                                 retry_action(ws_logs.delete_rows, target_row_idx)
                                 st.success("已精準作廢此筆訂單！商品已退回庫存"); time.sleep(1.5); st.rerun()
                             except: st.error("作廢失敗")
